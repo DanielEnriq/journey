@@ -14,7 +14,7 @@ import { anthropic } from '../integrations/anthropic/index.js';
 import { getCallAccess } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
 import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
-import { createWorkspace, listWorkspaces, rooms } from '../integrations/supabase/workspaces.js';
+import { createWorkspace, listWorkspaces, roomRecord, rooms } from '../integrations/supabase/workspaces.js';
 import type {
   Channels,
   EventChannel,
@@ -22,6 +22,7 @@ import type {
   InvokeChannel,
   InvokeResult,
   MicrophoneAccess,
+  RoomCheckout,
   RoomResult,
 } from '../shared/api.js';
 import { isAppPage } from './window.js';
@@ -117,6 +118,24 @@ async function originIdentity(repositoryId: unknown): Promise<string> {
   const identity = remote && repositoryIdentity(remote);
   if (!identity) throw new RoomError('invalid', `${repo.name} has no shareable origin remote`);
   return identity;
+}
+
+/**
+ * Where a room's repository is checked out here: the most recently opened added repository whose
+ * origin has the room's identity. Computed on this machine and never sent to the cloud.
+ */
+async function roomCheckout(roomId: string): Promise<RoomCheckout | null> {
+  const room = await rooms.getRoom(roomId);
+  if (!room.repository) return null;
+  const want = room.repository.toLowerCase();
+  const repos = listRepositories().sort((a, b) => (b.lastOpenedAt ?? '').localeCompare(a.lastOpenedAt ?? ''));
+  for (const repo of repos) {
+    const remote = await getRemoteUrl(repo.path).catch(() => null);
+    if (remote && repositoryIdentity(remote)?.toLowerCase() === want) {
+      return { roomId: room.id, repository: room.repository, repositoryId: repo.id, path: repo.path };
+    }
+  }
+  return null;
 }
 
 /**
@@ -246,6 +265,16 @@ export function registerIpc() {
   handle('rooms:attachRepository', (roomId, repositoryId) =>
     roomResult(async () => rooms.updateRoom(roomId, { repository: await originIdentity(repositoryId) })),
   );
+  handle('rooms:checkout', (roomId) => roomResult(() => roomCheckout(roomId)));
+  handle('record:get', (roomId) => roomResult(() => roomRecord.getRecord(roomId)));
+  handle('record:addThread', (roomId, thread) => roomResult(() => roomRecord.addThread(roomId, thread)));
+  handle('record:reply', (roomId, threadId, body) => roomResult(() => roomRecord.reply(roomId, threadId, body)));
+  handle('record:resolve', (roomId, threadId) => roomResult(() => roomRecord.resolve(roomId, threadId)));
+  handle('record:propose', (roomId, decision) => roomResult(() => roomRecord.propose(roomId, decision)));
+  handle('record:amend', (roomId, decisionId, change) => roomResult(() => roomRecord.amend(roomId, decisionId, change)));
+  handle('record:sign', (roomId, decisionId, version) => roomResult(() => roomRecord.sign(roomId, decisionId, version)));
+  handle('record:seen', (roomId) => roomResult(() => roomRecord.markSeen(roomId)));
+  handle('record:call', (roomId, what) => roomResult(() => roomRecord.logCall(roomId, what)));
   handle('rooms:join', (roomId) => connectRoom(requireString(roomId, 'Room id')));
   handle('rooms:leave', (roomId) => disconnectRoom(requireString(roomId, 'Room id')));
   // sendRoomEvent validates the type and payload against RoomEvents.

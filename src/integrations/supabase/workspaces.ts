@@ -1,4 +1,5 @@
 import { getCloud, isCloudConfigured } from './index.js';
+import { createRoomRecordService } from './record.js';
 import { createRoomService, RoomError, toRoomError } from './rooms.js';
 import type { Enums, Tables } from './types.js';
 
@@ -62,8 +63,8 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
-/** Persistent rooms and their membership (./rooms.ts), as the signed-in user. */
-export const rooms = createRoomService(async () => {
+/** The signed-in user's cloud client for room services, or the RoomError that explains why there isn't one. */
+async function roomCloud() {
   if (!isCloudConfigured()) throw new RoomError('not-configured', 'Rooms need Supabase: set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in .env');
   try {
     return await getCloud();
@@ -72,4 +73,10 @@ export const rooms = createRoomService(async () => {
     if (failure.code === 'network') throw failure;
     throw new RoomError('signed-out', 'Sign in to use rooms');
   }
-});
+}
+
+/** Persistent rooms and their membership (./rooms.ts), as the signed-in user. */
+export const rooms = createRoomService(roomCloud);
+
+/** Each room's threads, decisions and activity (./record.ts), as the signed-in user. */
+export const roomRecord = createRoomRecordService(roomCloud);

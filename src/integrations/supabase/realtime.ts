@@ -24,6 +24,8 @@ type Validators = { [K in RoomEventType]: (payload: unknown) => payload is RoomE
 /** One per RoomEvents entry; the compiler flags a missing one. */
 const validators: Validators = {
   'chat:message': (p): p is RoomEvents['chat:message'] => isRecord(p) && typeof p.text === 'string',
+  'record:changed': (p): p is RoomEvents['record:changed'] =>
+    isRecord(p) && ['thread', 'reply', 'decision', 'signature'].includes(p.what as string),
 };
 
 export const roomActivity = new EventEmitter<{

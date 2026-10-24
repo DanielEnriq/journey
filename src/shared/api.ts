@@ -556,6 +556,8 @@ export interface Participant {
  */
 export interface RoomEvents {
   'chat:message': { text: string };
+  /** The room's record changed (a thread, reply, decision or signature); members re-read it. */
+  'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' };
 }
 
 export type RoomEventType = keyof RoomEvents;
@@ -581,6 +583,93 @@ export interface RoomSession {
 
 /** `reconnecting` after a dropped connection (rejoins automatically); `left` once the room is closed. */
 export type RoomStatus = 'connected' | 'reconnecting' | 'left';
+
+// ─── Room record ─────────────────────────────────────────────────────────────
+// What a room keeps between calls: threads pinned to what it was looking at, their replies, its
+// decisions with their versions and signatures, and what happened (supabase/migrations/*_room_record.sql).
+// Authors, versions and timestamps are set by the database, never by the client.
+
+export type ThreadKind = 'note' | 'concern' | 'avoid' | 'constraint' | 'question' | 'goal';
+
+export interface RoomAuthor {
+  /** Cloud user id. */
+  id: string;
+  name: string | null;
+  email: string;
+}
+
+export interface RoomComment {
+  id: string;
+  body: string;
+  author: RoomAuthor;
+  createdAt: string;
+}
+
+export interface RoomThread {
+  id: string;
+  roomId: string;
+  kind: ThreadKind;
+  /** A canvas part (its id and name), or `pin` with the point it was dropped on. */
+  anchor: { id: string; name: string; x: number | null; y: number | null };
+  body: string;
+  author: RoomAuthor;
+  createdAt: string;
+  resolvedAt: string | null;
+  /** Oldest first. */
+  replies: RoomComment[];
+}
+
+export interface NewThread {
+  kind: ThreadKind;
+  anchor: { id: string; name: string; x?: number | null; y?: number | null };
+  body: string;
+}
+
+export interface RoomSignature {
+  userId: string;
+  version: number;
+  signedAt: string;
+}
+
+export interface RoomDecision {
+  id: string;
+  roomId: string;
+  title: string;
+  /** The checks, `;`-separated, as written. */
+  verify: string;
+  /** Bumped by the database whenever the title or checks change. */
+  version: number;
+  proposedBy: RoomAuthor;
+  createdAt: string;
+  updatedAt: string;
+  /** Every signature on any version; only those on `version` count. */
+  signatures: RoomSignature[];
+  /** Earlier versions, newest first. */
+  history: { version: number; title: string; verify: string; proposedBy: RoomAuthor; createdAt: string }[];
+}
+
+export type RoomActivityKind = 'thread' | 'reply' | 'decision' | 'amended' | 'signed' | 'repository' | 'call-started' | 'call-left';
+
+export interface RoomActivity {
+  id: string;
+  kind: RoomActivityKind;
+  actor: RoomAuthor | null;
+  subject: string | null;
+  version: number | null;
+  createdAt: string;
+}
+
+export interface RoomRecord {
+  roomId: string;
+  /** Open threads, oldest first. */
+  threads: RoomThread[];
+  /** The room's decisions, newest first; the first is the one the room is working on. */
+  decisions: RoomDecision[];
+  /** Newest first, at most 50. */
+  activity: RoomActivity[];
+  /** When you last looked at this room; null on a first visit. */
+  lastSeenAt: string | null;
+}
 
 // ─── Voice calls ─────────────────────────────────────────────────────────────
 // Each room has a LiveKit audio call, joined from the renderer (renderer/call.ts). Main only
@@ -646,6 +735,18 @@ export interface Channels {
     'rooms:removeMember': (roomId: string, userId?: string) => RoomResult<void>;
     /** Attaches the shared identity of a local repository's `origin` remote; its path stays local. */
     'rooms:attachRepository': (roomId: string, repositoryId: string) => RoomResult<RoomDetails>;
+    /** The room's repository checked out on this machine: an added local repository whose origin matches. */
+    'rooms:checkout': (roomId: string) => RoomResult<RoomCheckout | null>;
+    'record:get': (roomId: string) => RoomResult<RoomRecord>;
+    'record:addThread': (roomId: string, thread: NewThread) => RoomResult<RoomThread>;
+    'record:reply': (roomId: string, threadId: string, body: string) => RoomResult<RoomComment>;
+    'record:resolve': (roomId: string, threadId: string) => RoomResult<void>;
+    'record:propose': (roomId: string, decision: { title: string; verify: string }) => RoomResult<RoomDecision>;
+    'record:amend': (roomId: string, decisionId: string, change: { title?: string; verify?: string }) => RoomResult<RoomDecision>;
+    /** Signs the decision's current version; refused if `version` isn't current any more. */
+    'record:sign': (roomId: string, decisionId: string, version: number) => RoomResult<RoomDecision>;
+    'record:seen': (roomId: string) => RoomResult<void>;
+    'record:call': (roomId: string, what: 'call-started' | 'call-left') => RoomResult<void>;
     'rooms:join': (roomId: string) => RoomSession;
     'rooms:leave': (roomId: string) => void;
     'rooms:send': <K extends RoomEventType>(roomId: string, type: K, payload: RoomEvents[K]) => RoomEvent<K>;
@@ -767,6 +868,8 @@ export interface JourneyApi {
     removeMember(roomId: string, userId?: string): Promise<RoomResult<void>>;
     /** Owners only. Sets the room's repository from a local repository's `origin`; the path never leaves this machine. */
     attachRepository(roomId: string, repositoryId: string): Promise<RoomResult<RoomDetails>>;
+    /** Where this room's repository is checked out on this machine; null when it isn't, or the room has none. */
+    checkout(roomId: string): Promise<RoomResult<RoomCheckout | null>>;
 
     // The live room: Realtime channel and presence. Members only.
     /** Connects and announces you to the room. Members only; joining twice is a no-op. */
@@ -778,6 +881,20 @@ export interface JourneyApi {
     onEvent(listener: (event: RoomEvent) => void): () => void;
     onPresence(listener: (update: { roomId: string; participants: Participant[] }) => void): () => void;
     onStatus(listener: (update: { roomId: string; status: RoomStatus }) => void): () => void;
+  };
+  /** A room's record: threads, replies, decisions and signatures, activity. Members only. */
+  record: {
+    get(roomId: string): Promise<RoomResult<RoomRecord>>;
+    addThread(roomId: string, thread: NewThread): Promise<RoomResult<RoomThread>>;
+    reply(roomId: string, threadId: string, body: string): Promise<RoomResult<RoomComment>>;
+    resolve(roomId: string, threadId: string): Promise<RoomResult<void>>;
+    propose(roomId: string, decision: { title: string; verify: string }): Promise<RoomResult<RoomDecision>>;
+    amend(roomId: string, decisionId: string, change: { title?: string; verify?: string }): Promise<RoomResult<RoomDecision>>;
+    sign(roomId: string, decisionId: string, version: number): Promise<RoomResult<RoomDecision>>;
+    /** Moves your "last looked" marker to now. */
+    seen(roomId: string): Promise<RoomResult<void>>;
+    /** Records that you started or left the room's call. */
+    call(roomId: string, what: 'call-started' | 'call-left'): Promise<RoomResult<void>>;
   };
   calls: {
     /** Returns a token for the room's call. Members only. */
