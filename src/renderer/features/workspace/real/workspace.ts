@@ -521,6 +521,9 @@ function decisionOf(d: RoomDecision, members: RoomMember[]) {
   };
 }
 
+/** Vowe in the panel: its replies show its orb, whoever's app wrote them. */
+export const VOWE: PanelPerson = { id: 'vowe', name: 'Vowe', initials: 'V', kind: 'agent' };
+
 const record: RoomRecordSource = {
   async load(roomId) {
     const k = await read(roomId);
@@ -534,6 +537,7 @@ const record: RoomRecordSource = {
     };
     k.members.forEach((m) => add(m.userId));
     rec.threads.forEach((t) => { add(t.author.id, t.author); t.replies.forEach((r) => add(r.author.id, r.author)); });
+    if (rec.threads.some((t) => t.replies.some((r) => r.authorKind === 'agent'))) people[VOWE.id] = VOWE;
     const d = rec.decisions[0];
     if (d) add(d.proposedBy.id, d.proposedBy);
     const meId = selfId ?? 'you';
@@ -558,24 +562,31 @@ const record: RoomRecordSource = {
           kind: t.kind,
           anchor: { id: t.anchor.id === 'pin' ? `pin:${t.id}` : t.anchor.id, name: t.anchor.name },
           root: { id: `${t.id}-root`, authorId: t.author.id, body: t.body, ago: shortAgo(t.createdAt) },
-          replies: t.replies.map((r) => ({ id: r.id, authorId: r.author.id, body: r.body, ago: shortAgo(r.createdAt), fresh: Date.now() - Date.parse(r.createdAt) < 4000 })),
+          replies: t.replies.map((r) => ({ id: r.id, authorId: r.authorKind === 'agent' ? VOWE.id : r.author.id, body: r.body, ago: shortAgo(r.createdAt), fresh: Date.now() - Date.parse(r.createdAt) < 4000 })),
         })),
         streams,
       },
-      pins: rec.threads.flatMap((t) => t.anchor.id === 'pin' && t.anchor.x !== null && t.anchor.y !== null
-        ? [{ threadId: t.id, x: t.anchor.x, y: t.anchor.y, body: t.body, author: who(t.author.id, t.author) }] : []),
+      pins: rec.threads.flatMap((t) => t.anchor.x !== null && t.anchor.y !== null
+        ? [{ threadId: t.id, anchor: t.anchor.id === 'pin' ? `pin:${t.id}` : t.anchor.id, x: t.anchor.x, y: t.anchor.y, body: t.body, author: who(t.author.id, t.author) }] : []),
       decision: d ? { id: d.id, title: d.title, verify: d.verify } : null,
     };
     return view;
   },
   subscribe: (_roomId, listener) => room.subscribe(listener),
-  async pin(roomId, at, body) {
-    await unwrap(api().record.addThread(roomId, { kind: 'note', anchor: { id: 'pin', name: 'Canvas', x: Math.round(at.x), y: Math.round(at.y) }, body }));
+  async pin(roomId, at, body, on) {
+    const anchor = on ? { id: on.component, name: on.name } : { id: 'pin', name: 'Canvas' };
+    const thread = await unwrap(api().record.addThread(roomId, { kind: 'note', anchor: { ...anchor, x: Math.round(at.x), y: Math.round(at.y) }, body }));
+    broadcast(roomId, 'thread');
+    await changed(roomId);
+    return thread.id;
+  },
+  async resolve(roomId, threadId) {
+    await unwrap(api().record.resolve(roomId, threadId));
     broadcast(roomId, 'thread');
     await changed(roomId);
   },
-  async reply(roomId, threadId, body) {
-    await unwrap(api().record.reply(roomId, threadId, body));
+  async reply(roomId, threadId, body, as) {
+    await unwrap(api().record.reply(roomId, threadId, body, as === 'vowe' ? 'agent' : 'human'));
     broadcast(roomId, 'reply');
     await changed(roomId);
   },

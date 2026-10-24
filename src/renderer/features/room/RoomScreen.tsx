@@ -2,7 +2,7 @@ import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
 import { useEffect, useMemo, useRef, useState } from '../../vendor/preact-hooks.js';
 import { ClearInk, ToolComment, ToolDraw, ToolSelect } from '../../shared/components/icons.js';
 import { account } from '../../shared/account.js';
-import { useStore } from '../../shared/store.js';
+import { Store, useStore } from '../../shared/store.js';
 import { MICROPHONE_DENIED, type CallService } from '../../calls/service.js';
 import { AskVowe, AskVowePanel } from '../canvas/AskVowe.js';
 import { CanvasClient, ipcTransport } from '../canvas/client.js';
@@ -15,7 +15,7 @@ import { can, type MembershipSource, type RoomAccess } from '../membership/model
 import { PreJoinSheet } from '../membership/PreJoinSheet.js';
 import { Toasts, useToasts } from '../membership/primitives.js';
 import { useLoaded, useRooms } from '../workspace/hooks.js';
-import { selfCloudId } from '../workspace/real/workspace.js';
+import { selfCloudId, VOWE } from '../workspace/real/workspace.js';
 import type { CallControls } from './call/CallBar.js';
 import { CallBar } from './call/CallBar.js';
 import { Surface } from './canvas/Surface.js';
@@ -78,6 +78,8 @@ type InnerProps = RoomScreenProps & { ui: RoomUi };
 
 /** The OS refused the microphone in this session: the join sheet says so before you choose to talk. */
 let micRefused = false;
+/** For rooms without a canvas: nobody is asking Vowe. */
+const NOT_ASKING = new Store<{ reviewing: string | null }>({ reviewing: null });
 
 const typing = (e: KeyboardEvent) => {
   const t = e.target as HTMLElement | null;
@@ -245,7 +247,8 @@ function FreshCall(props: InnerProps) {
   const [tool, setTool] = useState<FreshTool>('select');
   const [ink, setInk] = useState<string[]>([]);
   /** Comments placed but not yet written; with a record, Enter saves one as a thread. */
-  const [drafts, setDrafts] = useState<{ x: number; y: number }[]>([]);
+  // At most one unwritten comment: placing another moves it. On the real canvas, x/y are stage units.
+  const [drafts, setDrafts] = useState<{ x: number; y: number; on?: { component: string; name: string } | null }[]>([]);
   const [stroke, setStroke] = useState<string | null>(null);
   const [muted, setMuted] = useState(true);
   const [cc, setCc] = useState(false);
@@ -272,6 +275,7 @@ function FreshCall(props: InnerProps) {
     ? new AskVowe(roomId, board, () => ({ userId: selfCloudId(), name: account.state.user?.name ?? null }))
     : null, [board]);
   useEffect(() => () => asker?.close(), [asker]);
+  const reviewing = useStore<{ reviewing: string | null }>(asker?.store ?? NOT_ASKING).reviewing;
 
   // Opening People (from Share's Manage access) opens the column it lives in.
   useEffect(() => { if (ui.people) setDesk(true); }, [ui.people]);
@@ -296,7 +300,7 @@ function FreshCall(props: InnerProps) {
   const path = (p: [number, number][]) => p.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
   const down = (e: PointerEvent) => {
     if ((e.target as Element).closest('button, input, label, .call, .tools, .pin, .receipt')) return;
-    if (tool === 'comment') { const [x, y] = at(e); setDrafts(drafts.concat([{ x: x - 10, y: y - 20 }])); return; }
+    if (tool === 'comment') { const [x, y] = at(e); setDrafts([{ x: x - 10, y: y - 20 }]); return; }
     if (tool !== 'draw') return;
     surf.current!.setPointerCapture(e.pointerId);
     pts.current = [at(e)];
@@ -306,11 +310,17 @@ function FreshCall(props: InnerProps) {
   const save = (i: number, body: string) => {
     const d = drafts[i];
     if (!record || !body.trim()) return;
-    act(record.pin(roomId, d, body.trim())).then(() => setDrafts((all) => all.filter((x) => x !== d)), () => {});
+    const text = body.trim();
+    record.pin(roomId, d, text, d.on).then((threadId) => {
+      setFailure(null);
+      setDrafts((all) => all.filter((x) => x !== d));
+      // Vowe answers each new comment in its thread, on this person's model.
+      asker?.feedback(threadId, text, d.on ?? null, (said) => act(record.reply(roomId, threadId, said, 'vowe')));
+    }, (err: Error) => setFailure(err.message));
   };
+  // A thread opened in the panel lights its comment on the canvas (or every comment on that part).
   const show = (anchor: string) => {
-    if (!anchor.startsWith('pin:')) return;
-    setLit(anchor.slice(4));
+    setLit(anchor);
     setTimeout(() => setLit(null), 1600);
   };
 
@@ -341,6 +351,7 @@ function FreshCall(props: InnerProps) {
     micToggle: live ? toggleMic : undefined,
     cc, ccCls: 'cbtn' + (cc ? ' on' : ''), toggleCc: () => { setCc(!cc); sources.call.setCaptions(!cc); },
     voiceOff, agentOff, micOff, leaving: cs.status === 'leaving', leave: onLeave,
+    askByText: asker ? () => asker.open() : undefined,
   };
   // Who's speaking, by initials (how the band draws people).
   const ring: Record<string, string> = {};
@@ -354,23 +365,29 @@ function FreshCall(props: InnerProps) {
   const pins = view?.pins ?? [];
   const empty = !ink.length && !drafts.length && !pins.length;
   // Comments: saved pins from the room's record, and ones you placed but haven't written yet.
-  const marks = (
+  // `place` puts a point on screen: as-is on the sketch surface, through the camera on the real canvas.
+  const marksAt = (place: (x: number, y: number) => { x: number; y: number }, nudge: [number, number]) => (
     <>
-      {pins.map((p) => (
-        <div key={p.threadId} class={'pin saved' + (lit === p.threadId ? ' lit' : '')} style={`transform: translate(${p.x}px, ${p.y}px)`}>
+      {pins.map((p) => { const q = place(p.x, p.y); return (
+        <div key={p.threadId} class={'pin saved' + (lit === p.anchor ? ' lit' : '')} style={`transform: translate(${q.x + nudge[0]}px, ${q.y + nudge[1]}px)`}>
           <span class={'head ' + p.author.tone} title={p.author.name}>{p.author.initials}</span>
           <span class="pin-note">{p.body}</span>
+          {record && p.author.tone === 'me' && (
+            <button class="pin-x" type="button" aria-label="Remove comment" title="Remove from the canvas (kept in the room's history)"
+              onClick={() => act(record.resolve(roomId, p.threadId)).catch(() => {})}>×</button>
+          )}
         </div>
-      ))}
-      {drafts.map((p, i) => (
-        <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${p.x}px, ${p.y}px)`}>
+      ); })}
+      {drafts.map((p, i) => { const q = place(p.x, p.y); return (
+        <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${q.x + nudge[0]}px, ${q.y + nudge[1]}px)`}>
           <span class="head">{me.initials}</span>
           <label style="display:flex"><span class="sr">Comment</span>
             <input type="text" placeholder={record ? 'Add a comment, then Enter' : 'Add a comment…'}
               onKeyDown={(e) => { if (e.key === 'Enter') save(i, (e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDrafts(drafts.filter((x) => x !== p)); }} />
           </label>
+          <button class="pin-x" type="button" aria-label="Discard comment" title="Discard" onClick={() => setDrafts(drafts.filter((x) => x !== p))}>×</button>
         </div>
-      ))}
+      ); })}
     </>
   );
   const overlays = (
@@ -430,8 +447,8 @@ function FreshCall(props: InnerProps) {
           <div class="presence"><Who people={[me, ...others]} vowe={!voiceOff && !agentOff} ring={ring} /></div>
         </div>
         {board ? (
-          <LiveSurface client={board} onComment={(x, y) => setDrafts(drafts.concat([{ x: x - 10, y: y - 20 }]))} onAsk={asker ? (about) => asker.open(about) : undefined}>
-            {marks}
+          <LiveSurface client={board} onComment={(x, y, on) => setDrafts([{ x, y, on }])} onAsk={asker ? (about) => asker.open(about) : undefined}
+            anchored={(place) => marksAt(place, [-10, -20])}>
             {!pins.length && !drafts.length && <LiveEmpty client={board} onAsk={asker ? () => asker.open() : undefined} />}
             {overlays}
           </LiveSurface>
@@ -442,7 +459,7 @@ function FreshCall(props: InnerProps) {
               {ink.map((d, i) => <path key={i} class="stroke" d={d}></path>)}
               {stroke && <path class="stroke" d={stroke}></path>}
             </svg>
-            {marks}
+            {marksAt((x, y) => ({ x, y }), [0, 0])}
             {empty && (
               <div class="fresh-empty">
                 <span class="orb"></span>
@@ -491,6 +508,8 @@ function FreshCall(props: InnerProps) {
             <div class="desk-panel">
               <RoomPanel
                 {...view.panel}
+                people={reviewing ? { ...view.panel.people, [VOWE.id]: VOWE } : view.panel.people}
+                threads={reviewing ? view.panel.threads.map((t) => t.id === reviewing ? { ...t, presence: { personId: VOWE.id, mode: 'typing' as const } } : t) : view.panel.threads}
                 onSign={(id, v) => { act(record.sign(roomId, id, v)).catch(() => {}); }}
                 onProposeChange={decides ? () => setDrafting('amend') : undefined}
                 onPropose={decides ? () => setDrafting('new') : undefined}

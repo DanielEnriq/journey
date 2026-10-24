@@ -768,6 +768,8 @@ export interface RoomComment {
   id: string;
   body: string;
   author: RoomAuthor;
+  /** `agent`: Vowe wrote it, from `author`'s app on their model. */
+  authorKind: 'human' | 'agent';
   createdAt: string;
 }
 
@@ -985,7 +987,7 @@ export interface Channels {
     'rooms:checkout': (roomId: string) => RoomResult<RoomCheckout | null>;
     'record:get': (roomId: string) => RoomResult<RoomRecord>;
     'record:addThread': (roomId: string, thread: NewThread) => RoomResult<RoomThread>;
-    'record:reply': (roomId: string, threadId: string, body: string) => RoomResult<RoomComment>;
+    'record:reply': (roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent') => RoomResult<RoomComment>;
     'record:resolve': (roomId: string, threadId: string) => RoomResult<void>;
     'record:propose': (roomId: string, decision: { title: string; verify: string }) => RoomResult<RoomDecision>;
     'record:amend': (roomId: string, decisionId: string, change: { title?: string; verify?: string }) => RoomResult<RoomDecision>;
@@ -1183,7 +1185,7 @@ export interface JourneyApi {
   record: {
     get(roomId: string): Promise<RoomResult<RoomRecord>>;
     addThread(roomId: string, thread: NewThread): Promise<RoomResult<RoomThread>>;
-    reply(roomId: string, threadId: string, body: string): Promise<RoomResult<RoomComment>>;
+    reply(roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent'): Promise<RoomResult<RoomComment>>;
     resolve(roomId: string, threadId: string): Promise<RoomResult<void>>;
     propose(roomId: string, decision: { title: string; verify: string }): Promise<RoomResult<RoomDecision>>;
     amend(roomId: string, decisionId: string, change: { title?: string; verify?: string }): Promise<RoomResult<RoomDecision>>;

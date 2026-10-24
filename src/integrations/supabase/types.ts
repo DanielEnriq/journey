@@ -142,6 +142,7 @@ export type Database = {
       }
       room_comments: {
         Row: {
+          author_kind: string
           body: string
           created_at: string
           created_by: string
@@ -150,6 +151,7 @@ export type Database = {
           thread_id: string
         }
         Insert: {
+          author_kind?: string
           body: string
           created_at?: string
           created_by?: string
@@ -158,6 +160,7 @@ export type Database = {
           thread_id: string
         }
         Update: {
+          author_kind?: string
           body?: string
           created_at?: string
           created_by?: string

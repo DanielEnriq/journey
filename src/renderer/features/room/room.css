@@ -227,6 +227,10 @@
   .pin{position:absolute;left:0;top:0;z-index:9;display:flex;align-items:flex-start;gap:6px}
   .pin .head{width:20px;height:20px;border-radius:10px 10px 10px 2px;background:var(--me);color:var(--pane);font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
   .pin input{width:180px;height:28px;box-sizing:border-box;padding:0 9px;border:0;border-radius:7px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);color:var(--ink);font:inherit;font-size:12px;outline:none}
+  .pin-x{flex:0 0 auto;width:20px;height:20px;border:0;border-radius:6px;background:var(--menu);box-shadow:0 0 0 1px var(--border);color:var(--ink-7);font:inherit;font-size:13px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+  .pin-x:hover{color:var(--ink);background:var(--hover-strong)}
+  .pin.saved .pin-x{opacity:0;transition:opacity 120ms}
+  .pin.saved:hover .pin-x,.pin.saved:focus-within .pin-x{opacity:1}
   .cursor{position:absolute;left:0;top:0;z-index:7;pointer-events:none;transition:transform 900ms var(--studio-ease)}
   .cursor .label{position:absolute;left:14px;top:16px;padding:1px 6px;border-radius:5px;background:var(--peer);color:#fff;font-size:10.5px;font-weight:500;white-space:nowrap}
   .cursor.p2 .label{background:var(--peer2)}
@@ -300,7 +304,7 @@
   .words{display:flex;flex-wrap:wrap;column-gap:.27em;min-width:0}
   .wd{animation:wordin 200ms ease both}
   /* Asking Vowe by text takes over the captions panel while open. */
-  .ask-vowe{gap:5px;max-height:46%;overflow-y:auto}
+  .ask-vowe{gap:5px;max-height:32%;overflow-y:auto}
   .ask-vowe .prevline{white-space:normal;-webkit-mask-image:none;mask-image:none}
   .ask-vowe .words{display:block;white-space:pre-wrap;flex:1 1 auto}
   .ask-vowe .cut{flex:0 0 auto;font-size:11.5px;color:var(--ink-8)}

@@ -24,12 +24,14 @@ export interface AskState {
   canvas: string[];
   /** Which provider answered, and how it's billed. */
   provider: string | null;
+  /** The thread Vowe is writing feedback for, while it does. */
+  reviewing: string | null;
 }
 
 const NOTHING = { selected: [], circled: [], names: [] };
 
 export class AskVowe {
-  readonly store = new Store<AskState>({ open: false, about: NOTHING, question: null, answer: '', status: 'idle', error: null, approval: null, canvas: [], provider: null });
+  readonly store = new Store<AskState>({ open: false, about: NOTHING, question: null, answer: '', status: 'idle', error: null, approval: null, canvas: [], provider: null, reviewing: null });
   private conversationId: string | null = null;
   private turn: VoiceTurnHandle | null = null;
   private recent: { speaker: string; text: string }[] = [];
@@ -41,7 +43,7 @@ export class AskVowe {
     private readonly agent: JourneyApi['agent'] = window.journey.agent,
   ) {}
 
-  get busy() { const s = this.store.state.status; return s === 'thinking' || s === 'answering'; }
+  get busy() { const s = this.store.state; return s.status === 'thinking' || s.status === 'answering' || s.reviewing !== null; }
 
   /** Opens the panel about what was selected or circled (or nothing: the whole canvas). */
   open(about: AskState['about'] = NOTHING) {
@@ -70,6 +72,47 @@ export class AskVowe {
   }
 
   stop() { if (this.busy) this.turn?.cancel(); }
+
+  /**
+   * Vowe's feedback on a comment just pinned: a turn in the same conversation (so what this person
+   * allowed still holds), whose answer `post` saves as Vowe's reply in the comment's thread. Its
+   * question isn't shown; an approval it needs opens the panel. Skipped while another turn runs.
+   */
+  feedback(threadId: string, comment: string, on: { component: string; name: string } | null, post: (text: string) => Promise<void>) {
+    const { userId, name } = this.me();
+    if (!userId || this.busy) return;
+    const where = on ? `on ${on.name}` : 'on the canvas';
+    const question = `${name ?? 'Someone'} just pinned this comment ${where}: "${comment}". Reply in that comment's thread with brief, specific feedback (one to three sentences): whether it holds up against the system on the canvas, and what to check or change. Point at the part if it helps. Don't restate the comment.`;
+    this.store.setState({ reviewing: threadId, error: null });
+    let text = '';
+    this.turn = agentOverIpc(this.agent).ask({
+      roomId: this.roomId,
+      participant: { userId, name },
+      question,
+      recentTurns: this.recent.slice(-6),
+      canvas: snapshotOf(this.client.store.state.doc, on ? { selected: [on.component], circled: [] } : NOTHING),
+      conversationId: this.conversationId,
+      source: 'text',
+    }, (e) => {
+      const s = this.store.state;
+      switch (e.type) {
+        case 'turn.started': this.conversationId = e.conversationId; return;
+        case 'text.final': text = e.text; return;
+        case 'approval.requested': return this.store.setState({ open: true, approval: e.request });
+        case 'canvas.applied': if (!e.result.ok) this.store.setState({ canvas: s.canvas.concat([`The canvas didn’t take one of Vowe’s changes: ${e.result.error.message}`]) }); return;
+        case 'turn.completed': case 'turn.cancelled': case 'turn.failed': {
+          this.turn = null;
+          const said = (e.reply.text || text).trim();
+          this.store.setState({ reviewing: null, approval: null, ...(e.type === 'turn.failed' ? { error: e.error } : {}) });
+          if (e.type === 'turn.completed' && said) {
+            this.recent.push({ speaker: name ?? 'Me', text: `Comment ${where}: ${comment}` }, { speaker: 'Vowe', text: said });
+            void post(said.slice(0, 4000)).catch(() => {});
+          }
+          return;
+        }
+      }
+    });
+  }
 
   answer(approved: boolean) {
     const a = this.store.state.approval;
@@ -109,6 +152,11 @@ export class AskVowe {
   }
 }
 
+/** The answer's **bold** as bold; the rest as written (no other markdown is rendered). */
+function emphasis(text: string) {
+  return text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <b key={i}>{part}</b> : part));
+}
+
 /** The ask, in the call's captions panel. */
 export function AskVowePanel({ ask }: { ask: AskVowe }) {
   const s = useStore(ask.store);
@@ -125,10 +173,10 @@ export function AskVowePanel({ ask }: { ask: AskVowe }) {
   return (
     <div class="captions ask-vowe" role="region" aria-label="Ask Vowe" aria-live="polite">
       {s.question && <div class="prevline">You · {s.question}</div>}
-      {s.question && (
+      {s.question && !(s.status === 'failed' && !s.answer) && (
         <div class="curline">
           <span class="spk">Vowe</span>
-          <span class="words">{s.answer || (s.status === 'thinking' ? 'Thinking…' : s.status === 'failed' ? '' : '…')}</span>
+          <span class="words">{s.answer ? emphasis(s.answer) : s.status === 'thinking' ? 'Thinking…' : '…'}</span>
           {s.status === 'stopped' && <span class="cut">— stopped</span>}
         </div>
       )}
@@ -162,7 +210,7 @@ export function AskVowePanel({ ask }: { ask: AskVowe }) {
           <button class="mini ghost" type="button" aria-label="Close" onClick={() => ask.close()}>Close</button>
         </span>
       </form>
-      {s.provider && s.question && <div class="prevline">Answered by {s.provider}. Only you see this panel; changes to the canvas are shared.</div>}
+      {s.provider && s.answer && <div class="prevline">Answered by {s.provider}. Only you see this panel; changes to the canvas are shared.</div>}
     </div>
   );
 }

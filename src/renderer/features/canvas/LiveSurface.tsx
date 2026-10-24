@@ -61,15 +61,17 @@ const avatar = (by: Actor, me: Actor) => by.kind === 'agent' ? 'mav vowe' : by.i
 
 export interface LiveSurfaceProps {
   client: CanvasClient;
-  /** The comment tool: where you clicked, in the surface's own pixels. Absent: no comment tool. */
-  onComment?(x: number, y: number): void;
+  /** The comment tool: where you clicked on the canvas (stage units) and the part it landed on, if any. Absent: no comment tool. */
+  onComment?(x: number, y: number, on: { component: string; name: string } | null): void;
+  /** Drawn over the canvas but kept on it as you pan and zoom (comment pins); `place` turns stage units into surface pixels. */
+  anchored?(place: (x: number, y: number) => { x: number; y: number }): ComponentChildren;
   /** Asking Vowe about what you selected or circled (component ids, and how the canvas names them). Absent: no ask. */
   onAsk?(about: { selected: string[]; circled: string[]; names: string[] }): void;
   /** Drawn inside the surface, over the canvas: pins, the empty state, captions, the call bar. */
   children?: ComponentChildren;
 }
 
-export function LiveSurface({ client, onComment, onAsk, children }: LiveSurfaceProps) {
+export function LiveSurface({ client, onComment, onAsk, anchored, children }: LiveSurfaceProps) {
   const s = useStore(client.store);
   const me = client.transport.me();
   const doc = s.doc, view = s.scenes[doc.activeView] ? doc.activeView : 'architecture';
@@ -173,7 +175,11 @@ export function LiveSurface({ client, onComment, onAsk, children }: LiveSurfaceP
   const down = (e: PointerEvent) => {
     if (e.button !== 0 || (e.target as Element).closest?.(IGNORE)) return;
     const el = sec.current!, p = toStage(e);
-    if (tool === 'comment') { if (onComment) { const r = el.getBoundingClientRect(); onComment(e.clientX - r.left, e.clientY - r.top); } return; }
+    if (tool === 'comment') {
+      const hit = targets.find((t) => !t.key.startsWith('step:') && !('step' in t.ref) && p[0] >= t.x && p[0] <= t.x + t.w && p[1] >= t.y && p[1] <= t.y + t.h);
+      onComment?.(p[0], p[1], hit && !('step' in hit.ref) ? { component: hit.ref.component, name: hit.short } : null);
+      return;
+    }
     try { el.setPointerCapture(e.pointerId); } catch { /* the pointer may already be gone */ }
     if (tool === 'pan') { drag.current = { mode: 'pan', sx: e.clientX, sy: e.clientY, cam, s: (el.getBoundingClientRect().width / el.offsetWidth) || 1 }; setDragging(true); }
     else if (tool === 'circle') { drag.current = { mode: 'circle', pts: [p] }; setLasso([p]); setAsk(null); }
@@ -452,6 +458,7 @@ export function LiveSurface({ client, onComment, onAsk, children }: LiveSurfaceP
       </div>
       <span style={srOnly} aria-live="polite">{s.pending ? 'Saving…' : ''}</span>
 
+      {anchored?.((x, y) => ({ x: size.w / 2 + cam.x + ox + (x - STAGE_W / 2) * z, y: size.h / 2 + cam.y + oy + (y - STAGE_H / 2) * z }))}
       {children}
     </section>
   );
