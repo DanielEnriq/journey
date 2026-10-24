@@ -4,8 +4,15 @@ import { join } from 'node:path';
 import { addRepository, listRepositories, removeRepository } from '../database/repositories.js';
 import { getAllSettings, updateSettings } from '../database/settings.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
+import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
+import { createRoom, createWorkspace, listRooms, listWorkspaces } from '../integrations/supabase/workspaces.js';
 import type { Channels, EventChannel, InvokeArgs, InvokeChannel, InvokeResult } from '../shared/api.js';
 import { isAppPage } from './window.js';
+
+function requireString(value: unknown, what: string): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${what} must be a non-empty string`);
+  return value;
+}
 
 /**
  * Registers a handler for a channel from the contract. Rejects calls from any frame
@@ -67,5 +74,20 @@ export function registerIpc() {
     removeRepository(id);
   });
 
+  // Cloud: RLS decides what each call may see or change, so these only check argument shapes.
+  handle('workspaces:list', () => listWorkspaces());
+  handle('workspaces:create', (name) => createWorkspace(requireString(name, 'Workspace name').trim()));
+  handle('rooms:list', (workspaceId) => listRooms(requireString(workspaceId, 'Workspace id')));
+  handle('rooms:create', (workspaceId, name) =>
+    createRoom(requireString(workspaceId, 'Workspace id'), requireString(name, 'Room name').trim()),
+  );
+  handle('rooms:join', (roomId) => connectRoom(requireString(roomId, 'Room id')));
+  handle('rooms:leave', (roomId) => disconnectRoom(requireString(roomId, 'Room id')));
+  // sendRoomEvent validates the type and payload against RoomEvents.
+  handle('rooms:send', (roomId, type, payload) => sendRoomEvent(requireString(roomId, 'Room id'), type, payload));
+
   onUserChange((user) => broadcast('auth:changed', user));
+  roomActivity.on('event', (event) => broadcast('rooms:event', event));
+  roomActivity.on('presence', (update) => broadcast('rooms:presence', update));
+  roomActivity.on('status', (update) => broadcast('rooms:status', update));
 }
