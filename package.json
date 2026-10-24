@@ -1,0 +1,32 @@
+{
+  "name": "journey",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "pnpm build && electron .",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "typecheck": "tsc -p . --noEmit",
+    "sign-out": "pnpm build && electron . --sign-out"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "better-sqlite3"
+    ]
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "google-auth-library": "^11.3.1"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "electron": "^45.0.0",
+    "typescript": "^7.0.2"
+  }
+}
