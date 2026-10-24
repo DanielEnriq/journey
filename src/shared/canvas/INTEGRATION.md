@@ -116,9 +116,22 @@ selection are per person. A proposed view shows the design's receipt (Undo → `
   42501 unless `private.can_edit_canvas` (an owner or member who is still in the workspace; the role is
   compared as text, so a future `viewer` role is refused without changes here). It does a CAS insert
   or update and returns the new revision, or `null` if someone saved first.
-- RLS: members read both tables (`can_use_room`). Direct insert, update and delete are revoked.
-- **Applied only to a local stack. Not deployed to the hosted project.** Deploying needs
-  explicit approval (`pnpm cloud:push`). `types.ts` already includes the tables and the function.
+- RLS: members read both tables (`can_use_room`). Every privilege is revoked from `anon` and
+  `authenticated`, and `authenticated` gets `select` back. This also removes the `truncate` that
+  Supabase's default privileges grant and RLS doesn't cover, which matches the sibling migrations.
+- **Deployed to the hosted project `journey` (`lpqzuilghsxbxsplamzr`) on 2026-10-24.**
+  `supabase db push --linked` applied this migration and nothing else; a dry run listed only this one.
+  Afterwards, on the hosted database:
+  - the history row is present;
+  - RLS is on for both tables;
+  - `authenticated` has `select` only, and `anon` has nothing;
+  - both read policies use `private.can_use_room`;
+  - `commit_canvas` and `can_edit_canvas` are `security definer` with an empty `search_path`, and
+    `anon` can't execute them;
+  - the check constraints are present;
+  - existing rooms, members, workspaces, users and invitations were unchanged;
+  - the Realtime policies on `realtime.messages` were untouched.
+  `pnpm cloud:types` regenerated `types.ts` from the hosted schema.
 
 ## Realtime
 
@@ -145,6 +158,35 @@ Eight steps, each one command or check, through `CanvasClient` + `LiveSurface` +
 `#/dev/canvas` keeps the room in local storage. Two windows are two people (BroadcastChannel). `#/dev/canvas/<roomId>`
 runs against a real room via IPC. Vowe's steps run as you there, because a renderer can't act as the agent.
 
+## Vowe's turns on the room canvas (`runtime.ts`, `main/vowe-canvas.ts`)
+
+The runtime (`src/assistant`) speaks contract version 1: a `CanvasSnapshot` in and `CanvasCommand`
+requests out. The engine speaks the semantic document. `runtime.ts` adapts between the two, so neither
+side changes:
+
+- **In.** `withRoomCanvas(turn)` in main replaces the renderer's snapshot with
+  `snapshotOf(await canvas.load(roomId), selection)`. Vowe then sees the document the hub will apply its
+  requests to, and the asker's selection and circle are kept. Views map `architecture→arch`,
+  `failure-flow→failure` and `concurrency→concurrency`. Kinds map `worker`/`boundary→service`,
+  `database→store` and `event→queue`. When a mapping loses detail, the engine kind is kept in `tech`.
+- **Out.** `canvasEvents(hub, roomId, forward)` wraps the turn's event stream. `TurnCanvas` maps each
+  validated request to engine commands, run through `hub.executeAsAgent`, so the engine's agent rules
+  apply:
+  - `highlight` → `highlight_component`;
+  - `annotate` → `annotate_component`, a suggested note;
+  - `show_view` → `show_view` (proposed). `failure`/`timeout` with a crash step becomes `add_failure`;
+  - every `propose_component` / `connect_components` in a turn becomes **one** `propose_change` when the
+    turn ends, which a person accepts or rejects. Requests that point at a proposed id wait until after
+    the proposal.
+  Each outcome reaches the asker as `{ type: 'canvas.applied', turnId, requests, result }`. The turn's
+  last event waits until its canvas requests have run. A cancelled or failed turn drops its unsent
+  proposal.
+- **Declined.** The `alternatives`, `impl` and `ui` views (demo-only here) come back as `canvas.applied`
+  with `ok: false`, and the ask panel says so.
+- **Lost in translation.** Highlight `tone` and annotation `near` have no engine equivalent and are
+  dropped. The model's tool result is the runtime's `{"sent":true}`, not the engine's outcome, so in the
+  same turn Vowe doesn't know whether a request was declined.
+
 ## What was tested where
 
 | Against the real local Supabase stack (`canvas.test.ts`, real users, RLS on) | Unit / in-memory only |
@@ -169,8 +211,12 @@ and more than two simultaneous users. This is not a claim of production multipla
   their queue); timing lanes for races.
 - Architecture doesn't draw `retries` relationships.
 - Alternatives, Implementation, Provider timeout and Checkout UI remain demo-only views.
-- The part's "Ask Vowe" button and the circle's "Ask Vowe about this" are omitted: there is no runtime to
-  ask in this build. The circle popover offers Done / Remove instead.
+- Asking Vowe (`features/canvas/AskVowe.tsx`) has three ways in: the selection bar's "Ask about
+  this/these", the circle popover's "Ask Vowe about this", and the empty canvas's "Ask Vowe". All three
+  use the existing `.ctx`, `.lasso-ask` and `.mini.ask` styles. The question and the streamed answer
+  appear in the existing captions panel (`.captions`, `.prevline`, `.curline`, `.spk`), which the ask
+  takes over while it's open. The only new rules are the `.ask-vowe` / `.ask-field` layout in `room.css`;
+  no design exists for a typed question.
 - The selection bar's "Point everyone here" (`highlight_component`) uses the existing `.ctx` bar.
 - One added CSS rule: `.cursor.live{transition:transform 120ms linear}`. Live cursors follow the pointer
   instead of the demo's 900ms scripted glide.

@@ -4,6 +4,7 @@ import { ClearInk, ToolComment, ToolDraw, ToolSelect } from '../../shared/compon
 import { account } from '../../shared/account.js';
 import { useStore } from '../../shared/store.js';
 import { MICROPHONE_DENIED, type CallService } from '../../calls/service.js';
+import { AskVowe, AskVowePanel } from '../canvas/AskVowe.js';
 import { CanvasClient, ipcTransport } from '../canvas/client.js';
 import { LiveSurface } from '../canvas/LiveSurface.js';
 import type { CallSession } from '../call/session.js';
@@ -84,8 +85,16 @@ const typing = (e: KeyboardEvent) => {
 };
 
 /** The call dropped: say so on the canvas, and let you rejoin or step back out to the room. */
+const NoCaptions = () => <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>;
+
+/** The captions panel: asking Vowe takes it over while open. */
+function CallCaptions({ ask, cc }: { ask: AskVowe; cc: boolean }) {
+  const open = useStore(ask.store).open;
+  return open ? <AskVowePanel ask={ask} /> : cc ? <NoCaptions /> : null;
+}
+
 /** A real room's canvas with nothing on it yet: the fresh call's empty state, told what works now. */
-function LiveEmpty({ client }: { client: CanvasClient }) {
+function LiveEmpty({ client, onAsk }: { client: CanvasClient; onAsk?(): void }) {
   const c = useStore(client.store);
   if (c.status === 'loading' || Object.keys(c.doc.components).length) return null;
   return (
@@ -96,6 +105,7 @@ function LiveEmpty({ client }: { client: CanvasClient }) {
         <>
           <span>When Vowe sketches the system it lands here for everyone in the call, saved with the room. Circle, draw and pin comments on it together.</span>
           <span class="fine">Ask Vowe about the system and it can sketch it here; structural changes wait for someone to accept them.</span>
+          {onAsk && <button class="mini ask" type="button" onClick={onAsk}>Ask Vowe</button>}
         </>
       )}
     </div>
@@ -257,6 +267,11 @@ function FreshCall(props: InnerProps) {
     ? new CanvasClient(roomId, ipcTransport(() => ({ kind: 'human', id: selfCloudId() ?? 'me', name: account.state.user?.name ?? 'You' })))
     : null, [roomId, !!record]);
   useEffect(() => () => board?.dispose(), [board]);
+  // Asking Vowe by text, on this person's own model sign-in; what it changes on the canvas is shared.
+  const asker = useMemo(() => board
+    ? new AskVowe(roomId, board, () => ({ userId: selfCloudId(), name: account.state.user?.name ?? null }))
+    : null, [board]);
+  useEffect(() => () => asker?.close(), [asker]);
 
   // Opening People (from Share's Manage access) opens the column it lives in.
   useEffect(() => { if (ui.people) setDesk(true); }, [ui.people]);
@@ -360,7 +375,7 @@ function FreshCall(props: InnerProps) {
   );
   const overlays = (
     <>
-      {cc && <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>}
+      {asker ? <CallCaptions ask={asker} cc={cc} /> : cc && <NoCaptions />}
       {failure && (
         <div class="receipt dropped" role="alert">
           <span class="dot needs"></span><span>Not saved: {failure}</span>
@@ -415,9 +430,9 @@ function FreshCall(props: InnerProps) {
           <div class="presence"><Who people={[me, ...others]} vowe={!voiceOff && !agentOff} ring={ring} /></div>
         </div>
         {board ? (
-          <LiveSurface client={board} onComment={(x, y) => setDrafts(drafts.concat([{ x: x - 10, y: y - 20 }]))}>
+          <LiveSurface client={board} onComment={(x, y) => setDrafts(drafts.concat([{ x: x - 10, y: y - 20 }]))} onAsk={asker ? (about) => asker.open(about) : undefined}>
             {marks}
-            {!pins.length && !drafts.length && <LiveEmpty client={board} />}
+            {!pins.length && !drafts.length && <LiveEmpty client={board} onAsk={asker ? () => asker.open() : undefined} />}
             {overlays}
           </LiveSurface>
         ) : (

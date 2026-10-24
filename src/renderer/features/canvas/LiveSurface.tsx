@@ -6,7 +6,7 @@ import {
 import { initials } from '../../shared/account.js';
 import { useStore } from '../../shared/store.js';
 import {
-  instanceKey, viewOf, viewsOf, type Actor, type Annotation, type CanvasRef, type Scene, type SceneNode,
+  componentsOf, instanceKey, viewOf, viewsOf, type Actor, type Annotation, type CanvasRef, type Scene, type SceneNode,
 } from '../../../shared/canvas/index.js';
 import { Inside, srOnly } from '../room/canvas/Part.js';
 import { inside, STAGE_H, STAGE_W, toD } from '../room/geometry.js';
@@ -63,11 +63,13 @@ export interface LiveSurfaceProps {
   client: CanvasClient;
   /** The comment tool: where you clicked, in the surface's own pixels. Absent: no comment tool. */
   onComment?(x: number, y: number): void;
+  /** Asking Vowe about what you selected or circled (component ids, and how the canvas names them). Absent: no ask. */
+  onAsk?(about: { selected: string[]; circled: string[]; names: string[] }): void;
   /** Drawn inside the surface, over the canvas: pins, the empty state, captions, the call bar. */
   children?: ComponentChildren;
 }
 
-export function LiveSurface({ client, onComment, children }: LiveSurfaceProps) {
+export function LiveSurface({ client, onComment, onAsk, children }: LiveSurfaceProps) {
   const s = useStore(client.store);
   const me = client.transport.me();
   const doc = s.doc, view = s.scenes[doc.activeView] ? doc.activeView : 'architecture';
@@ -80,7 +82,7 @@ export function LiveSurface({ client, onComment, children }: LiveSurfaceProps) {
   const [lasso, setLasso] = useState<Point[]>([]);
   const [stroke, setStroke] = useState<Point[]>([]);
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const [ask, setAsk] = useState<{ id: string; names: string[]; x: number; y: number } | null>(null);
+  const [ask, setAsk] = useState<{ id: string; refs: CanvasRef[]; names: string[]; x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -218,7 +220,7 @@ export function LiveSurface({ client, onComment, children }: LiveSurfaceProps) {
       const xs = d.pts.map((q) => q[0]), ys = d.pts.map((q) => q[1]);
       const at = { x: Math.max(...xs) + 12, y: Math.min(...ys) };
       void run('draw', { view, kind: 'circle', d: toD(d.pts, true), refs: hits.map((t) => t.ref) }).then((r) => {
-        if (r.ok) setAsk({ id: r.changed.annotations[0], names: hits.map((t) => t.short), ...at });
+        if (r.ok) setAsk({ id: r.changed.annotations[0], refs: hits.map((t) => t.ref), names: hits.map((t) => t.short), ...at });
       });
       return;
     }
@@ -374,7 +376,9 @@ export function LiveSurface({ client, onComment, children }: LiveSurfaceProps) {
               <span class="lbl">{ask.names.length ? 'You circled' : 'You circled empty space'}</span>
               <div class="items">{ask.names.map((nm, i) => <span key={i} class="tag">{nm}</span>)}</div>
               <div class="row2">
-                <button class="mini" type="button" onClick={() => setAsk(null)}>Done</button>
+                {onAsk && ask.names.length > 0 ? (
+                  <button class="mini ask" type="button" onClick={() => { onAsk({ selected: [], circled: componentsOf(ask.refs), names: ask.names }); setAsk(null); }}>Ask Vowe about this</button>
+                ) : <button class="mini" type="button" onClick={() => setAsk(null)}>Done</button>}
                 <button class="mini ghost" type="button" onClick={() => { void run('remove_annotation', { annotation: ask.id }); setAsk(null); }}>Remove</button>
               </div>
             </div>
@@ -382,6 +386,7 @@ export function LiveSurface({ client, onComment, children }: LiveSurfaceProps) {
           {ctx && (
             <div class="ctx" style={`transform: translate(${ctx.x}px, ${ctx.y - 42}px)`}>
               {sel.length > 1 && <><span class="n">{sel.length} selected</span><span class="sep"></span></>}
+              {onAsk && selNames.length > 0 && <><button type="button" onClick={() => onAsk({ selected: componentsOf(sel), circled: [], names: selNames })}>{sel.length > 1 ? 'Ask about these' : 'Ask about this'}</button><span class="sep"></span></>}
               {selNames.length > 0 && <button type="button" onClick={() => run('highlight_component', { components: [...new Set(sel.flatMap((r) => 'step' in r ? [] : [r.component]))] })}>Point everyone here</button>}
               <span class="sep"></span>
               <button type="button" onClick={() => select([])}>Done</button>
