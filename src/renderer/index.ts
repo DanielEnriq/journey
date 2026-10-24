@@ -1,4 +1,4 @@
-import type { GitFileChange, JourneyApi, Repository, Room, Theme, User, Workspace } from '../shared/api.js';
+import type { GitFileChange, JourneyApi, Repository, RoomSummary, Theme, User, Workspace } from '../shared/api.js';
 import { CallController, type CallParticipant, type CallSnapshot } from './call.js';
 import { setupDevSessions } from './dev-sessions.js';
 import { setupDevAgent } from './dev-agent.js';
@@ -23,7 +23,7 @@ const call = new CallController(calls);
 /** The repository whose Git details are shown, if any. */
 let selectedRepo: Repository | null = null;
 /** Rooms of the selected workspace, for labelling the call. */
-let roomList: Room[] = [];
+let roomList: RoomSummary[] = [];
 
 /** Runs an action, showing any failure in the error line instead of swallowing it. */
 async function attempt(action: () => Promise<unknown>) {
@@ -174,8 +174,9 @@ async function renderWorkspaces(user: User | null) {
     roomList = [];
     return renderRooms(unavailable ?? 'Create a workspace to add rooms.');
   }
-  roomList = await rooms.list(workspaceEl.value);
-  renderRooms();
+  const listed = await rooms.list(workspaceEl.value);
+  roomList = listed.ok ? listed.value : [];
+  renderRooms(listed.ok ? undefined : listed.error.message);
 }
 
 function renderRooms(empty = 'No rooms yet.') {
@@ -272,7 +273,8 @@ onSubmit('new-workspace', async (name) => {
   await renderWorkspaces(currentUser);
 });
 onSubmit('new-room', async (name) => {
-  await rooms.create(workspaceEl.value, name);
+  const created = await rooms.create({ workspaceId: workspaceEl.value, name });
+  if (!created.ok) throw new Error(created.error.message);
   await renderWorkspaces(currentUser);
 });
 

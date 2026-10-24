@@ -1,0 +1,107 @@
+import { h } from '../../vendor/preact.js';
+import { Compose, Home, PanelLeft, PanelRight } from '../../shared/components/icons.js';
+import { AccountFoot } from '../../shared/components/Account.js';
+import type { PersonRef, RoomSummary } from './types.js';
+
+// The window around every room screen, in the call or not: the band with its toggles, the rooms panel,
+// and how a room's presence is drawn.
+
+export function Lights() {
+  return (
+    <div class="lights" aria-hidden="true">
+      <span style="background:#ff5f57"></span>
+      <span style="background:#febc2e"></span>
+      <span style="background:#28c840"></span>
+    </div>
+  );
+}
+
+export interface ChromeProps {
+  side: boolean;
+  toggleSide(): void;
+  onNewRoom(): void;
+  /** Outside the call only: back to the workspace. */
+  onHome?(): void;
+  desk?: boolean | null;
+  deskUnseen?: boolean;
+  toggleDesk?(): void;
+}
+
+export function Chrome({ side, desk = null, deskUnseen, toggleSide, toggleDesk, onNewRoom, onHome }: ChromeProps) {
+  const sideLabel = side ? 'Hide rooms' : 'Show rooms', deskLabel = desk ? 'Hide where we are' : 'Show where we are';
+  return (
+    <header class="top-chrome">
+      <div class="chrome-controls">
+        <button class={'panel-toggle' + (side ? ' open' : '')} type="button" aria-label={sideLabel} title={`${sideLabel} · [`} aria-expanded={side} onClick={toggleSide}><PanelLeft /></button>
+        <button class="panel-toggle" type="button" aria-label="New room" title="New room" onClick={onNewRoom}><Compose /></button>
+        {onHome && <button class="panel-toggle" type="button" aria-label="Home" title="Back to your rooms" onClick={onHome}><Home /></button>}
+      </div>
+      {desk !== null && (
+        <div class="chrome-actions">
+          <button class={'panel-toggle' + (desk ? ' open' : '')} type="button" aria-label={deskLabel} title={`${deskLabel} · ]`} aria-expanded={desk} onClick={toggleDesk}>
+            <PanelRight />
+            {deskUnseen && <span class="unseen" aria-hidden="true"></span>}
+          </button>
+        </div>
+      )}
+    </header>
+  );
+}
+
+/** One room in a list: amber when it needs you, brighter when a call is on, quiet otherwise. */
+export function roomLine(r: RoomSummary) {
+  const names = r.inCall.filter((p) => p.tone !== 'me').map((p) => p.name);
+  const you = r.inCall.some((p) => p.tone === 'me');
+  const call = r.inCall.length > 0;
+  return {
+    dot: 'dot' + (r.needs ? ' needs' : call ? ' call' : ''),
+    act: r.needs ?? (call ? (you && !names.length ? 'You’re in the call' : `${listNames(names, you)} in the call`) : r.activity),
+    actCls: 'act' + (r.needs ? ' ask' : ''),
+  };
+}
+
+export function listNames(names: string[], you = false) {
+  const all = (you ? ['You'] : []).concat(names);
+  const verb = all.length === 1 && !you ? 'is' : 'are';
+  const joined = all.length <= 1 ? all[0] ?? '' : all.slice(0, -1).join(', ') + ' and ' + all[all.length - 1];
+  return `${joined} ${verb}`;
+}
+
+interface PanelProps {
+  rooms: RoomSummary[];
+  current: string;
+  ask?: { text: string; go(): void } | null;
+  onOpenRoom(id: string): void;
+  hidden: boolean;
+}
+
+export function RoomsPanel({ rooms, current, ask, onOpenRoom, hidden }: PanelProps) {
+  return (
+    <aside class="sidebar" aria-hidden={hidden}>
+      <div class="sidebar-title"><span class="eyebrow">Rooms</span></div>
+      <nav class="sidebar-nav" aria-label="Rooms">
+        {rooms.map((r) => {
+          const l = roomLine(r);
+          return [
+            <button key={r.id} class={'row' + (r.id === current ? ' selected' : '')} type="button" aria-current={r.id === current ? 'page' : undefined} onClick={() => onOpenRoom(r.id)}>
+              <span class={l.dot}></span>
+              <span class="txt"><span class="name">{r.name}</span><span class={l.actCls}>{l.act}</span></span>
+            </button>,
+            r.id === current && ask && <button key={r.id + '-ask'} class="subrow" type="button" onClick={ask.go}><span class="dot needs"></span><span>{ask.text}</span></button>,
+          ];
+        })}
+      </nav>
+      <AccountFoot />
+    </aside>
+  );
+}
+
+/** Avatars of who is in a call; Vowe's orb last, still, since it only speaks inside the call. */
+export function Who({ people, vowe, ring }: { people: PersonRef[]; vowe: boolean; ring?: Record<string, string> }) {
+  return (
+    <div class="who">
+      {people.map((p) => <span key={p.initials} class={`avatar ${p.tone === 'me' ? '' : p.tone} ${ring?.[p.initials] ?? ''}`} title={p.name}>{p.initials}</span>)}
+      {vowe && <span class="orb small" title="Vowe"></span>}
+    </div>
+  );
+}

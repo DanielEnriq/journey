@@ -14,19 +14,206 @@ export type Database = {
   }
   public: {
     Tables: {
+      room_activity: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["room_activity_kind"]
+          room_id: string
+          subject: string | null
+          version: number | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["room_activity_kind"]
+          room_id: string
+          subject?: string | null
+          version?: number | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["room_activity_kind"]
+          room_id?: string
+          subject?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_activity_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_comments: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          id: string
+          room_id: string
+          thread_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          room_id: string
+          thread_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          room_id?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_comments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_comments_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_comments_thread_id_room_id_fkey"
+            columns: ["thread_id", "room_id"]
+            isOneToOne: false
+            referencedRelation: "room_threads"
+            referencedColumns: ["id", "room_id"]
+          },
+        ]
+      }
+      room_decision_versions: {
+        Row: {
+          created_at: string
+          decision_id: string
+          proposed_by: string
+          title: string
+          verify: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          decision_id: string
+          proposed_by: string
+          title: string
+          verify: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          decision_id?: string
+          proposed_by?: string
+          title?: string
+          verify?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_decision_versions_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "room_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_decision_versions_proposed_by_fkey"
+            columns: ["proposed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_decisions: {
+        Row: {
+          created_at: string
+          id: string
+          proposed_by: string
+          room_id: string
+          title: string
+          updated_at: string
+          verify: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          proposed_by?: string
+          room_id: string
+          title: string
+          updated_at?: string
+          verify: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          proposed_by?: string
+          room_id?: string
+          title?: string
+          updated_at?: string
+          verify?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_decisions_proposed_by_fkey"
+            columns: ["proposed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_decisions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_members: {
         Row: {
           joined_at: string
+          role: Database["public"]["Enums"]["room_role"]
           room_id: string
           user_id: string
         }
         Insert: {
           joined_at?: string
+          role?: Database["public"]["Enums"]["room_role"]
           room_id: string
           user_id: string
         }
         Update: {
           joined_at?: string
+          role?: Database["public"]["Enums"]["room_role"]
           room_id?: string
           user_id?: string
         }
@@ -47,26 +234,168 @@ export type Database = {
           },
         ]
       }
+      room_signatures: {
+        Row: {
+          decision_id: string
+          signed_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          decision_id: string
+          signed_at?: string
+          user_id?: string
+          version: number
+        }
+        Update: {
+          decision_id?: string
+          signed_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_signatures_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "room_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_signatures_decision_id_version_fkey"
+            columns: ["decision_id", "version"]
+            isOneToOne: false
+            referencedRelation: "room_decision_versions"
+            referencedColumns: ["decision_id", "version"]
+          },
+          {
+            foreignKeyName: "room_signatures_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_threads: {
+        Row: {
+          anchor_id: string
+          anchor_name: string
+          anchor_x: number | null
+          anchor_y: number | null
+          body: string
+          created_at: string
+          created_by: string
+          id: string
+          kind: Database["public"]["Enums"]["thread_kind"]
+          resolved_at: string | null
+          room_id: string
+        }
+        Insert: {
+          anchor_id: string
+          anchor_name: string
+          anchor_x?: number | null
+          anchor_y?: number | null
+          body: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["thread_kind"]
+          resolved_at?: string | null
+          room_id: string
+        }
+        Update: {
+          anchor_id?: string
+          anchor_name?: string
+          anchor_x?: number | null
+          anchor_y?: number | null
+          body?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["thread_kind"]
+          resolved_at?: string | null
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_threads_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_visits: {
+        Row: {
+          room_id: string
+          seen_at: string
+          user_id: string
+        }
+        Insert: {
+          room_id: string
+          seen_at?: string
+          user_id?: string
+        }
+        Update: {
+          room_id?: string
+          seen_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_visits_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_visits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms: {
         Row: {
           created_at: string
           created_by: string
+          goal: string | null
           id: string
           name: string
+          repository: string | null
+          updated_at: string
           workspace_id: string
         }
         Insert: {
           created_at?: string
           created_by?: string
+          goal?: string | null
           id?: string
           name: string
+          repository?: string | null
+          updated_at?: string
           workspace_id: string
         }
         Update: {
           created_at?: string
           created_by?: string
+          goal?: string | null
           id?: string
           name?: string
+          repository?: string | null
+          updated_at?: string
           workspace_id?: string
         }
         Relationships: [
@@ -183,6 +512,23 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      room_activity_kind:
+        | "thread"
+        | "reply"
+        | "decision"
+        | "amended"
+        | "signed"
+        | "repository"
+        | "call-started"
+        | "call-left"
+      room_role: "owner" | "member"
+      thread_kind:
+        | "note"
+        | "concern"
+        | "avoid"
+        | "constraint"
+        | "question"
+        | "goal"
       workspace_role: "owner" | "member"
     }
     CompositeTypes: {
@@ -311,6 +657,25 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      room_activity_kind: [
+        "thread",
+        "reply",
+        "decision",
+        "amended",
+        "signed",
+        "repository",
+        "call-started",
+        "call-left",
+      ],
+      room_role: ["owner", "member"],
+      thread_kind: [
+        "note",
+        "concern",
+        "avoid",
+        "constraint",
+        "question",
+        "goal",
+      ],
       workspace_role: ["owner", "member"],
     },
   },

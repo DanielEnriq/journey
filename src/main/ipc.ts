@@ -8,13 +8,23 @@ import { WorkContextService } from '../context/index.js';
 import { addRepository, getRepository, listRepositories, markRepositoryOpened, removeRepository } from '../database/repositories.js';
 import { getAllSettings, updateSettings } from '../database/settings.js';
 import { detectRepositories } from '../git/detect.js';
-import { findWorkingTreeRoot, getStatus, listBranches, listWorktrees } from '../git/index.js';
+import { findWorkingTreeRoot, getRemoteUrl, getStatus, listBranches, listWorktrees } from '../git/index.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
 import { anthropic } from '../integrations/anthropic/index.js';
 import { getCallAccess } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
-import { createRoom, createWorkspace, listRooms, listWorkspaces } from '../integrations/supabase/workspaces.js';
-import type { Channels, EventChannel, InvokeArgs, InvokeChannel, InvokeResult, MicrophoneAccess } from '../shared/api.js';
+import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
+import { createWorkspace, listWorkspaces, roomRecord, rooms } from '../integrations/supabase/workspaces.js';
+import type {
+  Channels,
+  EventChannel,
+  InvokeArgs,
+  InvokeChannel,
+  InvokeResult,
+  MicrophoneAccess,
+  RoomCheckout,
+  RoomResult,
+} from '../shared/api.js';
 import { isAppPage } from './window.js';
 
 function requireString(value: unknown, what: string): string {
@@ -87,6 +97,45 @@ function handle<K extends InvokeChannel>(
 /** Pushes an event to every open window. */
 export function broadcast<K extends EventChannel>(channel: K, payload: Channels['event'][K]) {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
+}
+
+/** Runs a room operation, resolving with a RoomResult so the error code survives IPC. */
+async function roomResult<T>(run: () => Promise<T>): Promise<RoomResult<T>> {
+  try {
+    return { ok: true, value: await run() };
+  } catch (err) {
+    const { code, message } = toRoomError(err);
+    if (code === 'unknown') console.warn('[rooms]', err);
+    return { ok: false, error: { code, message } };
+  }
+}
+
+/** The shared identity of a local repository's `origin`. Only the identity leaves this machine, never the path. */
+async function originIdentity(repositoryId: unknown): Promise<string> {
+  const repo = typeof repositoryId === 'string' ? getRepository(repositoryId) : undefined;
+  if (!repo) throw new RoomError('invalid', 'No such local repository');
+  const remote = await getRemoteUrl(repo.path);
+  const identity = remote && repositoryIdentity(remote);
+  if (!identity) throw new RoomError('invalid', `${repo.name} has no shareable origin remote`);
+  return identity;
+}
+
+/**
+ * Where a room's repository is checked out here: the most recently opened added repository whose
+ * origin has the room's identity. Computed on this machine and never sent to the cloud.
+ */
+async function roomCheckout(roomId: string): Promise<RoomCheckout | null> {
+  const room = await rooms.getRoom(roomId);
+  if (!room.repository) return null;
+  const want = room.repository.toLowerCase();
+  const repos = listRepositories().sort((a, b) => (b.lastOpenedAt ?? '').localeCompare(a.lastOpenedAt ?? ''));
+  for (const repo of repos) {
+    const remote = await getRemoteUrl(repo.path).catch(() => null);
+    if (remote && repositoryIdentity(remote)?.toLowerCase() === want) {
+      return { roomId: room.id, repository: room.repository, repositoryId: repo.id, path: repo.path };
+    }
+  }
+  return null;
 }
 
 /**
@@ -203,10 +252,29 @@ export function registerIpc() {
   // Cloud: RLS decides what each call may see or change, so these only check argument shapes.
   handle('workspaces:list', () => listWorkspaces());
   handle('workspaces:create', (name) => createWorkspace(requireString(name, 'Workspace name').trim()));
-  handle('rooms:list', (workspaceId) => listRooms(requireString(workspaceId, 'Workspace id')));
-  handle('rooms:create', (workspaceId, name) =>
-    createRoom(requireString(workspaceId, 'Workspace id'), requireString(name, 'Room name').trim()),
+  // The room service validates its own arguments. Opening a room only reads it: no call, mic, agent, or files.
+  handle('rooms:list', (workspaceId) => roomResult(() => rooms.listRooms(workspaceId)));
+  handle('rooms:get', (roomId) => roomResult(() => rooms.getRoom(roomId)));
+  handle('rooms:create', (room) => roomResult(() => rooms.createRoom(room)));
+  handle('rooms:update', (roomId, patch) => roomResult(() => rooms.updateRoom(roomId, patch)));
+  handle('rooms:delete', (roomId) => roomResult(() => rooms.deleteRoom(roomId)));
+  handle('rooms:members', (roomId) => roomResult(() => rooms.listMembers(roomId)));
+  handle('rooms:addMember', (roomId, userId, role) => roomResult(() => rooms.addMember(roomId, userId, role)));
+  handle('rooms:setMemberRole', (roomId, userId, role) => roomResult(() => rooms.setMemberRole(roomId, userId, role)));
+  handle('rooms:removeMember', (roomId, userId) => roomResult(() => rooms.removeMember(roomId, userId)));
+  handle('rooms:attachRepository', (roomId, repositoryId) =>
+    roomResult(async () => rooms.updateRoom(roomId, { repository: await originIdentity(repositoryId) })),
   );
+  handle('rooms:checkout', (roomId) => roomResult(() => roomCheckout(roomId)));
+  handle('record:get', (roomId) => roomResult(() => roomRecord.getRecord(roomId)));
+  handle('record:addThread', (roomId, thread) => roomResult(() => roomRecord.addThread(roomId, thread)));
+  handle('record:reply', (roomId, threadId, body) => roomResult(() => roomRecord.reply(roomId, threadId, body)));
+  handle('record:resolve', (roomId, threadId) => roomResult(() => roomRecord.resolve(roomId, threadId)));
+  handle('record:propose', (roomId, decision) => roomResult(() => roomRecord.propose(roomId, decision)));
+  handle('record:amend', (roomId, decisionId, change) => roomResult(() => roomRecord.amend(roomId, decisionId, change)));
+  handle('record:sign', (roomId, decisionId, version) => roomResult(() => roomRecord.sign(roomId, decisionId, version)));
+  handle('record:seen', (roomId) => roomResult(() => roomRecord.markSeen(roomId)));
+  handle('record:call', (roomId, what) => roomResult(() => roomRecord.logCall(roomId, what)));
   handle('rooms:join', (roomId) => connectRoom(requireString(roomId, 'Room id')));
   handle('rooms:leave', (roomId) => disconnectRoom(requireString(roomId, 'Room id')));
   // sendRoomEvent validates the type and payload against RoomEvents.

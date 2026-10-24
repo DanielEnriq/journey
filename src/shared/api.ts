@@ -403,7 +403,143 @@ export interface AgentStatus {
 // not the Google `sub` in User.id. RoomSession.selfId is the signed-in user's.
 
 export type Workspace = Tables<'workspaces'>;
-export type Room = Tables<'rooms'>;
+
+// ─── Rooms ───────────────────────────────────────────────────────────────────
+// A room is persistent and exists apart from its call: opening one (rooms.get, rooms.members) reads
+// cloud rows only. It never starts a call, opens the microphone, runs a coding agent, or shares
+// local files. Joining the call (rooms.join, calls.access) is a separate step, for members only.
+// Implementation: integrations/supabase/rooms.ts; rules: supabase/migrations/*_room_membership.sql.
+
+/** `owner`s rename, delete, and manage members; `member`s use the room and can leave it. */
+export type RoomRole = 'owner' | 'member';
+
+/** A room you're a member of. Ids are stable UUIDs; times are ISO 8601. */
+export interface RoomSummary {
+  id: string;
+  workspaceId: string;
+  name: string;
+  /** What the room is for; null when nobody said. */
+  goal: string | null;
+  /**
+   * Shared repository identity, e.g. `github.com/acme/payments`. Never a local path: each member
+   * maps it to their own checkout on their machine (see RoomCheckout).
+   */
+  repository: string | null;
+  createdBy: string;
+  createdAt: string;
+  /** Last change to the room's own fields (name, goal, repository). */
+  updatedAt: string;
+  /** Your role in it. */
+  role: RoomRole;
+}
+
+export interface RoomDetails extends RoomSummary {
+  memberCount: number;
+}
+
+export interface RoomMember {
+  roomId: string;
+  /** Cloud user id. */
+  userId: string;
+  role: RoomRole;
+  joinedAt: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+export interface NewRoom {
+  workspaceId: string;
+  name: string;
+  goal?: string | null;
+  /** A remote URL (`git@github.com:acme/payments.git`) or identity; stored as the identity. Local paths are refused. */
+  repository?: string | null;
+}
+
+/** Fields to change; leave one out to keep it, or set goal/repository to null to clear it. */
+export interface RoomPatch {
+  name?: string;
+  goal?: string | null;
+  repository?: string | null;
+}
+
+/**
+ * Why a room call failed:
+ *   not-found          no such room, or you aren't a member (indistinguishable on purpose)
+ *   permission-denied  you can see the room but your role can't do that
+ *   invalid            bad input, e.g. an empty name, a local path as repository, a user outside the workspace
+ *   conflict           would leave a room without an owner
+ *   signed-out         no cloud session; sign in again
+ *   not-configured     Supabase isn't set up in .env; rooms are unavailable
+ *   network            the cloud couldn't be reached; safe to retry
+ */
+export type RoomErrorCode =
+  | 'not-found'
+  | 'permission-denied'
+  | 'invalid'
+  | 'conflict'
+  | 'signed-out'
+  | 'not-configured'
+  | 'network'
+  | 'unknown';
+
+export interface RoomFailure {
+  code: RoomErrorCode;
+  message: string;
+}
+
+/** What room channels resolve with: failures are values, so the code survives IPC. */
+export type RoomResult<T> = { ok: true; value: T } | { ok: false; error: RoomFailure };
+
+/** A suggested shape for UI state around a room call: loading until the RoomResult arrives. */
+export type RoomLoad<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; error: RoomFailure };
+
+// ─── Room integration boundaries ─────────────────────────────────────────────
+// Contracts only: nothing implements these yet. Each system keys its data by room id. Anything that
+// comes from this machine (paths, transcripts, worktrees) stays local unless a member explicitly
+// shares a summary of it with the room.
+
+/** Where a room's repository is checked out on this machine. Resolved locally; never stored in the cloud. */
+export interface RoomCheckout {
+  roomId: string;
+  /** RoomSummary.repository. */
+  repository: string;
+  /** Local Repository.id. */
+  repositoryId: string;
+  path: string;
+}
+
+/**
+ * A line of coding work (a branch in a worktree, with its Claude Code sessions) linked to a room.
+ * `local` ones come from WorkContextService on this machine; `room` ones were shared with members.
+ */
+export interface RoomWorkstreamRef {
+  roomId: string;
+  workstreamId: string;
+  repository: string | null;
+  branch: string | null;
+  visibility: 'local' | 'room';
+}
+
+/** Whether a room's call is running. Having a room never implies one: no call is the normal state. */
+export interface RoomCallState {
+  roomId: string;
+  active: boolean;
+  participants: Participant[];
+}
+
+/** A canvas view drawn in a room. */
+export interface RoomViewRef {
+  roomId: string;
+  viewId: string;
+}
+
+/** An engineering decision recorded in a room. */
+export interface RoomDecisionRef {
+  roomId: string;
+  decisionId: string;
+  version: number;
+}
 
 /** Someone connected to a live room. Several windows or devices of one user count once. */
 export interface Participant {
@@ -420,6 +556,8 @@ export interface Participant {
  */
 export interface RoomEvents {
   'chat:message': { text: string };
+  /** The room's record changed (a thread, reply, decision or signature); members re-read it. */
+  'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' };
 }
 
 export type RoomEventType = keyof RoomEvents;
@@ -445,6 +583,93 @@ export interface RoomSession {
 
 /** `reconnecting` after a dropped connection (rejoins automatically); `left` once the room is closed. */
 export type RoomStatus = 'connected' | 'reconnecting' | 'left';
+
+// ─── Room record ─────────────────────────────────────────────────────────────
+// What a room keeps between calls: threads pinned to what it was looking at, their replies, its
+// decisions with their versions and signatures, and what happened (supabase/migrations/*_room_record.sql).
+// Authors, versions and timestamps are set by the database, never by the client.
+
+export type ThreadKind = 'note' | 'concern' | 'avoid' | 'constraint' | 'question' | 'goal';
+
+export interface RoomAuthor {
+  /** Cloud user id. */
+  id: string;
+  name: string | null;
+  email: string;
+}
+
+export interface RoomComment {
+  id: string;
+  body: string;
+  author: RoomAuthor;
+  createdAt: string;
+}
+
+export interface RoomThread {
+  id: string;
+  roomId: string;
+  kind: ThreadKind;
+  /** A canvas part (its id and name), or `pin` with the point it was dropped on. */
+  anchor: { id: string; name: string; x: number | null; y: number | null };
+  body: string;
+  author: RoomAuthor;
+  createdAt: string;
+  resolvedAt: string | null;
+  /** Oldest first. */
+  replies: RoomComment[];
+}
+
+export interface NewThread {
+  kind: ThreadKind;
+  anchor: { id: string; name: string; x?: number | null; y?: number | null };
+  body: string;
+}
+
+export interface RoomSignature {
+  userId: string;
+  version: number;
+  signedAt: string;
+}
+
+export interface RoomDecision {
+  id: string;
+  roomId: string;
+  title: string;
+  /** The checks, `;`-separated, as written. */
+  verify: string;
+  /** Bumped by the database whenever the title or checks change. */
+  version: number;
+  proposedBy: RoomAuthor;
+  createdAt: string;
+  updatedAt: string;
+  /** Every signature on any version; only those on `version` count. */
+  signatures: RoomSignature[];
+  /** Earlier versions, newest first. */
+  history: { version: number; title: string; verify: string; proposedBy: RoomAuthor; createdAt: string }[];
+}
+
+export type RoomActivityKind = 'thread' | 'reply' | 'decision' | 'amended' | 'signed' | 'repository' | 'call-started' | 'call-left';
+
+export interface RoomActivity {
+  id: string;
+  kind: RoomActivityKind;
+  actor: RoomAuthor | null;
+  subject: string | null;
+  version: number | null;
+  createdAt: string;
+}
+
+export interface RoomRecord {
+  roomId: string;
+  /** Open threads, oldest first. */
+  threads: RoomThread[];
+  /** The room's decisions, newest first; the first is the one the room is working on. */
+  decisions: RoomDecision[];
+  /** Newest first, at most 50. */
+  activity: RoomActivity[];
+  /** When you last looked at this room; null on a first visit. */
+  lastSeenAt: string | null;
+}
 
 // ─── Voice calls ─────────────────────────────────────────────────────────────
 // Each room has a LiveKit audio call, joined from the renderer (renderer/call.ts). Main only
@@ -498,8 +723,30 @@ export interface Channels {
     'context:session': (sessionId: string) => SessionContext | null;
     'workspaces:list': () => Workspace[];
     'workspaces:create': (name: string) => Workspace;
-    'rooms:list': (workspaceId: string) => Room[];
-    'rooms:create': (workspaceId: string, name: string) => Room;
+    'rooms:list': (workspaceId?: string) => RoomResult<RoomSummary[]>;
+    'rooms:get': (roomId: string) => RoomResult<RoomDetails>;
+    'rooms:create': (room: NewRoom) => RoomResult<RoomDetails>;
+    'rooms:update': (roomId: string, patch: RoomPatch) => RoomResult<RoomDetails>;
+    'rooms:delete': (roomId: string) => RoomResult<void>;
+    'rooms:members': (roomId: string) => RoomResult<RoomMember[]>;
+    'rooms:addMember': (roomId: string, userId: string, role?: RoomRole) => RoomResult<RoomMember>;
+    'rooms:setMemberRole': (roomId: string, userId: string, role: RoomRole) => RoomResult<RoomMember>;
+    /** Without a userId, leaves the room (membership, not the call). */
+    'rooms:removeMember': (roomId: string, userId?: string) => RoomResult<void>;
+    /** Attaches the shared identity of a local repository's `origin` remote; its path stays local. */
+    'rooms:attachRepository': (roomId: string, repositoryId: string) => RoomResult<RoomDetails>;
+    /** The room's repository checked out on this machine: an added local repository whose origin matches. */
+    'rooms:checkout': (roomId: string) => RoomResult<RoomCheckout | null>;
+    'record:get': (roomId: string) => RoomResult<RoomRecord>;
+    'record:addThread': (roomId: string, thread: NewThread) => RoomResult<RoomThread>;
+    'record:reply': (roomId: string, threadId: string, body: string) => RoomResult<RoomComment>;
+    'record:resolve': (roomId: string, threadId: string) => RoomResult<void>;
+    'record:propose': (roomId: string, decision: { title: string; verify: string }) => RoomResult<RoomDecision>;
+    'record:amend': (roomId: string, decisionId: string, change: { title?: string; verify?: string }) => RoomResult<RoomDecision>;
+    /** Signs the decision's current version; refused if `version` isn't current any more. */
+    'record:sign': (roomId: string, decisionId: string, version: number) => RoomResult<RoomDecision>;
+    'record:seen': (roomId: string) => RoomResult<void>;
+    'record:call': (roomId: string, what: 'call-started' | 'call-left') => RoomResult<void>;
     'rooms:join': (roomId: string) => RoomSession;
     'rooms:leave': (roomId: string) => void;
     'rooms:send': <K extends RoomEventType>(roomId: string, type: K, payload: RoomEvents[K]) => RoomEvent<K>;
@@ -600,10 +847,32 @@ export interface JourneyApi {
     create(name: string): Promise<Workspace>;
   };
   rooms: {
-    list(workspaceId: string): Promise<Room[]>;
-    /** Creates a room in a workspace you belong to; you become a member but aren't connected yet. */
-    create(workspaceId: string, name: string): Promise<Room>;
-    /** Becomes a member if needed, connects, and announces you to the room. Joining twice is a no-op. */
+    // Persistent rooms. Each resolves with a RoomResult rather than rejecting, so the UI can tell
+    // not-found, permission-denied, network and the rest apart. None of these joins the call.
+    /** Rooms you're a member of, most recently changed first; optionally one workspace's only. */
+    list(workspaceId?: string): Promise<RoomResult<RoomSummary[]>>;
+    /** Opens a room's record (its preview data). Doesn't connect, start a call, or touch local files. */
+    get(roomId: string): Promise<RoomResult<RoomDetails>>;
+    /** Creates a room in a workspace you belong to; you become its owner but aren't connected. */
+    create(room: NewRoom): Promise<RoomResult<RoomDetails>>;
+    /** Owners only. */
+    update(roomId: string, patch: RoomPatch): Promise<RoomResult<RoomDetails>>;
+    /** Owners only. */
+    delete(roomId: string): Promise<RoomResult<void>>;
+    members(roomId: string): Promise<RoomResult<RoomMember[]>>;
+    /** Owners only. `userId` is the cloud id of an existing member of the room's workspace. */
+    addMember(roomId: string, userId: string, role?: RoomRole): Promise<RoomResult<RoomMember>>;
+    /** Owners only. A room always keeps an owner. */
+    setMemberRole(roomId: string, userId: string, role: RoomRole): Promise<RoomResult<RoomMember>>;
+    /** Leaves the room (no userId), or as an owner removes someone. Not the same as leaving the call. */
+    removeMember(roomId: string, userId?: string): Promise<RoomResult<void>>;
+    /** Owners only. Sets the room's repository from a local repository's `origin`; the path never leaves this machine. */
+    attachRepository(roomId: string, repositoryId: string): Promise<RoomResult<RoomDetails>>;
+    /** Where this room's repository is checked out on this machine; null when it isn't, or the room has none. */
+    checkout(roomId: string): Promise<RoomResult<RoomCheckout | null>>;
+
+    // The live room: Realtime channel and presence. Members only.
+    /** Connects and announces you to the room. Members only; joining twice is a no-op. */
     join(roomId: string): Promise<RoomSession>;
     /** Disconnects from the room; you stay a member and can join again. */
     leave(roomId: string): Promise<void>;
@@ -613,8 +882,22 @@ export interface JourneyApi {
     onPresence(listener: (update: { roomId: string; participants: Participant[] }) => void): () => void;
     onStatus(listener: (update: { roomId: string; status: RoomStatus }) => void): () => void;
   };
+  /** A room's record: threads, replies, decisions and signatures, activity. Members only. */
+  record: {
+    get(roomId: string): Promise<RoomResult<RoomRecord>>;
+    addThread(roomId: string, thread: NewThread): Promise<RoomResult<RoomThread>>;
+    reply(roomId: string, threadId: string, body: string): Promise<RoomResult<RoomComment>>;
+    resolve(roomId: string, threadId: string): Promise<RoomResult<void>>;
+    propose(roomId: string, decision: { title: string; verify: string }): Promise<RoomResult<RoomDecision>>;
+    amend(roomId: string, decisionId: string, change: { title?: string; verify?: string }): Promise<RoomResult<RoomDecision>>;
+    sign(roomId: string, decisionId: string, version: number): Promise<RoomResult<RoomDecision>>;
+    /** Moves your "last looked" marker to now. */
+    seen(roomId: string): Promise<RoomResult<void>>;
+    /** Records that you started or left the room's call. */
+    call(roomId: string, what: 'call-started' | 'call-left'): Promise<RoomResult<void>>;
+  };
   calls: {
-    /** Becomes a room member if needed and returns a token for the room's call. */
+    /** Returns a token for the room's call. Members only. */
     access(roomId: string): Promise<CallAccess>;
     requestMicrophone(): Promise<MicrophoneAccess>;
   };

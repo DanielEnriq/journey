@@ -1,0 +1,349 @@
+import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
+import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
+import { ClearInk, ToolComment, ToolDraw, ToolSelect } from '../../shared/components/icons.js';
+import { useStore } from '../../shared/store.js';
+import type { CallSession } from '../call/session.js';
+import { useLoaded, useRooms } from '../workspace/hooks.js';
+import type { CallControls } from './call/CallBar.js';
+import { CallBar } from './call/CallBar.js';
+import { Surface } from './canvas/Surface.js';
+import type { RoomController } from './controller.js';
+import type { CallDataSource, RoomDataSource, RoomRecordSource, WorkstreamDataSource } from './data/sources.js';
+import { Desk } from './intent/Desk.js';
+import { ProposeDecision, RoomPanel } from './panel/index.js';
+import { deriveRoom } from './model.js';
+import { RoomPreview } from './preview/RoomPreview.js';
+import { Chrome, Lights, RoomsPanel, Who } from './shell.js';
+import type { Chime } from './types.js';
+
+// A room, in one of two states. Outside the call it is a preview: what the room is for, who is in its
+// call, what changed, the work behind it. Joining the call opens the shared canvas in the same window,
+// under the same band; leaving it comes back to the preview. Only the demo's Payment Reliability has a
+// scripted canvas; any other room's call opens on an empty one, with the room's record beside it.
+
+export interface RoomScreenProps {
+  /** The workspace: rooms, calls and work context. */
+  sources: { room: RoomDataSource; call: CallDataSource; work: WorkstreamDataSource };
+  /** The room's persisted record, for the call's right column; absent in the demo, whose call is scripted. */
+  record?: RoomRecordSource;
+  roomId: string;
+  /** Show the call: the route asks for it and the session is in this room's call. */
+  inCall: boolean;
+  session: CallSession;
+  /** The room's scripted canvas, if it has one. */
+  canvas: RoomController | null;
+  /** Why the room's repository couldn't be attached when it was made. */
+  attachError?: string;
+  light: boolean;
+  onOpenRoom(id: string): void;
+  onNewRoom(): void;
+  onHome(): void;
+  onJoin(): void;
+  onLeave(): void;
+  /** Drawn inside the window, over everything: the New room sheet. */
+  overlay?: ComponentChildren;
+}
+
+const typing = (e: KeyboardEvent) => {
+  const t = e.target as HTMLElement | null;
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) || e.metaKey || e.ctrlKey || e.altKey;
+};
+
+/** The call dropped: say so on the canvas, and let you rejoin or step back out to the room. */
+function Dropped({ session, onJoin, onLeave }: { session: CallSession; onJoin(): void; onLeave(): void }) {
+  const cs = useStore(session.store);
+  if (cs.status !== 'dropped') return null;
+  return (
+    <div class="receipt dropped" role="alert">
+      <span class="dot needs"></span>
+      <span>The call disconnected. The canvas stays as it was.</span>
+      <button class="mini ghost" type="button" onClick={onLeave}>Back to the room</button>
+      <button class="mini" type="button" onClick={onJoin}>Rejoin</button>
+    </div>
+  );
+}
+
+function PreviewRoom(props: RoomScreenProps) {
+  const { sources, roomId, light, onOpenRoom, onNewRoom, onHome, canvas, session, onJoin } = props;
+  const rooms = useRooms(sources.room);
+  const [side, setSide] = useState(true);
+  const summary = rooms.find((r) => r.id === roomId);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (!typing(e) && e.key === '[') { setSide((v) => !v); e.preventDefault(); } };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, []);
+  const others = summary?.inCall.filter((p) => p.tone !== 'me') ?? [];
+  return (
+    <div class={`win ${light ? 'light ' : ''}${side ? 'side-open' : ''} outside`}>
+      <Lights />
+      {props.overlay}
+      <Chrome side={side} toggleSide={() => setSide(!side)} onNewRoom={onNewRoom} onHome={onHome} />
+      <RoomsPanel rooms={rooms} current={roomId} hidden={!side} onOpenRoom={onOpenRoom} />
+      <main class="room">
+        <div class="room-identity">
+          <h1>{summary?.name ?? 'Room'}</h1>
+          {summary?.repo && <span class="meta">{summary.repo}</span>}
+          {others.length > 0 && (
+            <div class="presence">
+              <span class="who-label">In the call</span>
+              <Who people={others} vowe />
+            </div>
+          )}
+        </div>
+        {summary ? (
+          <RoomPreview sources={sources} roomId={roomId} session={session} canvas={canvas} attachError={props.attachError} onJoin={onJoin} />
+        ) : (
+          <section class="lobby"><div class="lobby-in"><p class="wnote">This room isn’t in your workspace any more. <button class="linkish" type="button" onClick={onHome}>Back to your rooms</button></p></div></section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function DemoCall(props: RoomScreenProps & { canvas: RoomController }) {
+  const { sources, canvas: ctrl, session, onOpenRoom, onNewRoom, onLeave, onJoin, light, roomId } = props;
+  useEffect(() => { ctrl.resume(); return () => ctrl.suspend(); }, [ctrl]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => ctrl.key(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ctrl]);
+  const s = useStore(ctrl.store);
+  const cs = useStore(session.store);
+  const rooms = useRooms(sources.room);
+  const m = deriveRoom(ctrl);
+  const summary = rooms.find((r) => r.id === roomId);
+
+  const call: CallControls = {
+    voweCls: m.voweCls, agentLabel: m.agentLabel, partOpen: s.partOpen, chime: s.chime,
+    togglePart: () => ctrl.setState({ partOpen: !s.partOpen }), pickChime: (c) => ctrl.setState({ chime: c, partOpen: false }),
+    micCls: m.micCls, micLabel: m.micLabel, muted: s.muted, micDown: () => ctrl.micDown(), micUp: () => ctrl.micUp(),
+    cc: s.cc, ccCls: m.ccCls, toggleCc: () => ctrl.toggleCc(),
+    leaving: cs.status === 'leaving', leave: onLeave,
+  };
+
+  return (
+    <div class={`win ${light ? 'light ' : ''}${m.winClass} in-call`}>
+      <Lights />
+      {props.overlay}
+      <Chrome side={s.side} desk={s.desk} deskUnseen={m.deskUnseen} toggleSide={() => ctrl.setState({ side: !s.side })} toggleDesk={() => ctrl.setState({ desk: !s.desk })} onNewRoom={onNewRoom} />
+      <RoomsPanel rooms={rooms} current={roomId} hidden={!s.side} onOpenRoom={onOpenRoom}
+        ask={m.qOpen ? { text: `${s.handedTo} is asking about refunds`, go: () => ctrl.goTo('provider', { asideOpen: 'q', sel: [] }) } : null} />
+      <main class="room">
+        <div class="room-identity">
+          <h1>{summary?.name ?? 'Payment Reliability'}</h1>
+          <span class="q" title={summary?.repo ?? ''}>{m.def.question}</span>
+          {m.def.parent && <button class="lineage" type="button" title="Go to the view this one grew from" onClick={() => ctrl.go(m.def.parent!, { last: null })}>from {m.parentName}</button>}
+          <div class="presence">
+            {s.toast && <span class="who-label" style="color:var(--ink-3)">{s.toast}</span>}
+            <div class="who">
+              <span class={`avatar ${m.ring.daniel}`} title="Daniel">DE</span>
+              {ctrl.options.scenario === 'live' && <span class={`avatar peer ${m.ring.john}`} title="John">JM</span>}
+              {s.srikar === 'present' && <span class={`avatar p2 arrive ${m.ring.srikar}`} title="Srikar">SR</span>}
+              <span class={`orb small ${m.ring.vowe}`} title="Vowe"></span>
+            </div>
+          </div>
+        </div>
+        <Surface ctrl={ctrl} m={m} call={call} banner={<Dropped session={session} onJoin={onJoin} onLeave={onLeave} />} />
+      </main>
+      <Desk ctrl={ctrl} m={m} />
+    </div>
+  );
+}
+
+const FRESH_TOOLS = [
+  { id: 'select' as const, label: 'Select', title: 'Select · V', Icon: ToolSelect },
+  { id: 'draw' as const, label: 'Draw', title: 'Draw · P', Icon: ToolDraw },
+  { id: 'comment' as const, label: 'Comment', title: 'Comment · C', Icon: ToolComment },
+];
+type FreshTool = (typeof FRESH_TOOLS)[number]['id'];
+
+/** A call in a room with nothing drawn yet: the same canvas and call bar, ready for a fresh start. */
+function FreshCall(props: RoomScreenProps) {
+  const { sources, record, roomId, session, onOpenRoom, onNewRoom, onLeave, onJoin, light } = props;
+  const rooms = useRooms(sources.room);
+  const cs = useStore(session.store);
+  const summary = rooms.find((r) => r.id === roomId);
+  const me = sources.room.me();
+  const [side, setSide] = useState(false);
+  const [desk, setDesk] = useState(!!record);
+  const [tool, setTool] = useState<FreshTool>('select');
+  const [ink, setInk] = useState<string[]>([]);
+  /** Comments placed but not yet written; with a record, Enter saves one as a thread. */
+  const [drafts, setDrafts] = useState<{ x: number; y: number }[]>([]);
+  const [stroke, setStroke] = useState<string | null>(null);
+  const [muted, setMuted] = useState(true);
+  const [cc, setCc] = useState(false);
+  const [partOpen, setPartOpen] = useState(false);
+  const [chime, setChime] = useState<Chime>('pauses');
+  const [drafting, setDrafting] = useState<'new' | 'amend' | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [lit, setLit] = useState<string | null>(null);
+  const surf = useRef<HTMLElement>(null);
+  const pts = useRef<[number, number][] | null>(null);
+  const rec = useLoaded(
+    () => record ? record.load(roomId) : Promise.resolve(null),
+    (fn) => record ? record.subscribe(roomId, fn) : () => {},
+    roomId,
+  );
+  const view = rec.value;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (typing(e)) return;
+      const tools: Record<string, FreshTool> = { v: 'select', p: 'draw', c: 'comment' };
+      if (tools[e.key]) { setTool(tools[e.key]); e.preventDefault(); }
+      else if (e.key === '[') { setSide((v) => !v); e.preventDefault(); }
+      else if (e.key === ']' && record) { setDesk((v) => !v); e.preventDefault(); }
+      else if (e.key === 'Escape') setPartOpen(false);
+    };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, []);
+
+  /** Runs a change to the record, and says so on the canvas if it didn't go through. */
+  const act = (p: Promise<void>) => p.then(() => setFailure(null), (err: Error) => { setFailure(err.message); throw err; });
+
+  const at = (e: PointerEvent): [number, number] => { const r = surf.current!.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const path = (p: [number, number][]) => p.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
+  const down = (e: PointerEvent) => {
+    if ((e.target as Element).closest('button, input, label, .call, .tools, .pin, .receipt')) return;
+    if (tool === 'comment') { const [x, y] = at(e); setDrafts(drafts.concat([{ x: x - 10, y: y - 20 }])); return; }
+    if (tool !== 'draw') return;
+    surf.current!.setPointerCapture(e.pointerId);
+    pts.current = [at(e)];
+  };
+  const move = (e: PointerEvent) => { if (pts.current) { pts.current.push(at(e)); setStroke(path(pts.current)); } };
+  const up = () => { if (pts.current && pts.current.length > 2) setInk(ink.concat([path(pts.current)])); pts.current = null; setStroke(null); };
+  const save = (i: number, body: string) => {
+    const d = drafts[i];
+    if (!record || !body.trim()) return;
+    act(record.pin(roomId, d, body.trim())).then(() => setDrafts((all) => all.filter((x) => x !== d)), () => {});
+  };
+  const show = (anchor: string) => {
+    if (!anchor.startsWith('pin:')) return;
+    setLit(anchor.slice(4));
+    setTimeout(() => setLit(null), 1600);
+  };
+
+  const others = summary?.inCall.filter((p) => p.tone !== 'me') ?? [];
+  // A real room's call has no voice yet: the bar says so rather than pretending to listen.
+  const voiceOff = record ? 'Voice isn’t connected in this build' : undefined;
+  const call: CallControls = {
+    voweCls: 'vowe-btn' + (voiceOff ? '' : ' listening'), agentLabel: voiceOff ? 'not in this call' : 'Listening', partOpen, chime,
+    togglePart: () => setPartOpen(!partOpen), pickChime: (c) => { setChime(c); setPartOpen(false); },
+    micCls: 'cbtn' + (muted ? ' muted' : ''), micLabel: voiceOff ?? (muted ? 'Unmute' : 'Mute'), muted,
+    micDown: () => {}, micUp: () => { if (voiceOff) return; setMuted(!muted); sources.call.setMuted(!muted); },
+    cc, ccCls: 'cbtn' + (cc ? ' on' : ''), toggleCc: () => { setCc(!cc); sources.call.setCaptions(!cc); },
+    voiceOff, leaving: cs.status === 'leaving', leave: onLeave,
+  };
+  const pins = view?.pins ?? [];
+  const empty = !ink.length && !drafts.length && !pins.length;
+
+  return (
+    <div class={`win ${light ? 'light ' : ''}${side ? 'side-open ' : ''}${record && desk ? 'desk-open ' : ''}in-call`}>
+      <Lights />
+      {props.overlay}
+      <Chrome side={side} desk={record ? desk : null} toggleSide={() => setSide(!side)} toggleDesk={() => setDesk(!desk)} onNewRoom={onNewRoom} />
+      <RoomsPanel rooms={rooms} current={roomId} hidden={!side} onOpenRoom={onOpenRoom} />
+      <main class="room">
+        <div class="room-identity">
+          <h1>{summary?.name ?? 'Room'}</h1>
+          <span class="q">{summary?.repo ?? 'No repository'}</span>
+          <div class="presence"><Who people={[me, ...others]} vowe={!voiceOff} /></div>
+        </div>
+        <section ref={surf} class={'surface fresh tool-' + tool} tabIndex={0} aria-label="Shared canvas · V select, P draw, C comment, [ rooms"
+          onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+          <svg class="ink fresh-ink" aria-hidden="true">
+            {ink.map((d, i) => <path key={i} class="stroke" d={d}></path>)}
+            {stroke && <path class="stroke" d={stroke}></path>}
+          </svg>
+          {pins.map((p) => (
+            <div key={p.threadId} class={'pin saved' + (lit === p.threadId ? ' lit' : '')} style={`transform: translate(${p.x}px, ${p.y}px)`}>
+              <span class={'head ' + p.author.tone} title={p.author.name}>{p.author.initials}</span>
+              <span class="pin-note">{p.body}</span>
+            </div>
+          ))}
+          {drafts.map((p, i) => (
+            <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${p.x}px, ${p.y}px)`}>
+              <span class="head">{me.initials}</span>
+              <label style="display:flex"><span class="sr">Comment</span>
+                <input type="text" placeholder={record ? 'Add a comment, then Enter' : 'Add a comment…'}
+                  onKeyDown={(e) => { if (e.key === 'Enter') save(i, (e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDrafts(drafts.filter((x) => x !== p)); }} />
+              </label>
+            </div>
+          ))}
+          {empty && (
+            <div class="fresh-empty">
+              <span class="orb"></span>
+              <b>Nothing drawn yet</b>
+              {record ? (
+                <>
+                  <span>Draw and pin comments here. Comments become the room’s threads and stay after the call; ink stays on your screen only.</span>
+                  <span class="fine">Voice, and Vowe drawing as you talk, aren’t connected in this build.</span>
+                </>
+              ) : (
+                <>
+                  <span>Say what you’re building. Vowe sketches it here for everyone in the call, and you can point, circle and draw on it together.</span>
+                  <span class="fine">This build has no voice pipeline, so only the Payment Reliability demo draws by itself. Draw and comment work here.</span>
+                </>
+              )}
+            </div>
+          )}
+          <div class="tools" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
+            {FRESH_TOOLS.map(({ id, label, title, Icon }) => (
+              <button key={id} class={tool === id ? 'on' : ''} type="button" aria-label={label} title={title} aria-pressed={tool === id} onClick={() => setTool(id)}><Icon /></button>
+            ))}
+            {(ink.length > 0 || drafts.length > 0) && <button type="button" aria-label="Clear your ink" title="Clear your ink and unsaved comments" onClick={() => { setInk([]); setDrafts([]); }}><ClearInk /></button>}
+          </div>
+          {cc && <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>}
+          {failure && (
+            <div class="receipt dropped" role="alert">
+              <span class="dot needs"></span><span>Not saved: {failure}</span>
+              <button class="mini ghost" type="button" onClick={() => setFailure(null)}>Dismiss</button>
+            </div>
+          )}
+          <Dropped session={session} onJoin={onJoin} onLeave={onLeave} />
+          <CallBar c={call} />
+        </section>
+      </main>
+      {record && (
+        <aside class="desk" aria-label="Where the room is" aria-hidden={!desk}>
+          {!view ? (
+            <div class="desk-inner">
+              {rec.state === 'failed'
+                ? <p class="wnote">Couldn’t read this room’s record: {rec.error} <button class="linkish" type="button" onClick={rec.retry}>Try again</button></p>
+                : <p class="wnote"><span class="spinlet"></span>Reading the room…</p>}
+            </div>
+          ) : drafting ? (
+            <div class="desk-panel">
+              <ProposeDecision initial={drafting === 'amend' ? view.decision ?? undefined : undefined} onCancel={() => setDrafting(null)}
+                onSubmit={(d) => act(drafting === 'amend' && view.decision ? record.amend(roomId, view.decision.id, d) : record.propose(roomId, d)).then(() => setDrafting(null))} />
+            </div>
+          ) : (
+            <div class="desk-panel">
+              <RoomPanel
+                {...view.panel}
+                onSign={(id, v) => { act(record.sign(roomId, id, v)).catch(() => {}); }}
+                onProposeChange={() => setDrafting('amend')}
+                onPropose={() => setDrafting('new')}
+                onReply={(id, body) => { act(record.reply(roomId, id, body)).catch(() => {}); }}
+                onShowAnchor={show}
+              />
+            </div>
+          )}
+        </aside>
+      )}
+    </div>
+  );
+}
+
+export function RoomScreen(props: RoomScreenProps) {
+  const { inCall, canvas } = props;
+  return (
+    <div class="room-screen">
+      {!inCall ? <PreviewRoom {...props} /> : canvas ? <DemoCall {...props} canvas={canvas} /> : <FreshCall {...props} />}
+    </div>
+  );
+}

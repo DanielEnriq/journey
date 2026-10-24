@@ -1,0 +1,376 @@
+import { createClient } from '@supabase/supabase-js';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { after, before, describe, it } from 'node:test';
+import type { RoomErrorCode } from '../../shared/api.js';
+import type { Cloud } from './index.js';
+import { createRoomService, repositoryIdentity, RoomError, toRoomError, type RoomService } from './rooms.js';
+import type { Database } from './types.js';
+
+// Unit tests always run. The integration tests run against a local Supabase stack with the migrations
+// applied (docs/rooms.md), as several real signed-in users, and are skipped without one:
+//
+//   ROOMS_TEST_SUPABASE_URL=http://127.0.0.1:54321 ROOMS_TEST_SUPABASE_PUBLISHABLE_KEY=… \
+//   ROOMS_TEST_SUPABASE_SECRET_KEY=… pnpm test
+//
+// They create throwaway users and delete them afterwards, so they refuse any URL but localhost.
+
+const url = process.env.ROOMS_TEST_SUPABASE_URL;
+const publishableKey = process.env.ROOMS_TEST_SUPABASE_PUBLISHABLE_KEY;
+const secretKey = process.env.ROOMS_TEST_SUPABASE_SECRET_KEY;
+const local = Boolean(url && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url));
+if (url && !local) throw new Error('ROOMS_TEST_SUPABASE_URL must be a local stack (http://127.0.0.1:…), never a hosted project');
+const integration = local && publishableKey && secretKey ? {} : { skip: 'set ROOMS_TEST_SUPABASE_* to run against a local stack' };
+
+async function rejectsWith(promise: Promise<unknown>, code: RoomErrorCode) {
+  await assert.rejects(promise, (err: unknown) => {
+    assert.ok(err instanceof RoomError, `expected a RoomError, got ${String(err)}`);
+    assert.equal(err.code, code, err.message);
+    return true;
+  });
+}
+
+describe('repositoryIdentity', () => {
+  it('reduces remotes to host and path', () => {
+    for (const remote of [
+      'git@github.com:Acme/Payments.git',
+      'https://github.com/Acme/Payments',
+      'https://github.com/Acme/Payments.git/',
+      'https://user:token@GitHub.com/Acme/Payments.git',
+      'ssh://git@github.com:22/Acme/Payments.git',
+      'github.com/Acme/Payments',
+    ]) {
+      assert.equal(repositoryIdentity(remote), 'github.com/Acme/Payments', remote);
+    }
+    assert.equal(repositoryIdentity('acme/payments'), 'acme/payments');
+    assert.equal(repositoryIdentity('git@gitlab.example.com:group/sub/project.git'), 'gitlab.example.com/group/sub/project');
+  });
+
+  it('refuses local paths and file URLs', () => {
+    for (const path of [
+      '/Users/dee/projects/journey',
+      '~/projects/journey',
+      './journey',
+      '../journey',
+      'C:\\code\\journey',
+      'C:/code/journey',
+      'file:///Users/dee/projects/journey',
+      'journey',
+      '',
+      'github.com/acme/../secrets',
+      'has space/repo',
+    ]) {
+      assert.equal(repositoryIdentity(path), null, path);
+    }
+  });
+});
+
+describe('toRoomError', () => {
+  it('maps Postgres and network failures to codes', () => {
+    assert.equal(toRoomError({ code: '42501', message: 'new row violates row-level security policy' }).code, 'permission-denied');
+    assert.equal(toRoomError({ code: 'VR001', message: 'A room needs an owner' }).code, 'conflict');
+    assert.equal(toRoomError({ code: '23514', message: 'check' }).code, 'invalid');
+    assert.equal(toRoomError({ code: 'PGRST301', message: 'JWT expired' }).code, 'signed-out');
+    assert.equal(toRoomError({ code: '', message: 'TypeError: fetch failed' }).code, 'network');
+    assert.equal(toRoomError(new TypeError('fetch failed')).code, 'network');
+    assert.equal(toRoomError({ name: 'AuthRetryableFetchError', message: 'Failed to fetch', status: 0 }).code, 'network');
+    assert.equal(toRoomError(new Error('boom')).code, 'unknown');
+    const mapped = new RoomError('not-found', 'gone');
+    assert.equal(toRoomError(mapped), mapped);
+  });
+});
+
+describe('room service without a usable session', () => {
+  it('reports invalid ids before any request', async () => {
+    const service = createRoomService(() => Promise.reject(new Error('should not be called')));
+    await rejectsWith(service.getRoom('not-a-uuid'), 'invalid');
+    await rejectsWith(service.createRoom({ workspaceId: randomUUID(), name: '   ' }), 'invalid');
+    await rejectsWith(service.createRoom(null as never), 'invalid');
+    await rejectsWith(service.updateRoom(randomUUID(), { repository: '/Users/dee/journey' }), 'invalid');
+  });
+
+  it('passes on the client source’s RoomError', async () => {
+    const service = createRoomService(() => Promise.reject(new RoomError('not-configured', 'no Supabase')));
+    await rejectsWith(service.listRooms(), 'not-configured');
+  });
+});
+
+describe('persistent rooms (local Supabase)', integration, () => {
+  const run = randomUUID().slice(0, 8);
+  const password = `pw-${randomUUID()}`;
+  const admin = () =>
+    createClient<Database>(url!, secretKey!, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  /** A fresh client and session, as a restarted app would have. */
+  async function signIn(email: string, fetchImpl?: typeof fetch): Promise<Cloud> {
+    const client = createClient<Database>(url!, publishableKey!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      ...(fetchImpl ? { global: { fetch: fetchImpl } } : {}),
+    });
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return client;
+  }
+
+  interface Person {
+    id: string;
+    email: string;
+    cloud: Cloud;
+    rooms: RoomService;
+  }
+  const people: Record<'alice' | 'bob' | 'carol' | 'dave', Person> = {} as never;
+  let workspaceId: string;
+
+  before(async () => {
+    for (const name of ['alice', 'bob', 'carol', 'dave'] as const) {
+      const email = `${name}-${run}@rooms.test`;
+      const { data, error } = await admin().auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: name[0]!.toUpperCase() + name.slice(1) },
+      });
+      if (error) throw error;
+      const cloud = await signIn(email);
+      people[name] = { id: data.user.id, email, cloud, rooms: createRoomService(async () => cloud) };
+    }
+    // Alice's workspace has Bob and Carol; Dave is in none of hers.
+    const { alice, bob, carol } = people;
+    const { data: ws, error } = await alice.cloud.from('workspaces').insert({ name: `Rooms ${run}` }).select().single();
+    if (error) throw error;
+    workspaceId = ws.id;
+    const { error: addError } = await alice.cloud.from('workspace_members').insert([
+      { workspace_id: workspaceId, user_id: bob.id },
+      { workspace_id: workspaceId, user_id: carol.id },
+    ]);
+    if (addError) throw addError;
+  });
+
+  after(async () => {
+    for (const person of Object.values(people)) {
+      await person.cloud.removeAllChannels();
+      await admin().auth.admin.deleteUser(person.id); // cascades to their workspaces, rooms, memberships
+    }
+  });
+
+  it('creates a room owned by its creator and reads it back', async () => {
+    const { alice } = people;
+    const room = await alice.rooms.createRoom({
+      workspaceId,
+      name: '  Payment Reliability  ',
+      goal: 'Stop double charges',
+      repository: 'git@github.com:Acme/Payments.git',
+    });
+    assert.match(room.id, /^[0-9a-f-]{36}$/);
+    assert.equal(room.name, 'Payment Reliability');
+    assert.equal(room.goal, 'Stop double charges');
+    assert.equal(room.repository, 'github.com/Acme/Payments');
+    assert.equal(room.workspaceId, workspaceId);
+    assert.equal(room.createdBy, alice.id);
+    assert.equal(room.role, 'owner');
+    assert.equal(room.memberCount, 1);
+    assert.ok(Date.parse(room.createdAt) && Date.parse(room.updatedAt));
+
+    assert.deepEqual(await alice.rooms.getRoom(room.id), room);
+    const listed = await alice.rooms.listRooms(workspaceId);
+    assert.ok(listed.some((r) => r.id === room.id && r.role === 'owner'));
+    const members = await alice.rooms.listMembers(room.id);
+    assert.deepEqual(
+      members.map((m) => [m.userId, m.role, m.name]),
+      [[alice.id, 'owner', 'Alice']],
+    );
+  });
+
+  it('survives signing out and back in, as after restarting the app', async () => {
+    const { alice } = people;
+    const created = await alice.rooms.createRoom({ workspaceId, name: 'Survives restarts' });
+    await alice.cloud.auth.signOut({ scope: 'local' });
+    const restarted = await signIn(alice.email);
+    alice.cloud = restarted;
+    alice.rooms = createRoomService(async () => restarted);
+
+    const reopened = await alice.rooms.getRoom(created.id);
+    assert.equal(reopened.id, created.id);
+    assert.equal(reopened.name, 'Survives restarts');
+    assert.equal(reopened.createdAt, created.createdAt);
+    assert.ok((await alice.rooms.listRooms()).some((r) => r.id === created.id));
+  });
+
+  it('lets an owner add a workspace member, who then shares the room', async () => {
+    const { alice, bob } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Shared' });
+    const added = await alice.rooms.addMember(room.id, bob.id);
+    assert.equal(added.role, 'member');
+    assert.equal(added.email, bob.email);
+    // Adding again is a no-op that returns the same member.
+    assert.deepEqual(await alice.rooms.addMember(room.id, bob.id), added);
+
+    const seen = await bob.rooms.getRoom(room.id);
+    assert.equal(seen.role, 'member');
+    assert.equal(seen.memberCount, 2);
+    assert.ok((await bob.rooms.listRooms()).some((r) => r.id === room.id));
+    assert.deepEqual(
+      (await bob.rooms.listMembers(room.id)).map((m) => [m.userId, m.role]),
+      [
+        [alice.id, 'owner'],
+        [bob.id, 'member'],
+      ],
+    );
+  });
+
+  it('keeps room changes and membership to owners', async () => {
+    const { alice, bob, carol } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Owner rules' });
+    await alice.rooms.addMember(room.id, bob.id);
+
+    await rejectsWith(bob.rooms.updateRoom(room.id, { name: 'Bob’s now' }), 'permission-denied');
+    await rejectsWith(bob.rooms.addMember(room.id, carol.id), 'permission-denied');
+    await rejectsWith(bob.rooms.removeMember(room.id, alice.id), 'permission-denied');
+    await rejectsWith(bob.rooms.setMemberRole(room.id, bob.id, 'owner'), 'permission-denied');
+    await rejectsWith(bob.rooms.deleteRoom(room.id), 'permission-denied');
+
+    // The same writes made directly, bypassing the service, are refused by the database.
+    const direct = await bob.cloud.from('rooms').update({ name: 'Direct' }).eq('id', room.id).select();
+    assert.deepEqual(direct.data, []);
+    const promote = await bob.cloud.from('room_members').update({ role: 'owner' }).eq('room_id', room.id).select();
+    assert.deepEqual(promote.data, []);
+    const invite = await bob.cloud.from('room_members').insert({ room_id: room.id, user_id: carol.id });
+    assert.equal(invite.error?.code, '42501');
+    const reassign = await alice.cloud.from('rooms').update({ created_by: bob.id } as never).eq('id', room.id);
+    assert.equal(reassign.error?.code, '42501'); // only name, goal and repository are writable
+
+    await new Promise((r) => setTimeout(r, 5)); // so updated_at visibly moves
+    const renamed = await alice.rooms.updateRoom(room.id, { name: 'Renamed', goal: 'A goal', repository: null });
+    assert.equal(renamed.name, 'Renamed');
+    assert.equal(renamed.goal, 'A goal');
+    assert.ok(renamed.updatedAt > room.updatedAt);
+    assert.equal((await bob.rooms.getRoom(room.id)).name, 'Renamed');
+  });
+
+  it('hides rooms from people who are not members', async () => {
+    const { alice, bob, carol, dave } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Private' });
+    await alice.rooms.addMember(room.id, bob.id);
+
+    // Carol is in the workspace, Dave isn't; neither is in the room.
+    for (const outsider of [carol, dave]) {
+      await rejectsWith(outsider.rooms.getRoom(room.id), 'not-found');
+      await rejectsWith(outsider.rooms.listMembers(room.id), 'not-found');
+      await rejectsWith(outsider.rooms.updateRoom(room.id, { name: 'Mine' }), 'not-found');
+      await rejectsWith(outsider.rooms.deleteRoom(room.id), 'not-found');
+      await rejectsWith(outsider.rooms.addMember(room.id, outsider.id), 'not-found');
+      await rejectsWith(outsider.rooms.removeMember(room.id, bob.id), 'not-found');
+      assert.ok(!(await outsider.rooms.listRooms()).some((r) => r.id === room.id));
+
+      // Straight at the tables: nothing to read, nothing to change.
+      assert.deepEqual((await outsider.cloud.from('rooms').select().eq('id', room.id)).data, []);
+      assert.deepEqual((await outsider.cloud.from('room_members').select().eq('room_id', room.id)).data, []);
+      const selfAdd = await outsider.cloud.from('room_members').insert({ room_id: room.id, user_id: outsider.id });
+      assert.equal(selfAdd.error?.code, '42501');
+      const kick = await outsider.cloud.from('room_members').delete().eq('room_id', room.id).select();
+      assert.deepEqual(kick.data, []);
+    }
+    assert.equal((await alice.rooms.listMembers(room.id)).length, 2);
+    assert.equal((await alice.rooms.getRoom(room.id)).name, 'Private');
+
+    // Only workspace members can be added, even by an owner.
+    await rejectsWith(alice.rooms.addMember(room.id, dave.id), 'invalid');
+    // A workspace Dave isn't in is as good as missing to him.
+    await rejectsWith(dave.rooms.createRoom({ workspaceId, name: 'Sneaky' }), 'not-found');
+  });
+
+  it('admits members, and only members, to the room’s live channel', async () => {
+    const { alice, bob, carol } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Live' });
+    await alice.rooms.addMember(room.id, bob.id);
+
+    const subscribe = (cloud: Cloud) =>
+      new Promise<string>((resolve) => {
+        const channel = cloud.channel(`room:${room.id}`, { config: { private: true } });
+        const timer = setTimeout(() => resolve('TIMED_OUT'), 8000);
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            clearTimeout(timer);
+            void cloud.removeChannel(channel);
+            resolve(status);
+          }
+        });
+      });
+    assert.equal(await subscribe(bob.cloud), 'SUBSCRIBED');
+    assert.notEqual(await subscribe(carol.cloud), 'SUBSCRIBED');
+  });
+
+  it('lets members leave and owners remove them, but never the last owner', async () => {
+    const { alice, bob, carol } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Comings and goings' });
+    await alice.rooms.addMember(room.id, bob.id);
+    await alice.rooms.addMember(room.id, carol.id);
+
+    await bob.rooms.removeMember(room.id); // leaves
+    await rejectsWith(bob.rooms.getRoom(room.id), 'not-found');
+    await alice.rooms.removeMember(room.id, carol.id); // removed
+    await rejectsWith(carol.rooms.getRoom(room.id), 'not-found');
+    await rejectsWith(alice.rooms.removeMember(room.id, carol.id), 'not-found');
+
+    await rejectsWith(alice.rooms.removeMember(room.id), 'conflict');
+    await rejectsWith(alice.rooms.setMemberRole(room.id, alice.id, 'member'), 'conflict');
+
+    // Hand ownership on, then the old owner can step down and leave.
+    await alice.rooms.addMember(room.id, bob.id, 'owner');
+    await alice.rooms.setMemberRole(room.id, alice.id, 'member');
+    await rejectsWith(alice.rooms.updateRoom(room.id, { name: 'Not mine now' }), 'permission-denied');
+    await alice.rooms.removeMember(room.id);
+    assert.equal((await bob.rooms.getRoom(room.id)).role, 'owner');
+    await rejectsWith(alice.rooms.getRoom(room.id), 'not-found');
+
+    // Deleting the room takes its last owner's membership with it.
+    await bob.rooms.deleteRoom(room.id);
+    await rejectsWith(bob.rooms.getRoom(room.id), 'not-found');
+  });
+
+  it('cuts off a member removed from the workspace', async () => {
+    const { alice, carol } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Workspace bound' });
+    await alice.rooms.addMember(room.id, carol.id);
+    assert.equal((await carol.rooms.getRoom(room.id)).role, 'member');
+
+    const { error } = await alice.cloud.from('workspace_members').delete().eq('workspace_id', workspaceId).eq('user_id', carol.id);
+    assert.equal(error, null);
+    await rejectsWith(carol.rooms.getRoom(room.id), 'not-found');
+    assert.ok(!(await carol.rooms.listRooms()).some((r) => r.id === room.id));
+  });
+
+  it('never stores a local path as the repository', async () => {
+    const { alice } = people;
+    await rejectsWith(alice.rooms.createRoom({ workspaceId, name: 'Local', repository: '/Users/alice/payments' }), 'invalid');
+    // Even straight at the table, the database refuses paths.
+    for (const repository of ['/Users/alice/payments', 'C:\\code\\payments', 'file:///Users/alice/payments']) {
+      const { error } = await alice.cloud.from('rooms').insert({ workspace_id: workspaceId, name: 'Local', repository });
+      assert.equal(error?.code, '23514', repository);
+    }
+  });
+
+  it('opens a room without connecting to anything', async () => {
+    const { alice } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Quiet' });
+    await alice.rooms.getRoom(room.id);
+    await alice.rooms.listMembers(room.id);
+    assert.equal(alice.cloud.getChannels().length, 0);
+  });
+
+  it('reports network failures and lost sessions', async () => {
+    const { bob } = people;
+    let offline = false;
+    const flaky: typeof fetch = (input, init) =>
+      offline ? Promise.reject(new TypeError('fetch failed')) : fetch(input, init);
+    const cloud = await signIn(bob.email, flaky);
+    const rooms = createRoomService(async () => cloud);
+    await rooms.listRooms();
+    offline = true;
+    await rejectsWith(rooms.listRooms(), 'network');
+    await rejectsWith(rooms.getRoom(randomUUID()), 'network');
+
+    const signedOut = createClient<Database>(url!, publishableKey!, { auth: { persistSession: false } });
+    await rejectsWith(createRoomService(async () => signedOut).listRooms(), 'signed-out');
+  });
+});

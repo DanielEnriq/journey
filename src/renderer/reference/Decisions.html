@@ -1,0 +1,189 @@
+<!doctype html>
+<!-- Lifted verbatim from the Claude Design canvas "Shared Engineering Room" (Decisions.dc.html). Edit the design, not this copy. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Intent and decision grammar</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+body{margin:0}
+a{color:#2f63c4}a:hover{color:#1f4a99}
+.sheet{
+  --pane:#faf9f7;--rail:#f0eeea;--surface:#f0ede6;--menu:#ffffff;
+  --ink-bright:#121417;--ink-2:#2e3238;--ink-3:#3f434a;--ink-4:#52565d;--ink-6:#6b6f77;--ink-7:#62666e;--ink-8:#63676f;--ink-10:#9a9ea6;
+  --fill-1:rgba(18,22,30,.035);--fill-2:rgba(18,22,30,.07);--hairline:rgba(18,22,30,.08);--border:rgba(18,22,30,.12);--border-3:rgba(18,22,30,.18);--border-4:rgba(18,22,30,.24);
+  --good:#1c7a54;--attention:#cf8c1c;--attention-ink:#8a5810;--attention-line:rgba(168,112,20,.32);--attention-wash:rgba(207,140,28,.09);
+  --ask:#2f63c4;--studio-field:#f2f0ec;--shadow-menu:0 18px 40px rgba(18,22,30,.16);
+  --peer:#7a4fc4;--me:#127a74;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+.sec{display:flex;flex-direction:column;gap:16px}
+.sec-h{display:flex;align-items:baseline;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--hairline)}
+.eyebrow{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-8)}
+.tile{border-radius:12px;background:var(--rail);box-shadow:inset 0 0 0 1px var(--hairline);padding:14px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center}
+.cap{display:flex;flex-direction:column;gap:3px;padding:12px 2px 0}
+.cap b{font-size:13px;font-weight:700;color:var(--ink-bright)}
+.cap span{font-size:12px;line-height:1.5;color:var(--ink-6);text-wrap:pretty}
+.it{display:flex;flex-direction:column;gap:3px;padding:9px 10px;border-radius:8px;background:var(--pane)}
+.kind{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-8)}
+.kind .w{margin-left:auto;font-family:'Satoshi',sans-serif;font-size:11px;letter-spacing:0;text-transform:none}
+.say{font-size:13px;line-height:1.45;color:var(--ink-2)}
+.kd{width:6px;height:6px;border-radius:50%;flex:0 0 6px}
+.chip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:5px;background:var(--fill-2);color:var(--ink-4);font-size:11px;white-space:nowrap;align-self:flex-start;margin-top:3px}
+.mini{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:6px;background:var(--fill-2);color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.status{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;font-family:var(--mono);font-size:10px;letter-spacing:.04em;white-space:nowrap}
+.card{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:12px;font-size:12.5px}
+.card .what{font-size:13px;font-weight:700;line-height:1.4;color:var(--ink-bright)}
+.sig{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3)}
+.sig .s{margin-left:auto;font-size:11px}
+.av{width:18px;height:18px;flex:0 0 18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff}
+.pk{display:grid;grid-template-columns:62px minmax(0,1fr);gap:10px;padding:9px 12px;font-size:12px;line-height:1.45;color:var(--ink-3);border-top:1px solid var(--hairline)}
+.pk .l{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-8);padding-top:2px}
+</style>
+</head>
+<body>
+<div class="sheet" style="width:1440px;height:1300px;box-sizing:border-box;padding:56px 64px;background:var(--pane);font-family:'Satoshi',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--ink-2);display:flex;flex-direction:column;gap:40px">
+
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <span class="eyebrow">Design pass 4 · intent and decisions</span>
+    <h1 style="margin:0;font-size:34px;font-weight:700;letter-spacing:-.02em;color:var(--ink-bright)">What was meant, and what was agreed</h1>
+  </div>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Intent objects</span><span style="font-size:12.5px;color:var(--ink-6)">Plain rows, not forms. Kept in the speaker’s words, signed with their name, pinned to the part they’re about.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px">
+      <div>
+        <div class="tile" style="height:170px"><div class="it"><span class="kind"><span class="kd" style="background:var(--good)"></span>Goal<span class="w">John</span></span><span class="say">Retries can never produce a duplicate charge.</span></div></div>
+        <div class="cap"><b>Goal</b><span>An outcome the work must reach. Green dot.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px"><div class="it" style="background:var(--attention-wash);box-shadow:inset 0 0 0 1px var(--attention-line)"><span class="kind" style="color:var(--attention-ink)"><span class="kd" style="background:var(--attention)"></span>Concern<span class="w" style="color:var(--ink-8)">Daniel</span></span><span class="say">Worker crashes after the charge; job is charged again.</span><span class="chip">◎ Payment Worker</span></div></div>
+        <div class="cap"><b>Concern</b><span>Amber, like everything waiting on a person. Its part carries a matching badge on the canvas.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px"><div class="it"><span class="kind"><span class="kd" style="background:var(--ink-8);border-radius:1.5px"></span>Constraint<span class="w">John</span></span><span class="say">Retries stay reliable.</span><span class="chip">◎ Retry Queue</span></div></div>
+        <div class="cap"><b>Constraint</b><span>Must hold whatever is chosen. Square mark.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px"><div class="it"><span class="kind"><span class="kd" style="box-shadow:inset 0 0 0 1.5px var(--ink-8)"></span>Avoid<span class="w">Daniel</span></span><span class="say">A distributed lock, unless new evidence says we need one.</span></div></div>
+        <div class="cap"><b>Avoid</b><span>A preference against, with its own escape hatch. Hollow mark.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px"><div class="it" style="background:transparent;box-shadow:inset 0 0 0 1px var(--border)"><span class="kind" style="color:var(--ask)"><span class="kd" style="background:var(--ask)"></span>Suggested question<span class="w" style="color:var(--ink-8)">Vowe</span></span><span class="say">How do we notice an ack that never arrived?</span><span style="display:flex;gap:6px;margin-top:4px"><span class="mini">Keep</span><span class="mini" style="background:transparent;color:var(--ink-7)">Dismiss</span></span></div></div>
+        <div class="cap"><b>Suggested by Vowe</b><span>Outlined, not filled, until a person keeps it. Vowe can suggest; only people commit.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px"><div class="it"><span class="kind">Set aside<span class="w">Daniel, John</span></span><span class="say" style="text-decoration:line-through;color:var(--ink-4)">Distributed lock</span><span style="font-size:11.5px;line-height:1.45;color:var(--ink-6)"><b style="font-family:var(--mono);font-size:9.5px;font-weight:500;color:var(--ink-8)">REOPEN IF</b> keys can’t cover a provider timeout</span></div></div>
+        <div class="cap"><b>Set aside</b><span>Rejected options keep their reason and the condition that would bring them back.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Capture</span><span style="font-size:12.5px;color:var(--ink-6)">One step from something said to something kept. No dialog, no form, and Undo on the new row.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile" style="height:180px;align-items:center">
+          <div style="display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.5;color:var(--ink-4);max-width:360px">
+            <span class="av" style="background:var(--me)">DE</span><span>…so honestly the lease handling is the part I trust least.</span>
+            <span style="flex:0 0 auto;height:22px;padding:0 8px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--border);font-size:11.5px;color:var(--ink-7);display:inline-flex;align-items:center">Keep…</span>
+          </div>
+        </div>
+        <div class="cap"><b>1 · Any line can be kept</b><span>The last thing said, by anyone, has a quiet Keep… beside it. Saying “keep that as a concern” does the same thing.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:180px;align-items:center">
+          <div style="width:210px;padding:6px;border-radius:11px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);display:flex;flex-direction:column;gap:1px;font-size:12.5px;color:var(--ink-2)">
+            <span style="font-size:11px;color:var(--ink-8);padding:4px 8px 6px">Keep your words as</span>
+            <span style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px"><span class="kd" style="background:var(--good)"></span>Goal</span>
+            <span style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-radius:7px;background:rgba(18,22,30,.06)"><span class="kd" style="background:var(--attention)"></span>Concern<small style="margin-left:auto;font-size:10.5px;color:var(--ask)">suggested</small></span>
+            <span style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px"><span class="kd" style="background:var(--ink-8);border-radius:1.5px"></span>Constraint</span>
+          </div>
+        </div>
+        <div class="cap"><b>2 · Pick what it is</b><span>Vowe suggests a type but never decides. The text stays exactly as spoken.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:180px;align-items:center">
+          <div class="it" style="width:300px;background:rgba(18,122,116,.08);box-shadow:inset 0 0 0 1px rgba(18,122,116,.35)">
+            <span class="kind" style="color:var(--attention-ink)"><span class="kd" style="background:var(--attention)"></span>Concern<span class="w" style="color:var(--ink-8)">Daniel</span></span>
+            <span class="say">so honestly the lease handling is the part I trust least.</span>
+            <span class="chip">◎ Retry Queue</span>
+            <span style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="font-size:11.5px;color:var(--ink-7);margin-right:auto">Kept in your words</span><span class="mini" style="background:transparent;color:var(--ink-7)">Undo</span></span>
+          </div>
+        </div>
+        <div class="cap"><b>3 · Kept, in your colour</b><span>It arrives at the top of Intent tinted in the keeper’s colour, pinned to the part it guessed, which you can move.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">A decision’s life</span><span style="font-size:12.5px;color:var(--ink-6)">The border carries the state: dashed until agreed, solid once everyone signed the same version.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile" style="height:230px">
+          <div class="card" style="border:1px dashed rgba(47,99,196,.5)">
+            <span class="status" style="align-self:flex-start;color:var(--ink-4);box-shadow:inset 0 0 0 1px var(--border-4)">draft · under discussion</span>
+            <span class="what">Use idempotent processing…</span>
+            <span style="font-size:12px;color:var(--ink-3)">Verify: concurrent pickup; crash after charge<ins style="text-decoration:none;background:rgba(28,122,84,.14);box-shadow:inset 0 -1.5px 0 var(--good);border-radius:3px;padding:0 2px">; provider timeout</ins></span>
+          </div>
+        </div>
+        <div class="cap"><b>Draft</b><span>Amending opens the card in place. Additions are marked against the last version, never silently merged.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:230px">
+          <div class="card" style="border:1px dashed var(--border-4)">
+            <span class="status" style="align-self:flex-start;color:var(--ask);background:rgba(47,99,196,.1);box-shadow:inset 0 0 0 1px rgba(47,99,196,.3)">awaiting you</span>
+            <span class="what">Use idempotent processing…</span>
+            <div class="sig"><span class="av" style="background:var(--peer)">JM</span>John<span class="s" style="color:var(--attention-ink)">Signed v2 · not v3</span></div>
+            <div class="sig"><span class="av" style="background:var(--me)">DE</span>You<span class="s mini" style="margin-left:auto;background:var(--ink-bright);color:#fff;font-weight:700">Sign v3</span></div>
+          </div>
+        </div>
+        <div class="cap"><b>Awaiting</b><span>A signature belongs to one version. A new version marks old signatures stale in amber instead of carrying them over.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:230px">
+          <div class="card" style="background:var(--surface);box-shadow:inset 0 0 0 1px var(--border-3)">
+            <span class="status" style="align-self:flex-start;color:var(--good);background:rgba(28,122,84,.12)">approved</span>
+            <span class="what">Use idempotent processing…</span>
+            <div class="sig"><span class="av" style="background:var(--peer)">JM</span>John<span class="s" style="color:var(--good)">✓ Signed v3</span></div>
+            <div class="sig"><span class="av" style="background:var(--me)">DE</span>You<span class="s" style="color:var(--good)">✓ Signed v3</span></div>
+          </div>
+        </div>
+        <div class="cap"><b>Approved</b><span>Only when every required person has signed the same version. Silence is never a signature.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:230px;gap:8px">
+          <div style="display:grid;grid-template-columns:26px minmax(0,1fr);gap:2px 8px;font-size:12px;line-height:1.45;color:var(--ink-6)">
+            <span style="font-family:var(--mono);font-size:10.5px;color:var(--ink-8);text-decoration:line-through">v2</span><span>Concurrent pickup; crash after charge</span>
+            <span></span><span style="font-size:11px;color:var(--ink-8)">signed by John · superseded</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:10.5px;color:var(--ink-7);margin-top:10px">
+            <span>● Proposed —</span><span>● Discussed —</span><span>● Awaiting —</span><span>● Approved —</span><span style="color:var(--ink-bright);font-weight:500">● Handed off</span>
+          </div>
+        </div>
+        <div class="cap"><b>Superseded, and the trail</b><span>Old versions stay readable below the card. The stepper shows where this one is without a workflow screen.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Handoff</span><span style="font-size:12.5px;color:var(--ink-6)">What the coding agent gets is shown in full before it goes, and is built only from the signed version.</span></div>
+    <div style="display:grid;grid-template-columns:420px minmax(0,1fr);gap:40px;align-items:start">
+      <div style="border-radius:10px;box-shadow:inset 0 0 0 1px var(--border);overflow:hidden;background:var(--menu)">
+        <div class="pk" style="border-top:0;background:var(--fill-1)"><span class="l">DO</span><span style="color:var(--ink-bright);font-weight:500">Use idempotent processing for concurrent worker execution.</span></div>
+        <div class="pk"><span class="l">GOAL</span><span>Prevent duplicate payment processing</span></div>
+        <div class="pk"><span class="l">AVOID</span><span>Distributed locking unless evidence shows it’s required</span></div>
+        <div class="pk"><span class="l">VERIFY</span><span>Concurrent pickup; worker crash after charge; provider timeout mid-charge</span></div>
+        <div class="pk"><span class="l">BECAUSE</span><span>If the worker crashes after the charge, the job is redelivered and charged again. (Daniel)</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;font-size:13px;line-height:1.55;color:var(--ink-3);max-width:560px">
+        <div style="display:flex;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--hairline)"><b style="font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--ink-8);width:24px;flex:0 0 24px;padding-top:3px">01</b><span>Sent: the decision, its goal, what to avoid, every verification case, and the concern it answers, quoted.</span></div>
+        <div style="display:flex;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--hairline)"><b style="font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--ink-8);width:24px;flex:0 0 24px;padding-top:3px">02</b><span>Kept in the room: who said what, the discussion, and why options were set aside.</span></div>
+        <div style="display:flex;gap:12px"><b style="font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--ink-8);width:24px;flex:0 0 24px;padding-top:3px">03</b><span>If the agent finds something that contradicts the decision, it comes back as a question on the card, not a quiet workaround.</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

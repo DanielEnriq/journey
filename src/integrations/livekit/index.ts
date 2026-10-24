@@ -2,7 +2,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { CallAccess } from '../../shared/api.js';
 import { isApiConfigured, postApi } from '../api/index.js';
 import { getCloud } from '../supabase/index.js';
-import { joinRoom as addRoomMember } from '../supabase/workspaces.js';
+import { rooms } from '../supabase/workspaces.js';
 
 /**
  * Voice calls run on LiveKit, one LiveKit room per Journey room (`room:<room id>`). Audio is
@@ -14,9 +14,9 @@ import { joinRoom as addRoomMember } from '../supabase/workspaces.js';
  * workspace. The app itself never sees the secret.
  */
 
-/** Makes you a room member if needed, then fetches a short-lived token for its call. */
+/** Fetches a short-lived token for the call of a room you're a member of. Doesn't open the microphone. */
 export async function getCallAccess(roomId: string): Promise<CallAccess> {
-  await addRoomMember(roomId); // RLS: only workspace members can join; the function checks this row
+  await rooms.getRoom(roomId); // not-found unless you're a member; the token service checks the same
   if (isApiConfigured()) {
     const data = await postApi<CallAccess>('/livekit/token', { roomId }).catch((err: Error) => {
       throw new Error(`Could not join the call: ${err.message}`);
