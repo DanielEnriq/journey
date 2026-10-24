@@ -6,8 +6,9 @@
  */
 
 import { execFile } from 'node:child_process';
-import { resolve } from 'node:path';
-import type { GitBranch, GitChange, GitCommit, GitDiffStat, GitFileChange, GitStatus, GitWorktree } from '../shared/api.js';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import { isAbsolute, normalize, resolve, sep } from 'node:path';
+import type { CodeExcerpt, GitBranch, GitChange, GitCommit, GitDiffStat, GitFileChange, GitStatus, GitWorktree } from '../shared/api.js';
 
 const TIMEOUT_MS = 15_000;
 const MAX_OUTPUT = 64 * 1024 * 1024; // status of a large, dirty repository can run to megabytes
@@ -237,6 +238,56 @@ export async function diffFile(path: string, file: string, untracked: boolean): 
   return untracked
     ? git(path, ['diff', '--no-index', ...SAFE_DIFF, '--', '/dev/null', file], true)
     : git(path, ['diff', 'HEAD', ...SAFE_DIFF, '--', file]);
+}
+
+// ─── Tracked files ───────────────────────────────────────────────────────────
+// Code evidence for Vowe's agent: only files Git tracks, so ignored files (.env, build output, local
+// secrets) are never searched or read.
+
+/** Lines in tracked files matching any of `terms` (case-insensitive, fixed strings), as `path:line: text`. */
+export async function grepTracked(path: string, terms: string[], { pathspec, maxPerFile = 8 }: { pathspec?: string; maxPerFile?: number } = {}) {
+  const args = ['grep', '-n', '-I', '-i', '-F', '--no-color', '--full-name', `--max-count=${maxPerFile}`, '-z', ...terms.flatMap((t) => ['-e', t]), '--'];
+  if (pathspec) args.push(pathspec);
+  const out = await git(path, args, true); // exit 1: no matches
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [file, lineNo, ...text] = line.split('\0');
+      return { path: file, line: Number(lineNo), text: text.join('\0') };
+    });
+}
+
+/** Whether `file` (relative to the worktree) is tracked by Git there. */
+export async function isTracked(path: string, file: string): Promise<boolean> {
+  return git(path, ['ls-files', '--error-unmatch', '--', file]).then(
+    () => true,
+    () => false,
+  );
+}
+
+const MAX_READ_LINES = 200;
+const MAX_READ_BYTES = 1024 * 1024;
+
+/**
+ * Lines `from`–`to` (at most 200) of a tracked file as it is in the worktree at `root` now, each
+ * prefixed with its number. Refuses absolute paths, paths that leave the worktree (also through
+ * symlinks), untracked or ignored files, large files and binaries.
+ */
+export async function readTrackedFile(root: string, file: string, from = 1, to = from + MAX_READ_LINES - 1): Promise<CodeExcerpt> {
+  const rel = normalize(file);
+  if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) throw new Error('Only paths inside the repository can be read.');
+  if (!(await isTracked(root, rel))) throw new Error(`Not a tracked file in this worktree: ${file}`);
+  const [realRoot, realFile] = await Promise.all([realpath(root), realpath(resolve(root, rel)).catch(() => null)]);
+  if (!realFile) throw new Error(`Tracked but missing from the worktree (deleted?): ${file}`);
+  if (!realFile.startsWith(realRoot + sep)) throw new Error('That file links outside the repository; it can’t be read.');
+  if ((await stat(realFile)).size > MAX_READ_BYTES) throw new Error('That file is too large to read.');
+  const text = await readFile(realFile, 'utf8');
+  if (text.includes('\0')) throw new Error('That file is binary.');
+  const lines = text.split('\n');
+  const start = Math.max(1, from);
+  const end = Math.min(lines.length, to, start + MAX_READ_LINES - 1);
+  return { path: rel, from: start, to: end, totalLines: lines.length, text: lines.slice(start - 1, end).map((l, i) => `${start + i}: ${l}`).join('\n') };
 }
 
 // ─── Remotes ─────────────────────────────────────────────────────────────────

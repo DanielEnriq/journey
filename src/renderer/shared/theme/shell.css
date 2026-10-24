@@ -88,6 +88,21 @@
 .account-out{appearance:none;border:0;background:none;font:inherit;font-size:12.5px;color:var(--ink-4);text-align:left;padding:6px 4px 2px;border-top:1px solid var(--hairline);cursor:pointer}
 .account-out:hover{color:var(--bad)}
 .account-out:disabled{opacity:.6;cursor:default}
+.account-gpt{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--hairline)}
+.account-gpt-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
+.account-gpt-on{font-size:12.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.account-gpt-note{font-size:11.5px;line-height:1.4;color:var(--ink-6)}
+.account-gpt-go{appearance:none;border:0;font:inherit;font-size:12.5px;padding:6px 10px;border-radius:7px;background:var(--ink);color:var(--menu);cursor:pointer}
+.account-gpt-go:disabled{opacity:.6;cursor:default}
+.account-gpt-link{appearance:none;border:0;background:none;font:inherit;font-size:12px;color:var(--ink-5);padding:0;text-align:left;cursor:pointer;white-space:nowrap}
+.account-gpt-link:hover{color:var(--ink)}
+.account-gpt-link.button{overflow:hidden;text-overflow:ellipsis}
+.account-gpt-err{font-size:11.5px;color:var(--bad)}
+.gpt-welcome{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.28);z-index:50;padding:16px}
+.gpt-welcome-card{max-width:340px;padding:18px;border-radius:12px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.gpt-welcome-title{font-size:15px;font-weight:600;color:var(--ink)}
+.gpt-welcome-card p{margin:0;font-size:13px;line-height:1.45;color:var(--ink-5)}
+.gpt-welcome-card a{color:inherit}
 .avatar{width:22px;height:22px;border-radius:50%;flex:0 0 22px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--pane);background:var(--me)}
 .avatar.peer{background:var(--peer)}
 
