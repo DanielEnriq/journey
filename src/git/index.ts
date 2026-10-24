@@ -238,3 +238,11 @@ export async function diffFile(path: string, file: string, untracked: boolean): 
     ? git(path, ['diff', '--no-index', ...SAFE_DIFF, '--', '/dev/null', file], true)
     : git(path, ['diff', 'HEAD', ...SAFE_DIFF, '--', file]);
 }
+
+// ─── Remotes ─────────────────────────────────────────────────────────────────
+
+/** The URL of a remote (default `origin`), or null if the repository has no such remote. */
+export async function getRemoteUrl(path: string, remote = 'origin'): Promise<string | null> {
+  const out = await git(path, ['config', '--get', `remote.${remote}.url`]).catch(() => '');
+  return out.trim() || null;
+}

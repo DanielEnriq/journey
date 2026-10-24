@@ -17,16 +17,19 @@ export type Database = {
       room_members: {
         Row: {
           joined_at: string
+          role: Database["public"]["Enums"]["room_role"]
           room_id: string
           user_id: string
         }
         Insert: {
           joined_at?: string
+          role?: Database["public"]["Enums"]["room_role"]
           room_id: string
           user_id: string
         }
         Update: {
           joined_at?: string
+          role?: Database["public"]["Enums"]["room_role"]
           room_id?: string
           user_id?: string
         }
@@ -51,22 +54,31 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          goal: string | null
           id: string
           name: string
+          repository: string | null
+          updated_at: string
           workspace_id: string
         }
         Insert: {
           created_at?: string
           created_by?: string
+          goal?: string | null
           id?: string
           name: string
+          repository?: string | null
+          updated_at?: string
           workspace_id: string
         }
         Update: {
           created_at?: string
           created_by?: string
+          goal?: string | null
           id?: string
           name?: string
+          repository?: string | null
+          updated_at?: string
           workspace_id?: string
         }
         Relationships: [
@@ -183,6 +195,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      room_role: "owner" | "member"
       workspace_role: "owner" | "member"
     }
     CompositeTypes: {
@@ -311,6 +324,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      room_role: ["owner", "member"],
       workspace_role: ["owner", "member"],
     },
   },

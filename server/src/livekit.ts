@@ -17,8 +17,8 @@ export async function issueToken({ userId, supabase }: Caller, body: unknown): P
   const roomId = (body as { roomId?: unknown } | null)?.roomId;
   if (typeof roomId !== 'string' || !UUID.test(roomId)) throw new HttpError(400, 'roomId must be a room id');
 
-  // Same rule as the room's Realtime channel (private.can_use_room): RLS shows room_members rows only to
-  // members of the room's workspace, so this finds a row only if the caller is in both the room and its workspace.
+  // Same rule as the room's Realtime channel (private.can_use_room): RLS shows a room's room_members rows only
+  // to its members who are still in its workspace, so this finds a row only if the caller is in both.
   const { data: membership, error } = await supabase
     .from('room_members')
     .select('room_id')
