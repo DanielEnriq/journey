@@ -10,6 +10,11 @@ function required(name: string): string {
   return value;
 }
 
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+function effort(value: string | undefined): (typeof EFFORTS)[number] {
+  return EFFORTS.find((e) => e === value) ?? 'medium';
+}
+
 export const config = {
   // Getters so a missing .env surfaces when auth runs (and exits cleanly), not at import time.
   google: {
@@ -26,6 +31,13 @@ export const config = {
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY,
     agentId: process.env.ELEVENLABS_AGENT_ID,
+  },
+  // Vowe's collaborator agent (src/assistant). Credentials: ANTHROPIC_API_KEY, or an `ant auth login` profile.
+  agent: {
+    model: process.env.VOWE_AGENT_MODEL || 'claude-opus-5-5',
+    effort: effort(process.env.VOWE_AGENT_EFFORT),
+    /** Retry a request the model's safeguards decline on Anthropic's recommended fallback model. */
+    fallbacks: process.env.VOWE_AGENT_FALLBACKS !== 'off',
   },
   // Optional: the Vowe cloud API (server/), which holds the LiveKit and ElevenLabs secrets. Without it,
   // call tokens come from the Supabase Edge Function and ElevenLabs uses the local key above.

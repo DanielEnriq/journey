@@ -1,5 +1,7 @@
 import type { GitFileChange, JourneyApi, Repository, Room, Theme, User, Workspace } from '../shared/api.js';
 import { CallController, type CallParticipant, type CallSnapshot } from './call.js';
+import { setupDevSessions } from './dev-sessions.js';
+import { setupDevAgent } from './dev-agent.js';
 
 declare global {
   interface Window {
@@ -34,6 +36,9 @@ async function attempt(action: () => Promise<unknown>) {
   }
 }
 
+const devSessions = setupDevSessions(window.journey, attempt);
+const devAgent = setupDevAgent(window.journey, attempt);
+
 function button(label: string, onClick: () => Promise<unknown>) {
   const el = document.createElement('button');
   el.textContent = label;
@@ -58,6 +63,8 @@ function renderUser(user: User | null) {
 }
 
 function renderRepos(list: Repository[]) {
+  devSessions.setRepositories(list, selectedRepo?.id);
+  devAgent.setRepositories(list, selectedRepo?.id);
   reposEl.replaceChildren();
   if (!list.length) {
     const li = document.createElement('li');

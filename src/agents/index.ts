@@ -6,3 +6,6 @@ export type * from './adapter.js';
 export function getCodingAgentAdapters(): CodingAgentAdapter[] {
   return [];
 }
+
+/** Read-only access to Claude Code's local session history. Not a CodingAgentAdapter: it never starts a run. */
+export { ClaudeCodeAdapter } from './claude-code.js';

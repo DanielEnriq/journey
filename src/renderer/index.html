@@ -43,6 +43,37 @@
       #detected li:last-child { border-bottom: 0; }
       #repos li.selected > div:first-child { font-weight: 600; }
       #repos li > div { cursor: pointer; }
+      #cc .card-head { padding: 0.25rem 0; }
+      #cc-sessions { max-height: 260px; overflow-y: auto; }
+      #cc-sessions li > div { cursor: pointer; }
+      #cc-sessions li.selected > div > div:first-child { font-weight: 600; }
+      #cc-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.15rem 1rem; margin: 0.75rem 0; font-size: 0.9em; }
+      #cc-meta dt { color: var(--muted); }
+      #cc-meta dd { margin: 0; overflow-wrap: anywhere; }
+      #cc-messages { max-height: 60vh; overflow-y: auto; border-top: 1px solid var(--line); }
+      .cc-msg { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+      .cc-msg.assistant { padding-left: 1rem; }
+      .cc-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .cc-msg pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85em; margin: 0.25rem 0; max-height: 300px; overflow-y: auto; }
+      .cc-msg summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }
+      .cc-error summary { color: #d33; }
+      #cc h3 { font-size: 0.85em; margin: 0.75rem 0 0.25rem; }
+      #cc-activity { max-height: 220px; overflow-y: auto; font-size: 0.9em; }
+      #cc-activity li { padding: 0.25rem 0; }
+      #cc-context summary { cursor: pointer; font-size: 0.85em; font-weight: 600; margin: 0.75rem 0 0.25rem; }
+      #cc-context-json { max-height: 400px; overflow: auto; font-size: 0.8em; white-space: pre; }
+      .cc-state { font-size: 0.75em; padding: 0 0.4em; border-radius: 4px; border: 1px solid var(--line); white-space: nowrap; }
+      .cc-state.active { border-color: #2a7; color: #2a7; }
+      .cc-state.ended { opacity: 0.6; }
+      #ag .card-head { padding: 0.25rem 0; flex-wrap: wrap; }
+      #ag-log { max-height: 60vh; overflow-y: auto; border-top: 1px solid var(--line); margin-top: 0.5rem; }
+      .ag-msg { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+      .ag-msg.agent { padding-left: 1rem; }
+      .ag-msg pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85em; margin: 0.25rem 0; }
+      .ag-msg summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }
+      .ag-approval { border: 1px solid #c80; border-radius: 6px; padding: 0.5rem 0.75rem; margin: 0.5rem 0; display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start; }
+      #ag-form { margin: 0.5rem 0; align-items: flex-end; }
+      #ag-input { flex: 1; min-width: 0; font: inherit; resize: vertical; }
       #error { color: #d33; min-height: 1.5em; margin-top: 1rem; }
     </style>
   </head>
@@ -68,6 +99,41 @@
       <ul id="repo-branches"></ul>
       <h3>Worktrees</h3>
       <ul id="repo-worktrees"></ul>
+    </section>
+
+    <h2>Claude Code sessions (developer)</h2>
+    <section id="cc" class="card">
+      <div class="card-head">
+        <label>Repository <select id="cc-repo"></select></label>
+        <button id="cc-refresh">Refresh</button>
+      </div>
+      <div class="card-head"><span id="cc-hooks" class="status"></span><button id="cc-hooks-toggle" hidden></button></div>
+      <ul id="cc-sessions"></ul>
+      <h3>Recent activity</h3>
+      <ul id="cc-activity"></ul>
+      <details id="cc-context">
+        <summary>Work context</summary>
+        <ul id="cc-workstreams"></ul>
+        <pre id="cc-context-json"></pre>
+      </details>
+      <div id="cc-detail" hidden>
+        <dl id="cc-meta"></dl>
+        <button id="cc-earlier" hidden>Load earlier messages</button>
+        <div id="cc-messages"></div>
+      </div>
+    </section>
+
+    <h2>Vowe agent (developer)</h2>
+    <section id="ag" class="card">
+      <div class="card-head">
+        <label>Repository <select id="ag-repo"></select></label>
+        <label>Workstream <select id="ag-workstream"></select></label>
+        <button id="ag-new">New conversation</button>
+      </div>
+      <div id="ag-status" class="status"></div>
+      <div id="ag-log"></div>
+      <div id="ag-approvals"></div>
+      <form id="ag-form"><textarea id="ag-input" rows="2" placeholder="Ask about the work…"></textarea><button id="ag-send">Send</button></form>
     </section>
 
     <h2>Rooms</h2>

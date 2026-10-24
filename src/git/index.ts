@@ -7,12 +7,13 @@
 
 import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
-import type { GitBranch, GitChange, GitFileChange, GitStatus, GitWorktree } from '../shared/api.js';
+import type { GitBranch, GitChange, GitCommit, GitDiffStat, GitFileChange, GitStatus, GitWorktree } from '../shared/api.js';
 
 const TIMEOUT_MS = 15_000;
 const MAX_OUTPUT = 64 * 1024 * 1024; // status of a large, dirty repository can run to megabytes
 
-function git(cwd: string, args: string[]): Promise<string> {
+/** `allowDiffExit`: `git diff --no-index` exits 1 when the files differ, which isn't a failure. */
+function git(cwd: string, args: string[], allowDiffExit = false): Promise<string> {
   // A repository's own config can name a program for core.fsmonitor, which `git status` would
   // run; the user may add a repository they don't trust, so never let it.
   const argv = ['-C', cwd, '-c', 'core.fsmonitor=false', ...args];
@@ -28,7 +29,7 @@ function git(cwd: string, args: string[]): Promise<string> {
         env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' },
       },
       (err, stdout, stderr) => {
-        if (!err) return done(stdout);
+        if (!err || (allowDiffExit && err.code === 1)) return done(stdout);
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') return fail(new Error('Git is not installed or not on PATH'));
         fail(new Error(stderr.trim().replace(/^fatal: /, '') || err.message));
       },
@@ -40,6 +41,20 @@ function git(cwd: string, args: string[]): Promise<string> {
 export async function findWorkingTreeRoot(path: string): Promise<string | null> {
   try {
     return resolve((await git(path, ['rev-parse', '--show-toplevel'])).trim());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Which repository `path` is in: the top of its working tree and the repository's common Git
+ * directory, which every worktree of one repository shares. Null if it isn't in a working tree
+ * (or no longer exists).
+ */
+export async function gitIdentity(path: string): Promise<{ toplevel: string; commonDir: string } | null> {
+  try {
+    const [toplevel, commonDir] = (await git(path, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'])).trim().split('\n');
+    return toplevel && commonDir ? { toplevel: resolve(toplevel), commonDir: resolve(commonDir) } : null;
   } catch {
     return null;
   }
@@ -183,4 +198,43 @@ export async function listWorktrees(path: string): Promise<GitWorktree[]> {
     else if (key === 'prunable') current.prunable = true;
   }
   return worktrees;
+}
+
+// ─── History and diffs ───────────────────────────────────────────────────────
+
+// Like core.fsmonitor, a repository's config can name diff programs; never run them.
+const SAFE_DIFF = ['--no-color', '--no-ext-diff', '--no-textconv'];
+
+/** The latest commits reachable from HEAD, newest first; empty before the first commit. */
+export async function listCommits(path: string, limit = 10): Promise<GitCommit[]> {
+  const out = await git(path, ['log', `--max-count=${limit}`, '--format=%H%x00%an%x00%aI%x00%s', 'HEAD']).catch(() => '');
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [commit, author, committedAt, subject] = line.split('\0');
+      return { commit, author, committedAt, subject };
+    });
+}
+
+/** Lines added and removed per tracked file, working tree and index against HEAD. Binary files count as null. */
+export async function diffStat(path: string): Promise<GitDiffStat[]> {
+  const out = await git(path, ['diff', 'HEAD', ...SAFE_DIFF, '--numstat', '-z', '--no-renames']).catch(() => '');
+  const stats: GitDiffStat[] = [];
+  for (const entry of out.split('\0')) {
+    const [added, removed, ...rest] = entry.split('\t');
+    if (!rest.length) continue;
+    stats.push({ path: rest.join('\t'), added: added === '-' ? null : Number(added), removed: removed === '-' ? null : Number(removed) });
+  }
+  return stats;
+}
+
+/**
+ * The unified diff of one changed file against HEAD; an untracked file shows as wholly added.
+ * Callers pass paths from getStatus, so this never reads a file Git doesn't report as changed.
+ */
+export async function diffFile(path: string, file: string, untracked: boolean): Promise<string> {
+  return untracked
+    ? git(path, ['diff', '--no-index', ...SAFE_DIFF, '--', '/dev/null', file], true)
+    : git(path, ['diff', 'HEAD', ...SAFE_DIFF, '--', file]);
 }
