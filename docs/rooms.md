@@ -82,11 +82,26 @@ Error codes (`RoomErrorCode`):
 
 `RoomLoad<T>` (`loading` | `ready` | `error`) is a suggested shape for UI state around these calls.
 
-## Integration boundaries (contracts only, in `src/shared/api.ts`)
+## The room's record (`supabase/migrations/20261026000000_room_record.sql`, `src/integrations/supabase/record.ts`)
 
-`RoomCheckout` (room → local checkout), `RoomWorkstreamRef` (Claude Code work linked to a room, `local`
-or `room` visibility), `RoomCallState`, `RoomViewRef`, `RoomDecisionRef`. Each future system keys its
-data by room id. Nothing implements them yet.
+What a room keeps between calls, members only, over `record:*`:
+
+- **Threads** pinned to a canvas part, or to a point (`anchor.id = 'pin'` with x/y), and their **replies**.
+- **Decisions** with versions and **signatures**. The database bumps the version whenever the title or
+  checks change, keeps each earlier version, and only accepts a signature on the current version, as
+  yourself. Older signatures stay on the record but no longer count.
+- **Activity**, written by triggers (threads, replies, proposals, amendments, signatures, repository
+  changes); clients may only log their own `call-started`/`call-left`.
+- **Visits**: your own "last looked" time, which the preview's "Since you were last here" counts from.
+
+Authors, versions and times are set by the database (no client grant on those columns). After a
+write, the app broadcasts `record:changed` on the room's channel so connected members re-read it.
+
+## Integration boundaries (in `src/shared/api.ts`)
+
+`RoomCheckout` is implemented: `rooms.checkout` matches the room's repository identity against the
+`origin` of repositories added on this machine. Still contracts only: `RoomWorkstreamRef` (sharing
+local work with the room), `RoomCallState`, `RoomViewRef` (stored canvas views), `RoomDecisionRef`.
 
 ## Not done yet
 
