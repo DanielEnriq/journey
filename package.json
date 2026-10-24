@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/main/index.js",
   "scripts": {
-    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node -e \"fs.cpSync('src/renderer/index.html','dist/renderer/index.html')\"",
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node -e \"fs.cpSync('src/renderer/index.html','dist/renderer/index.html');fs.cpSync('node_modules/livekit-client/dist/livekit-client.esm.mjs','dist/renderer/vendor/livekit-client.js')\"",
     "start": "pnpm build && electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "cloud:push": "supabase db push --linked",
     "cloud:types": "supabase gen types typescript --linked --schema public > src/integrations/supabase/types.ts",
+    "cloud:functions": "supabase functions deploy livekit-token",
     "sign-out": "pnpm build && electron . --sign-out"
   },
   "pnpm": {
@@ -29,7 +30,8 @@
     "@supabase/supabase-js": "2.118.0",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "0.45.4",
-    "google-auth-library": "^11.3.1"
+    "google-auth-library": "^11.3.1",
+    "livekit-client": "2.22.4"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",

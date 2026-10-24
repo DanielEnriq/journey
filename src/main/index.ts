@@ -3,8 +3,9 @@ import { closeDb, getDb } from '../database/index.js';
 import { restoreSession, signIn, signOut } from '../integrations/google/auth.js';
 import { startCloudSync } from '../integrations/supabase/index.js';
 import { disconnectAllRooms } from '../integrations/supabase/realtime.js';
+import { getVoiceAgentProvider } from '../integrations/voice/index.js';
 import { applySettings, registerIpc } from './ipc.js';
-import { createMainWindow } from './window.js';
+import { createMainWindow, restrictPermissions } from './window.js';
 
 app.on('window-all-closed', () => {
   // Rooms are joined from the UI; with no window left (macOS keeps running), stop appearing present.
@@ -23,6 +24,7 @@ async function main() {
   await app.whenReady();
   getDb();
   applySettings();
+  restrictPermissions();
 
   const user = await restoreSession();
   if (process.argv.includes('--sign-out')) {
@@ -33,6 +35,7 @@ async function main() {
   }
 
   createMainWindow();
+  checkVoiceAgent();
 
   if (user) {
     console.log(`[auth] restored session for ${user.email}`);
@@ -44,6 +47,16 @@ async function main() {
       (err: Error) => console.warn('[auth] sign-in did not complete:', err.message),
     );
   }
+}
+
+/** No conversation runs yet; this only surfaces bad credentials early instead of on the first call. */
+function checkVoiceAgent() {
+  const provider = getVoiceAgentProvider();
+  if (!provider) return;
+  provider.verify().then(
+    () => console.log(`[voice] ${provider.name} agent ready`),
+    (err: Error) => console.warn(`[voice] ${provider.name} check failed:`, err.message),
+  );
 }
 
 main().catch((err) => {

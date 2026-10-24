@@ -1,6 +1,6 @@
 # Journey
 
-Electron desktop app (pnpm, TypeScript). Google sign-in, local SQLite storage, a Supabase cloud backend for shared data, and the groundwork for collaborative agent calls.
+Electron desktop app (pnpm, TypeScript). Google sign-in, local SQLite storage, a Supabase cloud backend for shared data, LiveKit voice calls in rooms, and the groundwork for AI voice agents in those calls.
 
 ## Run
 
@@ -17,6 +17,7 @@ pnpm start
 | `pnpm db:generate` | Write a migration after editing `src/database/schema.ts` |
 | `pnpm cloud:push` | Apply `supabase/migrations/` to the linked Supabase project |
 | `pnpm cloud:types` | Regenerate `src/integrations/supabase/types.ts` from the linked project |
+| `pnpm cloud:functions` | Deploy the `livekit-token` Edge Function to the linked project |
 | `pnpm sign-out` | Revoke the stored Google session and quit |
 
 ## Layout
@@ -27,10 +28,10 @@ src/
   preload/       exposes window.journey: named functions only, no raw ipcRenderer
   renderer/      the UI (sandboxed, no Node)
   database/      SQLite via Drizzle: schema, migrations runner, one module per area
-  integrations/  external services (Google auth, Supabase, ElevenLabs)
+  integrations/  external services (Google auth, Supabase, LiveKit, voice agents: ElevenLabs)
   shared/api.ts  the typed main ↔ renderer contract
 drizzle/         generated SQL migrations, applied on startup
-supabase/        cloud Postgres schema (migrations/) and local-stack config
+supabase/        cloud Postgres schema (migrations/), Edge Functions (functions/), local-stack config
 ```
 
 Data lives in `journey.db` under Electron's `userData` directory (`~/Library/Application Support/journey` on macOS).
@@ -67,6 +68,28 @@ Setup, once per project:
 4. `pnpm exec supabase login && pnpm exec supabase link --project-ref <ref>`, then `pnpm cloud:push`.
 
 Typed queries live in `src/integrations/supabase/workspaces.ts`. To change the schema, add a migration (`pnpm exec supabase migration new <name>`), `pnpm cloud:push`, then `pnpm cloud:types`.
+
+### Voice calls (LiveKit)
+
+Every room has an audio call: one LiveKit room per Journey room, named `room:<room id>`. WebRTC needs a browser, so the call runs in the renderer (`src/renderer/call.ts`, `CallController`); main only lets you in:
+
+1. `calls.requestMicrophone()` asks the OS for the microphone (macOS prompts once; a refusal must be undone in System Settings). Electron itself grants our page audio capture and nothing else (`restrictPermissions` in `src/main/window.ts`).
+2. `calls.access(roomId)` makes you a room member if needed and calls the `livekit-token` Edge Function (`supabase/functions/livekit-token`), which checks the same rule as the Realtime channel (in the room *and* still in its workspace) and returns a 10-minute token for that room only, microphone publishing only. The LiveKit API secret lives in Supabase, never in the app.
+3. The renderer connects with `livekit-client` and reports status (`connecting` / `connected` / `reconnecting`) and each participant's speaking, muted, and connection quality (`lost` while they're dropped).
+
+LiveKit identities are cloud user ids, so joining from a second window or device replaces the first connection. A call is separate from the Realtime presence above: you can be in a room's channel without being in its call.
+
+The renderer has no bundler, so `pnpm build` copies livekit-client's self-contained ESM bundle to `dist/renderer/vendor/livekit-client.js`; `src/renderer/vendor/livekit-client.d.ts` supplies its types. The page's CSP admits `*.livekit.cloud`: add your host to `connect-src` in `src/renderer/index.html` if you self-host LiveKit.
+
+Setup, once per project (after the Supabase setup above):
+
+1. Create a LiveKit Cloud project (cloud.livekit.io) and an API key under Settings → API Keys.
+2. `pnpm exec supabase secrets set LIVEKIT_URL=wss://<project>.livekit.cloud LIVEKIT_API_KEY=<key> LIVEKIT_API_SECRET=<secret>`
+3. `pnpm cloud:functions`
+
+### Voice agents (ElevenLabs)
+
+AI voice agents sit behind `VoiceAgentProvider` (`src/integrations/voice/provider.ts`): start a session, send it call audio and background context, get back transcripts, speech, and interruptions, all as plain PCM so a bridge can later carry them into a LiveKit call as one more participant. ElevenLabs is the only provider (`src/integrations/elevenlabs`), chosen by `getVoiceAgentProvider()` when `ELEVENLABS_*` is set. Nothing starts a conversation yet; startup only verifies the key and agent.
 
 ## Adding a renderer capability
 

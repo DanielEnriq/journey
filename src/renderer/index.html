@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'"
+      content="default-src 'self'; img-src 'self' https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud"
     />
     <title>Journey</title>
     <style>
@@ -22,6 +22,14 @@
       .path { color: var(--muted); font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .empty { color: var(--muted); }
       label { display: flex; align-items: center; gap: 0.75rem; }
+      form { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+      #call { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
+      #call-head { display: flex; align-items: center; gap: 0.75rem; }
+      #call-head strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #call li img { width: 24px; height: 24px; border-radius: 50%; }
+      #call li:last-child { border-bottom: 0; }
+      .speaking { box-shadow: 0 0 0 2px #2a7; }
+      .status { color: var(--muted); font-size: 0.85em; }
       #error { color: #d33; min-height: 1.5em; margin-top: 1rem; }
     </style>
   </head>
@@ -34,6 +42,26 @@
     <h2>Repositories</h2>
     <ul id="repos"></ul>
     <button id="add-repo">Add repository…</button>
+
+    <h2>Rooms</h2>
+    <section id="call" hidden>
+      <div id="call-head">
+        <strong id="call-room"></strong>
+        <span id="call-status" class="status"></span>
+        <button id="call-audio" hidden>Enable audio</button>
+        <button id="call-mute"></button>
+        <button id="call-leave">Leave call</button>
+      </div>
+      <div id="call-error" class="status" role="status"></div>
+      <ul id="call-participants"></ul>
+    </section>
+    <label>
+      Workspace
+      <select id="workspace"></select>
+    </label>
+    <ul id="rooms"></ul>
+    <form id="new-room"><input name="name" placeholder="New room" required /><button>Create room</button></form>
+    <form id="new-workspace"><input name="name" placeholder="New workspace" required /><button>Create workspace</button></form>
 
     <h2>Settings</h2>
     <label>

@@ -78,6 +78,19 @@ export interface RoomSession {
 /** `reconnecting` after a dropped connection (rejoins automatically); `left` once the room is closed. */
 export type RoomStatus = 'connected' | 'reconnecting' | 'left';
 
+// ─── Voice calls ─────────────────────────────────────────────────────────────
+// Each room has a LiveKit audio call, joined from the renderer (renderer/call.ts). Main only
+// hands out access; LiveKit participant identities are cloud user ids, like Participant.userId.
+
+/** Where to connect for a room's call. The token is short-lived and only admits you to that room. */
+export interface CallAccess {
+  url: string;
+  token: string;
+}
+
+/** The OS-level microphone permission. `denied`/`restricted` mean the user must change it in system settings. */
+export type MicrophoneAccess = 'granted' | 'denied' | 'restricted';
+
 /**
  * IPC channel names. `invoke` channels are request/response handled by main
  * (arguments are untrusted at runtime; handlers must validate them). `event`
@@ -101,6 +114,9 @@ export interface Channels {
     'rooms:join': (roomId: string) => RoomSession;
     'rooms:leave': (roomId: string) => void;
     'rooms:send': <K extends RoomEventType>(roomId: string, type: K, payload: RoomEvents[K]) => RoomEvent<K>;
+    'calls:access': (roomId: string) => CallAccess;
+    /** Asks the OS for the microphone if it hasn't been asked yet; otherwise reports the current answer. */
+    'calls:requestMicrophone': () => MicrophoneAccess;
   };
   event: {
     'auth:changed': User | null;
@@ -152,5 +168,10 @@ export interface JourneyApi {
     onEvent(listener: (event: RoomEvent) => void): () => void;
     onPresence(listener: (update: { roomId: string; participants: Participant[] }) => void): () => void;
     onStatus(listener: (update: { roomId: string; status: RoomStatus }) => void): () => void;
+  };
+  calls: {
+    /** Becomes a room member if needed and returns a token for the room's call. */
+    access(roomId: string): Promise<CallAccess>;
+    requestMicrophone(): Promise<MicrophoneAccess>;
   };
 }
