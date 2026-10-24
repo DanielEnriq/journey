@@ -73,6 +73,17 @@ export class AskVowe {
 
   stop() { if (this.busy) this.turn?.cancel(); }
 
+  /** What you just said to your Vowe in the call: its turn (CallVoice runs it) shows here like a typed ask. */
+  heard(question: string) {
+    this.store.setState({ open: true, question, answer: '', status: 'thinking', error: null, approval: null, canvas: [] });
+  }
+
+  /** A voice turn's events: the answer as it's spoken, approvals it waits on, what the canvas did. */
+  follow(e: AgentEvent) {
+    if (this.store.state.reviewing) return;
+    this.on(e, this.store.state.question ?? '', this.me().name);
+  }
+
   /**
    * Vowe's feedback on a comment just pinned: a turn in the same conversation (so what this person
    * allowed still holds), whose answer `post` saves as Vowe's reply in the comment's thread. Its

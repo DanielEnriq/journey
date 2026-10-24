@@ -31,6 +31,10 @@ export interface CallControls {
   agentOff?: string;
   /** Vowe can't speak in this call but can be asked by text: the orb opens the ask instead of being off. */
   askByText?(): void;
+  /** The orb brings your Vowe into the call, or takes it out (its state is in voweCls and agentLabel). */
+  toggleVowe?(): void;
+  /** Your Vowe is in the call. */
+  voweOn?: boolean;
   /** Your mic can't be used here (a viewer only listens): it's off, and says why. */
   micOff?: string;
   /** A real call's mic: a click (or Enter or Space) turns it on or off, instead of the demo's hold-to-talk. */
@@ -44,7 +48,10 @@ export function CallBar({ c }: { c: CallControls }) {
   const agentOff = c.voiceOff ?? c.agentOff, micOff = c.voiceOff ?? c.micOff;
   return (
     <div class={'call' + (c.leaving ? ' leaving' : '')} role="group" aria-label="Call">
-      {agentOff && c.askByText
+      {c.toggleVowe && !agentOff
+        ? <button class={c.voweCls} type="button" aria-pressed={!!c.voweOn} aria-label={`Vowe · ${c.agentLabel}`}
+            title={c.voweOn ? `Vowe · ${c.agentLabel} · click to take Vowe out of the call` : `Bring Vowe into the call · ${c.agentLabel}`} onClick={c.toggleVowe}><span class="orb"></span></button>
+        : agentOff && c.askByText
         ? <button class={c.voweCls} type="button" aria-label="Ask Vowe" title={`Ask Vowe by text · ${agentOff}`} onClick={c.askByText}><span class="orb"></span></button>
         : <button class={c.voweCls} type="button" aria-expanded={c.partOpen} aria-label={`Vowe · ${c.agentLabel}`} title={agentOff ?? `Vowe · ${c.agentLabel}`} disabled={!!agentOff} onClick={c.togglePart}><span class="orb"></span></button>}
       {c.partOpen && (

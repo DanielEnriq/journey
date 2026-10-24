@@ -11,6 +11,7 @@ import type { Grounding } from '../assistant/evidence.js';
 import type { ModelBilling, ModelProviderErrorCode } from '../assistant/provider.js';
 import type { Tables } from '../integrations/supabase/types.js';
 import type { CanvasChanged, CanvasDocument, CanvasPresence, CommandResult } from './canvas/index.js';
+import type { HeardSpeech, VoiceStatus } from '../voice/index.js';
 
 export type { CanvasCommand, CanvasSnapshot, Grounding };
 
@@ -932,6 +933,14 @@ export type InviteKey = { token: string } | { invitationId: string };
 /** The OS-level microphone permission. `denied`/`restricted` mean the user must change it in system settings. */
 export type MicrophoneAccess = 'granted' | 'denied' | 'restricted';
 
+// ─── Vowe's voice ────────────────────────────────────────────────────────────
+// The speech half of the runtime's VoiceAdapter (renderer/shared/vowe-voice.ts): your Vowe's voice in
+// the call you're in, as its own participant `vowe:<your user id>`, and your microphone heard as
+// HumanSpeech. Audio, speech providers and credentials stay in main and the Vowe API. See
+// src/voice/INTEGRATION.md.
+
+export type { HeardSpeech, VoiceStatus } from '../voice/index.js';
+
 /**
  * IPC channel names. `invoke` channels are request/response handled by main
  * (arguments are untrusted at runtime; handlers must validate them). `event`
@@ -1034,6 +1043,15 @@ export interface Channels {
     /** Revokes and forgets the active account's tokens; `revoked` says whether OpenAI confirmed it. */
     'chatgpt:signOut': () => { revoked: boolean };
     'chatgpt:dismissWelcome': () => void;
+    /** Brings your Vowe into the room's call; rejects with a reason to show. */
+    'voice:start': (roomId: string) => VoiceStatus;
+    'voice:stop': () => void;
+    'voice:status': () => VoiceStatus;
+    'voice:audio': (roomId: string, pcm: Uint8Array) => void;
+    'voice:begin': (turnId: string) => void;
+    'voice:say': (turnId: string, text: string) => void;
+    'voice:end': (turnId: string) => void;
+    'voice:cancel': (turnId: string) => void;
   };
   event: {
     'auth:changed': User | null;
@@ -1047,6 +1065,9 @@ export interface Channels {
     'agent:toolCall': { conversationId: string; call: AgentToolCall };
     'agent:event': AgentEvent;
     'chatgpt:changed': ChatGptStatus;
+    'voice:status': VoiceStatus;
+    'voice:speech': { roomId: string; speech: HeardSpeech };
+    'voice:said': { roomId: string; turnId: string; text: string };
   };
 }
 
@@ -1235,5 +1256,25 @@ export interface JourneyApi {
     signOut(): Promise<{ revoked: boolean }>;
     dismissWelcome(): Promise<void>;
     onChange(listener: (status: ChatGptStatus) => void): () => void;
+  };
+  /** Your Vowe's voice in a room's call. Members only (not viewers); one call at a time. */
+  voice: {
+    /** Brings your Vowe into the room's call, hearing your microphone; rejects with a reason to show. */
+    start(roomId: string): Promise<VoiceStatus>;
+    stop(): Promise<void>;
+    status(): Promise<VoiceStatus>;
+    /** Your microphone while it's on: 16 kHz mono 16-bit PCM, in chunks of at most 1 s. */
+    audio(roomId: string, pcm: Uint8Array): Promise<void>;
+    /** The runtime's VoiceOutput: what your Vowe says for a turn, as it streams. */
+    begin(turnId: string): Promise<void>;
+    say(turnId: string, text: string): Promise<void>;
+    end(turnId: string): Promise<void>;
+    /** Silence now, dropping what's unspoken: interrupted, cancelled or failed. */
+    cancel(turnId: string): Promise<void>;
+    onStatus(listener: (status: VoiceStatus) => void): () => void;
+    /** Your speech, for VoiceAdapter.hear. Not stored anywhere. */
+    onSpeech(listener: (update: { roomId: string; speech: HeardSpeech }) => void): () => void;
+    /** Each sentence your Vowe starts saying, for captions. */
+    onSaid(listener: (update: { roomId: string; turnId: string; text: string }) => void): () => void;
   };
 }

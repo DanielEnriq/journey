@@ -130,6 +130,19 @@ const api: JourneyApi = {
     dismissWelcome: () => invoke('chatgpt:dismissWelcome'),
     onChange: (listener) => subscribe('chatgpt:changed', listener),
   },
+  voice: {
+    start: (roomId) => invoke('voice:start', roomId),
+    stop: () => invoke('voice:stop'),
+    status: () => invoke('voice:status'),
+    audio: (roomId, pcm) => invoke('voice:audio', roomId, pcm),
+    begin: (turnId) => invoke('voice:begin', turnId),
+    say: (turnId, text) => invoke('voice:say', turnId, text),
+    end: (turnId) => invoke('voice:end', turnId),
+    cancel: (turnId) => invoke('voice:cancel', turnId),
+    onStatus: (listener) => subscribe('voice:status', listener),
+    onSpeech: (listener) => subscribe('voice:speech', listener),
+    onSaid: (listener) => subscribe('voice:said', listener),
+  },
 };
 
 contextBridge.exposeInMainWorld('journey', api);

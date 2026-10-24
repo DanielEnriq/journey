@@ -3,7 +3,10 @@ import { useEffect, useMemo, useRef, useState } from '../../vendor/preact-hooks.
 import { ClearInk, ToolComment, ToolDraw, ToolSelect } from '../../shared/components/icons.js';
 import { account } from '../../shared/account.js';
 import { Store, useStore } from '../../shared/store.js';
+import type { VoiceStatus } from '../../../shared/api.js';
+import { snapshotOf } from '../../../shared/canvas/index.js';
 import { MICROPHONE_DENIED, type CallService } from '../../calls/service.js';
+import { CallVoice } from '../../voice/call-voice.js';
 import { AskVowe, AskVowePanel } from '../canvas/AskVowe.js';
 import { CanvasClient, ipcTransport } from '../canvas/client.js';
 import { LiveSurface } from '../canvas/LiveSurface.js';
@@ -333,7 +336,44 @@ function FreshCall(props: InnerProps) {
   const decides = !summary?.role || can(summary.role, 'sign_decision');
   const micMuted = live ? !snap!.micEnabled : muted;
   const voiceOff = record && !voice ? 'Voice isn’t connected in this build' : undefined;
-  const agentOff = live ? 'Vowe’s voice isn’t connected in this build' : undefined;
+  // Your Vowe in this call: it hears your microphone while it's on, answers on your model sign-in, and
+  // speaks into the call as "Vowe (for you)". Its turns show in the Ask Vowe panel, like typed asks.
+  const callVoice = useMemo(() => {
+    const userId = selfCloudId();
+    if (!live || !board || !asker || !voice || !window.journey?.voice || !userId) return null;
+    return new CallVoice({
+      api: window.journey,
+      roomId,
+      localUser: { userId, name: account.state.user?.name ?? null },
+      canvas: () => snapshotOf(board.store.state.doc, { selected: [], circled: [] }),
+      call: voice,
+      microphone: () => voice.microphoneTrack(),
+      onEvent: (event) => asker.follow(event),
+    });
+  }, [live, board, asker, voice, roomId]);
+  useEffect(() => () => { void callVoice?.stop().catch(() => {}); }, [callVoice]);
+  const [vowe, setVowe] = useState<VoiceStatus | null>(null);
+  const [voweError, setVoweError] = useState<string | null>(null);
+  useEffect(() => {
+    const api = window.journey?.voice;
+    if (!api || !asker) return;
+    void api.status().then(setVowe, () => {});
+    const offStatus = api.onStatus((s) => { setVowe(s); if (s.status === 'failed' && s.error) setVoweError(s.error); });
+    const offSpeech = api.onSpeech(({ roomId: r, speech }) => {
+      if (r === roomId && speech.final && speech.addressed) asker.heard(speech.text.replace(/^vowe,\s*/i, ''));
+    });
+    return () => { offStatus(); offSpeech(); };
+  }, [roomId, asker]);
+  const mine = vowe?.roomId === roomId ? vowe : null;
+  const voweOn = mine?.status === 'on' || mine?.status === 'joining';
+  const voweState = !mine || !voweOn ? null : mine.status === 'joining' ? 'thinking' : mine.state;
+  const toggleVowe = () => {
+    if (!callVoice) return;
+    setVoweError(null);
+    if (voweOn) void callVoice.stop().catch((err: Error) => setVoweError(err.message));
+    else callVoice.start().catch((err: Error) => setVoweError(err.message)); // from the click: speech needs a gesture
+  };
+  const agentOff = live && !callVoice ? 'Vowe’s voice isn’t connected in this build' : undefined;
   const micOff = !live ? undefined
     : !talks ? 'Viewers listen. Ask an owner to make you a member to talk.'
     : snap!.status !== 'connected' ? 'Connecting to the call…' : undefined;
@@ -343,14 +383,20 @@ function FreshCall(props: InnerProps) {
     voice.setMicrophoneEnabled(!snap.micEnabled).catch(() => { /* the snapshot says why */ });
   };
   const call: CallControls = {
-    voweCls: 'vowe-btn' + (voiceOff || agentOff ? '' : ' listening'), agentLabel: voiceOff || agentOff ? 'not in this call' : 'Listening', partOpen, chime,
+    voweCls: callVoice ? 'vowe-btn' + (voweState ? ' ' + voweState : '') : 'vowe-btn' + (voiceOff || agentOff ? '' : ' listening'),
+    agentLabel: callVoice
+      ? (mine?.status === 'joining' ? 'joining the call…' : voweState === 'listening' && micMuted ? 'in the call · unmute so it can hear you' : voweState ? { listening: 'Listening · say “Vowe, …”', thinking: 'Thinking', speaking: 'Speaking' }[voweState] : 'not in this call')
+      : voiceOff || agentOff ? 'not in this call' : 'Listening',
+    partOpen, chime,
+    toggleVowe: callVoice ? toggleVowe : undefined, voweOn,
     togglePart: () => setPartOpen(!partOpen), pickChime: (c) => { setChime(c); setPartOpen(false); },
     micCls: 'cbtn' + (micMuted ? ' muted' : '') + (meSpeaking ? ' talking' : '') + (live && snap!.micPending ? ' pending' : ''),
     micLabel: voiceOff ?? (live && snap!.micPending ? 'Turning the mic on…' : micMuted ? 'Unmute' : 'Mute'), muted: micMuted,
     micDown: () => {}, micUp: () => { if (voiceOff) return; setMuted(!muted); sources.call.setMuted(!muted); },
     micToggle: live ? toggleMic : undefined,
     cc, ccCls: 'cbtn' + (cc ? ' on' : ''), toggleCc: () => { setCc(!cc); sources.call.setCaptions(!cc); },
-    voiceOff, agentOff, micOff, leaving: cs.status === 'leaving', leave: onLeave,
+    voiceOff, agentOff, micOff, leaving: cs.status === 'leaving',
+    leave: () => { if (voweOn) void callVoice?.stop().catch(() => {}); onLeave(); },
     askByText: asker ? () => asker.open() : undefined,
   };
   // Who's speaking, by initials (how the band draws people).
@@ -393,6 +439,12 @@ function FreshCall(props: InnerProps) {
   const overlays = (
     <>
       {asker ? <CallCaptions ask={asker} cc={cc} /> : cc && <NoCaptions />}
+      {voweError && (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>Vowe: {voweError}</span>
+          <button class="mini ghost" type="button" onClick={() => setVoweError(null)}>Dismiss</button>
+        </div>
+      )}
       {failure && (
         <div class="receipt dropped" role="alert">
           <span class="dot needs"></span><span>Not saved: {failure}</span>
@@ -444,7 +496,7 @@ function FreshCall(props: InnerProps) {
         <div class="room-identity">
           <h1>{summary?.name ?? 'Room'}</h1>
           <span class="q">{summary?.repo ?? 'No repository'}</span>
-          <div class="presence"><Who people={[me, ...others]} vowe={!voiceOff && !agentOff} ring={ring} /></div>
+          <div class="presence"><Who people={[me, ...others]} vowe={callVoice ? voweOn : !voiceOff && !agentOff} ring={ring} /></div>
         </div>
         {board ? (
           <LiveSurface client={board} onComment={(x, y, on) => setDrafts([{ x, y, on }])} onAsk={asker ? (about) => asker.open(about) : undefined}

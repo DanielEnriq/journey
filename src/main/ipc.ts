@@ -33,6 +33,7 @@ import type {
   RoomCheckout,
   RoomResult,
 } from '../shared/api.js';
+import { createVoiceHost } from '../voice/index.js';
 import { canvas, executeAsPerson, loadRoomCanvas, sharePresence } from './canvas.js';
 import { roomCanvasEvents, withRoomCanvas } from './vowe-canvas.js';
 import { isAppPage } from './window.js';
@@ -112,6 +113,12 @@ const collaborator = new Collaborator({
     localUser: () => getCloudUserId(),
   },
 });
+
+/** Your Vowe's voice in calls: speech and audio only. Its turns go through the runtime (agent:ask) like typed ones. */
+export const voice = createVoiceHost();
+const turnId = z.string().min(1).max(100);
+/** One chunk of microphone audio: 16-bit samples, at most a second of them at 16 kHz. */
+const pcm = z.instanceof(Uint8Array).refine((b) => b.byteLength % 2 === 0 && b.byteLength <= 32_000, 'Expected up to 1 s of 16-bit PCM');
 
 /**
  * Registers a handler for a channel from the contract. Rejects calls from any frame
@@ -367,7 +374,28 @@ export function registerIpc() {
     else if (process.platform === 'win32') await shell.openExternal('ms-settings:privacy-microphone');
   });
 
-  onUserChange((user) => broadcast('auth:changed', user));
+  // Vowe's voice: the Vowe API checks you may bring it into this room's call (members, not viewers).
+  handle('voice:start', (roomId) => voice.start(parse(z.uuid(), roomId, 'Room id')));
+  handle('voice:stop', () => voice.stop());
+  handle('voice:status', () => voice.status);
+  handle('voice:audio', (roomId, chunk) => {
+    const bytes = parse(pcm, chunk, 'Audio');
+    voice.audio(parse(z.uuid(), roomId, 'Room id'), new Int16Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)));
+  });
+  handle('voice:begin', (id) => voice.begin(parse(turnId, id, 'Turn id')));
+  handle('voice:say', (id, text) => voice.say(parse(turnId, id, 'Turn id'), parse(z.string().max(8000), text, 'Text')));
+  handle('voice:end', (id) => voice.end(parse(turnId, id, 'Turn id')));
+  handle('voice:cancel', (id) => voice.cancel(parse(turnId, id, 'Turn id')));
+
+  onUserChange((user) => {
+    broadcast('auth:changed', user);
+    if (!user) void voice.stop(); // signed out: your Vowe leaves the call
+  });
+  voice.onEvent((e) => {
+    if (e.type === 'status') broadcast('voice:status', e.status);
+    else if (e.type === 'speech') broadcast('voice:speech', { roomId: e.roomId, speech: e.speech });
+    else broadcast('voice:said', { roomId: e.roomId, turnId: e.turnId, text: e.text });
+  });
   // The sign-in reads the keychain, so it's created once the app is ready.
   void app.whenReady().then(() => chatgptAuth().onChange((status) => broadcast('chatgpt:changed', status)));
   claudeCodeActivity.on('event', (event) => broadcast('claudeCode:event', event));
