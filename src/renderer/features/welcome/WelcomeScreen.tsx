@@ -1,8 +1,10 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
 import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
+import { account, firstName } from '../../shared/account.js';
 import { AccountFoot } from '../../shared/components/Account.js';
 import { Compose, HomeMic, PanelLeft, Repo } from '../../shared/components/icons.js';
 import { mockLog } from '../../shared/mock.js';
+import { useStore } from '../../shared/store.js';
 import { ago } from '../../shared/time.js';
 import { roomLine, Who } from '../room/shell.js';
 import type { RoomSummary } from '../room/types.js';
@@ -194,6 +196,7 @@ function Overview({ rooms, onOpenRoom }: { rooms: RoomSummary[]; onOpenRoom(id: 
 }
 
 export function HomeScreen({ light, rooms, repos, onOpenRoom, onCreate, onNewRoom, overlay }: HomeProps) {
+  const me = firstName(useStore(account).user);
   const [text, setText] = useState('');
   const [focus, setFocus] = useState(false);
   const [listening, setListening] = useState(false);
@@ -267,11 +270,11 @@ export function HomeScreen({ light, rooms, repos, onOpenRoom, onCreate, onNewRoo
             <div class="hello"><span class="orb"></span>{firstRun ? 'Welcome to Vowe' : 'Your rooms'}</div>
             {firstRun ? (
               <>
-                <h1 class="home-h">What are we building<span>, Daniel?</span></h1>
+                <h1 class="home-h">What are we building<span>, {me}?</span></h1>
                 <p class="home-p">Start a room and say it out loud. Vowe sketches the system as you talk, and you can bring your team in whenever you’re ready.</p>
               </>
             ) : (
-              <h1 class="home-h">{hour()}, Daniel.<span>{needCount ? ` ${needCount === 1 ? 'One room needs' : needCount + ' rooms need'} you.` : ' Nothing needs you.'}</span></h1>
+              <h1 class="home-h">{hour()}, {me}.<span>{needCount ? ` ${needCount === 1 ? 'One room needs' : needCount + ' rooms need'} you.` : ' Nothing needs you.'}</span></h1>
             )}
 
             <div class="composer">

@@ -1,6 +1,7 @@
 import { Fragment, h, render } from './vendor/preact.js';
 import { useEffect, useLayoutEffect, useRef, useState } from './vendor/preact-hooks.js';
 import { CallSession } from './features/call/session.js';
+import { RoomPanelPreview } from './features/room/panel/RoomPanelPreview.js';
 import { RoomScreen } from './features/room/RoomScreen.js';
 import { useRooms } from './features/workspace/hooks.js';
 import {
@@ -23,7 +24,8 @@ type Route =
   | { screen: 'login' }
   | { screen: 'home' }
   | { screen: 'room'; id: string; call: boolean }
-  | { screen: 'reference'; sheet: Sheet };
+  | { screen: 'reference'; sheet: Sheet }
+  | { screen: 'room-panel' };
 
 const SHEETS = { Components: 3300, Grammar: 1180, Conversation: 1240, Decisions: 1300, Work: 1220 };
 type Sheet = keyof typeof SHEETS;
@@ -38,6 +40,7 @@ function parseRoute(hash: string): Route {
   if (screen === 'home') return { screen: 'home' };
   if (screen === 'room' && a) return { screen: 'room', id: decodeURIComponent(a), call: b === 'call' };
   if (screen === 'reference') return { screen: 'reference', sheet: a in SHEETS ? a as Sheet : 'Components' };
+  if (screen === 'dev' && a === 'room-panel') return { screen: 'room-panel' };
   return { screen: 'login' };
 }
 
@@ -45,6 +48,7 @@ function routeHash(r: Route) {
   if (r.screen === 'home') return '#/home';
   if (r.screen === 'room') return `#/room/${encodeURIComponent(r.id)}` + (r.call ? '/call' : '');
   if (r.screen === 'reference') return `#/reference/${r.sheet}`;
+  if (r.screen === 'room-panel') return '#/dev/room-panel';
   return '#/login';
 }
 
@@ -123,6 +127,7 @@ function DevMenu({ route, go, onClose }: { route: Route; go(r: Route): void; onC
         <button type="button" class={on(route.screen === 'login')} onClick={() => go({ screen: 'login' })}>Sign in</button>
         <button type="button" class={on(route.screen === 'home')} onClick={() => go({ screen: 'home' })}>Home</button>
         <button type="button" class={on(route.screen === 'reference')} onClick={() => go({ screen: 'reference', sheet: 'Components' })}>Reference sheets</button>
+        <button type="button" class={on(route.screen === 'room-panel')} onClick={() => go({ screen: 'room-panel' })}>Room panel, on fixtures</button>
       </div>
       <div class="grp">
         <b>Mock conditions</b>
@@ -195,6 +200,7 @@ function App() {
         onLeave={async () => { await session.leave(); go({ screen: 'room', id, call: false }); }} />
     );
   }
+  else if (route.screen === 'room-panel') screen = <div class={'win panel-dev' + (light ? ' light' : '')}><RoomPanelPreview /></div>;
   else screen = <ReferenceScreen sheet={route.sheet} go={(sheet) => go({ screen: 'reference', sheet })} onClose={home} />;
 
   return (

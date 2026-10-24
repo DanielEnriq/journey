@@ -26,6 +26,11 @@ export function signOut(): Promise<void> {
   return Promise.resolve();
 }
 
+/** What to call someone: the first word of their name, or the front of their email. */
+export function firstName(user: User | null | undefined): string {
+  return user?.name?.trim().split(/\s+/)[0] || user?.email.split('@')[0] || '';
+}
+
 export function initials(name: string): string {
   return name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 }

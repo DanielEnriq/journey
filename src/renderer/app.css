@@ -37,3 +37,6 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0c0d0f}
 .devmenu .grp button.on{background:#7f9fd9;color:#0c0d0f}
 .devmenu .note{margin:0;padding-top:8px;border-top:1px solid #ffffff14;color:#8b8f99;font-size:11.5px}
 .devmenu code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#b4c9ef}
+
+/* ---------- Room panel on fixtures (Dev menu): the right column alone, as the design canvas draws it. ---------- */
+.win.panel-dev{display:flex;justify-content:center;padding-top:40px;background:var(--app)}
