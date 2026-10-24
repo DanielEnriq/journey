@@ -19,6 +19,7 @@ pnpm start
 | `pnpm cloud:types` | Regenerate `src/integrations/supabase/types.ts` from the linked project |
 | `pnpm cloud:functions` | Deploy the `livekit-token` Edge Function to the linked project |
 | `pnpm sign-out` | Revoke the stored Google session and quit |
+| `pnpm api:start` | Build and run the cloud API (`server/`) on `localhost:8080`, reading `.env` |
 
 ## Layout
 
@@ -32,6 +33,7 @@ src/
   agents/        the coding-agent adapter interface (Claude Code, Codex…); no adapters yet
   integrations/  external services (Google auth, Supabase, LiveKit, voice agents: ElevenLabs)
   shared/api.ts  the typed main ↔ renderer contract
+server/          the Vowe cloud API (pnpm workspace package `vowe-api`), deployed to DigitalOcean
 drizzle/         generated SQL migrations, applied on startup
 supabase/        cloud Postgres schema (migrations/), Edge Functions (functions/), local-stack config
 ```
@@ -92,6 +94,18 @@ Setup, once per project (after the Supabase setup above):
 ### Voice agents (ElevenLabs)
 
 AI voice agents sit behind `VoiceAgentProvider` (`src/integrations/voice/provider.ts`): start a session, send it call audio and background context, get back transcripts, speech, and interruptions, all as plain PCM so a bridge can later carry them into a LiveKit call as one more participant. ElevenLabs is the only provider (`src/integrations/elevenlabs`), chosen by `getVoiceAgentProvider()` when `ELEVENLABS_*` is set. Nothing starts a conversation yet; startup only verifies the key and agent.
+
+## Cloud API (DigitalOcean)
+
+`server/` is a small Node HTTP service for integrations whose secrets must not ship with the app. It shares nothing with Electron or SQLite and deploys to DigitalOcean App Platform from `.do/app.yaml` (see `docs/DIGITALOCEAN_HANDOFF.md`). Supabase stays the auth, Postgres, and Realtime backend: the API checks the caller's Supabase session and asks Postgres questions as them, under RLS.
+
+| Route | |
+|---|---|
+| `GET /health` | `{ status: 'ok', livekit, elevenlabs }`: which integrations have credentials |
+| `POST /livekit/token` | `{ roomId }` → `{ url, token }`, the same rules as the `livekit-token` Edge Function |
+| `POST /elevenlabs/signed-url` | `{ signedUrl }` for the private agent; any signed-in user |
+
+Set `VOWE_API_URL` in `.env` and main uses it for call tokens and ElevenLabs signed URLs, so `ELEVENLABS_*` can stay off the machine. Unset, calls fall back to the Edge Function and ElevenLabs to the local key. Server env vars are listed in `server/.env.example`.
 
 ## Repositories and Git
 

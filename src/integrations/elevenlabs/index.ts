@@ -1,4 +1,5 @@
 import { config } from '../../config.js';
+import { getApiHealth, isApiConfigured, postApi } from '../api/index.js';
 import type { AudioFormat, VoiceAgentEvent, VoiceAgentProvider, VoiceAgentSession } from '../voice/provider.js';
 
 /**
@@ -45,8 +46,12 @@ async function request(path: string): Promise<unknown> {
   return res.json();
 }
 
-/** Short-lived (15 min) WebSocket URL for a private agent. Keeps the API key in the main process. */
+/**
+ * Short-lived (15 min) WebSocket URL for a private agent. With VOWE_API_URL set the Vowe API signs it and
+ * the key never reaches this machine; otherwise the key in .env stays in the main process.
+ */
 async function getSignedUrl(): Promise<string> {
+  if (isApiConfigured()) return (await postApi<{ signedUrl: string }>('/elevenlabs/signed-url')).signedUrl;
   const { agentId } = credentials();
   const { signed_url } = (await request(`/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`)) as {
     signed_url: string;
@@ -164,8 +169,12 @@ async function startSession(onEvent: (event: VoiceAgentEvent) => void): Promise<
 
 export const elevenlabs: VoiceAgentProvider = {
   name: 'ElevenLabs',
-  isConfigured: () => Boolean(config.elevenlabs.apiKey && config.elevenlabs.agentId),
+  isConfigured: () => isApiConfigured() || Boolean(config.elevenlabs.apiKey && config.elevenlabs.agentId),
   async verify() {
+    if (isApiConfigured()) {
+      if (!(await getApiHealth()).elevenlabs) throw new Error('the Vowe API has no ElevenLabs credentials');
+      return;
+    }
     await request(`/convai/agents/${encodeURIComponent(credentials().agentId)}`);
   },
   startSession,
