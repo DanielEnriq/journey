@@ -676,6 +676,16 @@ export type Database = {
         Args: { invitation?: string; token?: string }
         Returns: string
       }
+      commit_canvas: {
+        Args: {
+          actor_kind?: string
+          base_revision: number
+          command: Json
+          document: Json
+          room: string
+        }
+        Returns: number
+      }
       create_room_link: {
         Args: {
           link_role: Database["public"]["Enums"]["room_role"]
@@ -720,16 +730,6 @@ export type Database = {
       revoke_room_invitation: {
         Args: { invitation: string }
         Returns: undefined
-      }
-      commit_canvas: {
-        Args: {
-          actor_kind?: string
-          base_revision: number
-          command: Json
-          document: Json
-          room: string
-        }
-        Returns: number
       }
     }
     Enums: {

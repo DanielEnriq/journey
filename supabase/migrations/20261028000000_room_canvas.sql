@@ -99,7 +99,10 @@ grant execute on function public.commit_canvas(uuid, bigint, jsonb, jsonb, text)
 alter table public.room_canvases enable row level security;
 alter table public.room_canvas_ops enable row level security;
 
-revoke insert, update, delete on public.room_canvases, public.room_canvas_ops from authenticated, anon;
+-- Supabase's default privileges grant everything (truncate included, which RLS doesn't cover) to anon
+-- and authenticated; start from nothing and let members read.
+revoke all on public.room_canvases, public.room_canvas_ops from authenticated, anon;
+grant select on public.room_canvases, public.room_canvas_ops to authenticated;
 
 create policy "room_canvases: members read" on public.room_canvases
   for select to authenticated using (private.can_use_room(room_id));

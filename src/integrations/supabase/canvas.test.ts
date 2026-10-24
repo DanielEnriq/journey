@@ -48,7 +48,7 @@ describe('room canvases (local Supabase)', integration, () => {
   }
 
   interface Person { id: string; email: string; name: string; cloud: Cloud; store: CanvasStore }
-  const people: Record<'alice' | 'bob' | 'carol' | 'dave', Person> = {} as never;
+  const people: Record<'alice' | 'bob' | 'carol' | 'dave' | 'erin', Person> = {} as never;
   let roomId: string;
 
   /** Joins the room's private channel as Realtime and RLS see it, like realtime.ts does. */
@@ -75,7 +75,7 @@ describe('room canvases (local Supabase)', integration, () => {
   };
 
   before(async () => {
-    for (const name of ['alice', 'bob', 'carol', 'dave'] as const) {
+    for (const name of ['alice', 'bob', 'carol', 'dave', 'erin'] as const) {
       const email = `${name}-${run}@canvas.test`;
       const full = name[0]!.toUpperCase() + name.slice(1);
       const { data, error } = await admin().auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: full } });
@@ -83,16 +83,17 @@ describe('room canvases (local Supabase)', integration, () => {
       const cloud = await signIn(email);
       people[name] = { id: data.user.id, email, name: full, cloud, store: createCanvasStore(async () => cloud) };
     }
-    // Alice owns the room; Bob is a member; Carol is in the workspace but not the room; Dave is in neither.
-    const { alice, bob, carol } = people;
+    // Alice owns the room; Bob is a member; Erin is a viewer; Carol is in the workspace but not the room;
+    // Dave is in neither.
+    const { alice, bob, carol, erin } = people;
     const { data: ws, error } = await alice.cloud.from('workspaces').insert({ name: `Canvas ${run}` }).select().single();
     if (error) throw error;
-    const added = await alice.cloud.from('workspace_members').insert([{ workspace_id: ws.id, user_id: bob.id }, { workspace_id: ws.id, user_id: carol.id }]);
+    const added = await alice.cloud.from('workspace_members').insert([{ workspace_id: ws.id, user_id: bob.id }, { workspace_id: ws.id, user_id: carol.id }, { workspace_id: ws.id, user_id: erin.id }]);
     if (added.error) throw added.error;
     const room = await alice.cloud.from('rooms').insert({ workspace_id: ws.id, name: 'Payment Reliability' }).select().single();
     if (room.error) throw room.error;
     roomId = room.data.id;
-    const member = await alice.cloud.from('room_members').insert({ room_id: roomId, user_id: bob.id });
+    const member = await alice.cloud.from('room_members').insert([{ room_id: roomId, user_id: bob.id, role: 'member' }, { room_id: roomId, user_id: erin.id, role: 'viewer' }]);
     if (member.error) throw member.error;
   });
 
@@ -169,6 +170,23 @@ describe('room canvases (local Supabase)', integration, () => {
     const direct = await alice.cloud.from('room_canvases').update({ revision: live.revision + 1 }).eq('room_id', roomId).select();
     assert.ok(direct.error || direct.data?.length === 0, 'a direct update changed nothing');
     assert.equal((await alice.store.load(roomId)).revision, live.revision);
+  });
+
+  it('lets a viewer read the canvas but not change it, and shows anyone signed out nothing', async () => {
+    const { alice, erin } = people;
+    const live = await alice.store.load(roomId);
+    const seen = await erin.store.load(roomId);
+    assert.equal(seen.revision, live.revision, 'a viewer reads the same canvas');
+    const { result } = await hubFor(erin).execute(roomId, command('annotate_component', { component: 'payment-worker', text: 'Viewer note' }));
+    assert.equal(errorCode(result), 'permission-denied');
+    assert.equal((await alice.store.load(roomId)).revision, live.revision);
+    const anon = createClient<Database>(url!, publishableKey!, { auth: { persistSession: false, autoRefreshToken: false } });
+    const read = await anon.from('room_canvases').select('room_id').eq('room_id', roomId);
+    assert.ok(read.error || read.data?.length === 0, 'signed out reads nothing');
+    const ops = await anon.from('room_canvas_ops').select('revision').eq('room_id', roomId);
+    assert.ok(ops.error || ops.data?.length === 0, 'signed out reads no commands');
+    const rpc = await anon.rpc('commit_canvas', { room: roomId, base_revision: live.revision, document: live.doc as never, command: {} as never });
+    assert.ok(rpc.error, 'signed out cannot save');
   });
 
   it('refuses a document the app didn’t make', async () => {
