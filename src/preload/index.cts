@@ -91,6 +91,12 @@ const api: JourneyApi = {
     seen: (roomId) => invoke('record:seen', roomId),
     call: (roomId, what) => invoke('record:call', roomId, what),
   },
+  canvas: {
+    load: (roomId) => invoke('canvas:load', roomId),
+    execute: (roomId, command) => invoke('canvas:execute', roomId, command),
+    presence: (roomId, presence) => invoke('canvas:presence', roomId, presence),
+    onChanged: (listener) => subscribe('canvas:changed', listener),
+  },
   calls: {
     access: (roomId) => invoke('calls:access', roomId),
     requestMicrophone: () => invoke('calls:requestMicrophone'),

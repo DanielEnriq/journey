@@ -59,6 +59,87 @@ export type Database = {
           },
         ]
       }
+      room_canvas_ops: {
+        Row: {
+          actor_kind: string
+          command: Json
+          created_at: string
+          created_by: string | null
+          revision: number
+          room_id: string
+        }
+        Insert: {
+          actor_kind: string
+          command: Json
+          created_at?: string
+          created_by?: string | null
+          revision: number
+          room_id: string
+        }
+        Update: {
+          actor_kind?: string
+          command?: Json
+          created_at?: string
+          created_by?: string | null
+          revision?: number
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_canvas_ops_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_canvas_ops_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_canvases: {
+        Row: {
+          document: Json
+          revision: number
+          room_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          document: Json
+          revision: number
+          room_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          document?: Json
+          revision?: number
+          room_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_canvases_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: true
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_canvases_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_comments: {
         Row: {
           body: string
@@ -509,7 +590,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      commit_canvas: {
+        Args: {
+          actor_kind?: string
+          base_revision: number
+          command: Json
+          document: Json
+          room: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       room_activity_kind:

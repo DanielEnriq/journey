@@ -2,6 +2,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import type { Participant, RoomEvent, RoomEvents, RoomEventType, RoomSession, RoomStatus } from '../../shared/api.js';
+import { parseCanvasChanged, parsePresence } from '../../shared/canvas/presence.js';
 import { onUserChange } from '../google/auth.js';
 import { getCloud, getCloudUserId } from './index.js';
 import { rooms } from './workspaces.js';
@@ -26,7 +27,14 @@ const validators: Validators = {
   'chat:message': (p): p is RoomEvents['chat:message'] => isRecord(p) && typeof p.text === 'string',
   'record:changed': (p): p is RoomEvents['record:changed'] =>
     isRecord(p) && ['thread', 'reply', 'decision', 'signature'].includes(p.what as string),
+  'canvas:changed': (p): p is RoomEvents['canvas:changed'] => parses(parseCanvasChanged, p),
+  'canvas:presence': (p): p is RoomEvents['canvas:presence'] => parses(parsePresence, p),
 };
+
+/** The canvas's own validators throw; here a bad payload is just dropped. They also refuse unknown fields. */
+function parses(parse: (raw: unknown) => unknown, payload: unknown): boolean {
+  try { parse(payload); return true; } catch { return false; }
+}
 
 export const roomActivity = new EventEmitter<{
   event: [RoomEvent];

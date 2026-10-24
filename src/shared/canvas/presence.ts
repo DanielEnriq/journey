@@ -1,5 +1,6 @@
 import { arr, id, int, obj, only, oneOf } from './check.js';
-import { ref } from './commands.js';
+import { COMMAND_NAMES, ref } from './commands.js';
+import { invalid } from './errors.js';
 import type { CanvasRef } from './model.js';
 
 // What each person in a call is doing on the canvas right now: the view they're on, where their pen
@@ -33,4 +34,14 @@ export function parsePresence(raw: unknown): CanvasPresence {
     selection: arr(p.selection ?? [], 'presence.selection', 20).map((r, i) => ref(r, `presence.selection[${i}]`)),
     tool: oneOf(p.tool ?? 'select', PRESENCE_TOOLS, 'presence.tool'),
   };
+}
+
+/** Sent on the room's channel after a save, so everyone else re-reads the canvas. Carries no content. */
+export interface CanvasChanged { revision: number; command: string; name: string }
+
+export function parseCanvasChanged(raw: unknown): CanvasChanged {
+  const p = obj(raw, 'changed');
+  only(p, ['revision', 'command', 'name'], 'changed');
+  if (typeof p.command !== 'string' || p.command.length > 80) throw invalid('must be a command id', 'changed.command');
+  return { revision: int(p.revision, 'changed.revision', 1, Number.MAX_SAFE_INTEGER), command: p.command, name: oneOf(p.name, COMMAND_NAMES, 'changed.name') };
 }

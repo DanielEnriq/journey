@@ -7,6 +7,7 @@
  */
 
 import type { Tables } from '../integrations/supabase/types.js';
+import type { CanvasChanged, CanvasDocument, CanvasPresence, CommandResult } from './canvas/index.js';
 
 export interface User {
   id: string;
@@ -558,9 +559,26 @@ export interface RoomEvents {
   'chat:message': { text: string };
   /** The room's record changed (a thread, reply, decision or signature); members re-read it. */
   'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' };
+  /** Someone saved the room's canvas; members re-read it (canvas:load). Carries no content. */
+  'canvas:changed': CanvasChanged;
+  /** Where someone is on the canvas: their view, pen and selection. Never saved; cameras aren't shared. */
+  'canvas:presence': CanvasPresence;
 }
 
 export type RoomEventType = keyof RoomEvents;
+
+/** A room's canvas as saved: its semantic document (src/shared/canvas) and how many saves it has had. */
+export interface RoomCanvas {
+  roomId: string;
+  revision: number;
+  doc: CanvasDocument;
+}
+
+/** What running a canvas command did, and the canvas it left (unchanged if it failed). */
+export interface CanvasExecuted {
+  result: CommandResult;
+  canvas: RoomCanvas;
+}
 
 /** A room event as delivered: `type` narrows `payload`. */
 export type RoomEvent<K extends RoomEventType = RoomEventType> = {
@@ -747,6 +765,11 @@ export interface Channels {
     'record:sign': (roomId: string, decisionId: string, version: number) => RoomResult<RoomDecision>;
     'record:seen': (roomId: string) => RoomResult<void>;
     'record:call': (roomId: string, what: 'call-started' | 'call-left') => RoomResult<void>;
+    'canvas:load': (roomId: string) => RoomResult<RoomCanvas>;
+    /** Runs a Canvas Command as the signed-in person; the result says if it was refused and why. */
+    'canvas:execute': (roomId: string, command: unknown) => CanvasExecuted;
+    /** Your view, pen and selection: sent to the room's call and kept for Vowe's "this". */
+    'canvas:presence': (roomId: string, presence: CanvasPresence) => void;
     'rooms:join': (roomId: string) => RoomSession;
     'rooms:leave': (roomId: string) => void;
     'rooms:send': <K extends RoomEventType>(roomId: string, type: K, payload: RoomEvents[K]) => RoomEvent<K>;
@@ -767,6 +790,8 @@ export interface Channels {
     'rooms:event': RoomEvent;
     'rooms:presence': { roomId: string; participants: Participant[] };
     'rooms:status': { roomId: string; status: RoomStatus };
+    /** A room's canvas changed, here or elsewhere; `result` when this app made the change. */
+    'canvas:changed': RoomCanvas & { result?: CommandResult };
     'agent:approval': AgentApprovalRequest;
     'agent:toolCall': { conversationId: string; call: AgentToolCall };
   };
@@ -900,6 +925,17 @@ export interface JourneyApi {
     /** Returns a token for the room's call. Members only. */
     access(roomId: string): Promise<CallAccess>;
     requestMicrophone(): Promise<MicrophoneAccess>;
+  };
+  /**
+   * A room's semantic canvas. Members read it; owners and members change it, one Canvas Command at a
+   * time (src/shared/canvas/commands.ts). Changes made anywhere arrive through onChanged.
+   */
+  canvas: {
+    load(roomId: string): Promise<RoomResult<RoomCanvas>>;
+    execute(roomId: string, command: unknown): Promise<CanvasExecuted>;
+    /** Throttle this: it goes to everyone in the call. Requires having joined the room. */
+    presence(roomId: string, presence: CanvasPresence): Promise<void>;
+    onChanged(listener: (change: RoomCanvas & { result?: CommandResult }) => void): () => void;
   };
   /** Vowe's collaborator agent: text conversations about the work, through read-only tools. */
   agent: {
