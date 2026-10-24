@@ -1,5 +1,5 @@
 import type { GitFileChange, JourneyApi, Repository, RoomSummary, Theme, User, Workspace } from '../shared/api.js';
-import { CallController, type CallParticipant, type CallSnapshot } from './call.js';
+import { CallService, type CallParticipant, type CallSnapshot } from './calls/service.js';
 import { setupDevSessions } from './dev-sessions.js';
 import { setupDevAgent } from './dev-agent.js';
 
@@ -19,7 +19,7 @@ const workspaceEl = $<HTMLSelectElement>('workspace');
 const roomsEl = $<HTMLUListElement>('rooms');
 const repoEl = $('repo');
 const callEl = $('call');
-const call = new CallController(calls);
+const call = new CallService(calls);
 /** The repository whose Git details are shown, if any. */
 let selectedRepo: Repository | null = null;
 /** Rooms of the selected workspace, for labelling the call. */
@@ -232,6 +232,7 @@ const STATUS_LABEL: Record<CallSnapshot['status'], string> = {
   connecting: 'Connecting…',
   connected: 'Connected',
   reconnecting: 'Reconnecting…',
+  dropped: 'Connection lost',
 };
 
 function renderCall(snapshot: CallSnapshot) {
@@ -243,14 +244,15 @@ function renderCall(snapshot: CallSnapshot) {
   $('call-error').textContent = snapshot.error ?? '';
   $('call-audio').hidden = !snapshot.audioBlocked;
   const mute = $<HTMLButtonElement>('call-mute');
-  mute.textContent = snapshot.micEnabled ? 'Mute' : 'Unmute';
-  mute.disabled = snapshot.status !== 'connected';
+  mute.textContent = snapshot.status === 'dropped' ? 'Rejoin' : snapshot.micEnabled ? 'Mute' : 'Turn on microphone';
+  mute.disabled = (snapshot.status !== 'connected' && snapshot.status !== 'dropped') || snapshot.micPending;
   $('call-participants').replaceChildren(...snapshot.participants.map(renderParticipant));
   renderRooms();
 }
 
 $('call-leave').onclick = () => attempt(() => call.leave());
-$('call-mute').onclick = () => attempt(() => call.setMuted(call.snapshot.micEnabled));
+$('call-mute').onclick = () =>
+  attempt(() => (call.snapshot.status === 'dropped' ? call.reconnect() : call.setMicrophoneEnabled(!call.snapshot.micEnabled)));
 $('call-audio').onclick = () => attempt(() => call.startAudio());
 workspaceEl.onchange = () => attempt(() => renderWorkspaces(currentUser));
 

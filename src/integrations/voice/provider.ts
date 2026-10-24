@@ -1,6 +1,6 @@
 /**
  * AI voice agents, independent of who provides them. Calls between people run on LiveKit
- * (src/renderer/call.ts); a voice agent is a separate conversation that will later be bridged
+ * (src/renderer/calls/service.ts); a voice agent is a separate conversation that will later be bridged
  * into a call as one more participant. Nothing starts a session yet.
  *
  * A provider runs in main and keeps its credentials there. Audio crosses this interface as raw

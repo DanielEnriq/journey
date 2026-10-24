@@ -1,7 +1,8 @@
 import type {
-  ClaudeCodeBlock, ClaudeCodeMessage, Participant, RoomActivity, RoomAuthor, RoomDecision, RoomDetails, RoomMember, RoomRecord,
-  RoomResult, RoomSummary as CloudRoom, WorkContext,
+  ClaudeCodeBlock, ClaudeCodeMessage, Participant, RoomActivity, RoomAuthor, RoomDecision, RoomDetails, RoomFailure, RoomInvitation,
+  RoomMember, RoomRecord, RoomResult, RoomRole, RoomSummary as CloudRoom, WorkContext,
 } from '../../../../shared/api.js';
+import { CallService } from '../../../calls/service.js';
 import { account, initials } from '../../../shared/account.js';
 import { Store } from '../../../shared/store.js';
 import { shortAgo } from '../../../shared/time.js';
@@ -12,12 +13,19 @@ import type {
 import type { Person as PanelPerson, PersonTone, Stream } from '../../room/panel/types.js';
 import type { PersonRef, RoomSummary } from '../../room/types.js';
 import { toRoomWorkContext } from '../../work/adapter.js';
+import type {
+  AccessLost, InviteLink, InviteSource, Invitation, LinkExpiry, Member, MembershipError, MembershipSource, Result, RoomAccess, User,
+} from '../../membership/model.js';
 
-// The workspace as it really is: your Supabase rooms and their members, each room's record (threads,
-// replies, decisions, signatures, activity), Realtime presence while you are in a room's call, and the
-// coding work in your local clone of its repository (WorkContextService and Claude Code transcripts,
-// over IPC). Nothing here is invented: what can't be read is reported as unavailable, never filled in.
-// Voice isn't part of this build, so a call is presence and the shared canvas only.
+// The workspace as it really is: your Supabase rooms, their members and invitations, each room's record
+// (threads, replies, decisions, signatures, activity), Realtime presence while you have a room open, its
+// LiveKit voice call, and the coding work in your local clone of its repository (WorkContextService and
+// Claude Code transcripts, over IPC). Nothing here is invented: what can't be read is reported as
+// unavailable, never filled in.
+//
+// Three kinds of "here", kept apart: a room's members (the database), who has it open (Realtime presence),
+// and who is in its call (each client announces that in its presence, from its LiveKit connection).
+// Opening a room never joins its call, and joining the call never opens the mic.
 
 const api = () => window.journey;
 
@@ -31,7 +39,7 @@ const WORDS: Partial<Record<string, string>> = {
   'signed-out': 'Your cloud session ended. Sign out and in again.',
   network: 'Couldn’t reach Vowe’s cloud. Check your connection and try again.',
   'not-found': 'This room doesn’t exist, or you aren’t a member of it.',
-  'permission-denied': 'Only the room’s owner can do that.',
+  'permission-denied': 'Your role in this room can’t do that. Ask an owner.',
 };
 
 async function unwrap<T>(result: Promise<RoomResult<T>>): Promise<T> {
@@ -49,8 +57,14 @@ export const realStatus = new Store<RealStatus>({ state: 'loading', error: null 
 
 let order: string[] = [];
 const known = new Map<string, Known>();
-/** Who is connected to a room, while you are (presence only reaches those connected). */
+/** Who has a room open, while you do (presence only reaches those connected), and whether each is in its call. */
 const presence = new Map<string, Participant[]>();
+/** Each room's invitations, read with its members when its access is shown. */
+const invitations = new Map<string, RoomInvitation[]>();
+/** Links made in this window, by invitation id: the only place a link's token is ever held. Never stored or logged. */
+const linkUrls = new Map<string, string>();
+/** Rooms you lost access to while you had them open. */
+const lostRooms = new Map<string, AccessLost>();
 /** The last work context read for a room, for its transcripts and the call's Running list. */
 const work = new Map<string, { repositoryId: string; context: WorkContext; room: RoomWorkContext }>();
 /** Your cloud user id: learned from a room's members (by email) or from joining a room. */
@@ -107,26 +121,32 @@ function eventOf(a: RoomActivity, who: (id: string, fallback?: RoomAuthor) => Pe
     repository: a.subject ? `${name} attached ${a.subject}.` : `${name} detached the repository.`,
     'call-started': `${name} joined the call.`,
     'call-left': `${name} left the call.`,
+    joined: `${name} joined the room.`,
+    left: `${name} left the room.`,
+    removed: `${name} removed ${a.subject ?? 'someone'} from the room.`,
+    role: `${name} changed ${(a.subject ?? '').replace(' · ', '’s role to ')}.`,
   }[a.kind];
   return { id: a.id, at: a.createdAt, text, who: p };
 }
 
-/** The decision being worked on, and whether it waits on your signature. */
-function current(record: RoomRecord | null) {
+/** The decision being worked on, and whether it waits on your signature (never a viewer's: they can't sign). */
+function current(record: RoomRecord | null, role?: RoomRole) {
   const d = record?.decisions[0] ?? null;
-  const needsMe = !!d && !!selfId && !d.signatures.some((s) => s.userId === selfId && s.version === d.version);
+  const needsMe = !!d && !!selfId && role !== 'viewer' && !d.signatures.some((s) => s.userId === selfId && s.version === d.version);
   return { d, needsMe };
 }
 
 function summaryOf(k: Known): RoomSummary {
   const who = peopleOf(k.members);
   const latest = k.record?.activity[0];
-  const { d, needsMe } = current(k.record);
+  const { d, needsMe } = current(k.record, k.room.role);
   return {
     id: k.room.id,
     name: k.room.name,
     repo: k.room.repository,
-    inCall: (presence.get(k.room.id) ?? []).map((p) => who(p.userId, { name: p.name, email: '' })),
+    inCall: (presence.get(k.room.id) ?? []).filter((p) => p.call).map((p) => who(p.userId, { name: p.name, email: '' })),
+    here: (presence.get(k.room.id) ?? []).map((p) => who(p.userId, { name: p.name, email: '' })),
+    role: k.room.role,
     needs: needsMe ? `Decision v${d!.version} needs your signature` : null,
     activity: latest ? eventOf(latest, who).text : 'Room created.',
     activityAt: latest?.createdAt ?? k.room.createdAt,
@@ -148,6 +168,7 @@ async function read(roomId: string, room?: CloudRoom): Promise<Known> {
 }
 
 async function refresh() {
+  if (!account.state.user) return;
   try {
     const rooms = await unwrap(api().rooms.list());
     order = rooms.map((r) => r.id);
@@ -172,6 +193,73 @@ function broadcast(roomId: string, what: 'thread' | 'reply' | 'decision' | 'sign
   if (presence.has(roomId)) api().rooms.send(roomId, 'record:changed', { what }).catch(() => {});
 }
 
+/** Tells everyone else in the room that its people changed. `userId` is who it's about, when it's a person. */
+function broadcastMembers(roomId: string, what: 'joined' | 'left' | 'removed' | 'role' | 'invitation', userId: string | null = null) {
+  if (presence.has(roomId)) return api().rooms.send(roomId, 'members:changed', { what, userId }).then(() => {}, () => {});
+  return Promise.resolve();
+}
+
+/* ---------- Having a room open: its Realtime channel, apart from its call. ---------- */
+
+/** One open or close at a time per room, so a quick close-and-reopen can't leave the channel in the wrong state. */
+const roomQueue = new Map<string, Promise<unknown>>();
+const opened = new Map<string, number>();
+
+function queued<T>(roomId: string, run: () => Promise<T>): Promise<T> {
+  const next = (roomQueue.get(roomId) ?? Promise.resolve()).catch(() => {}).then(run);
+  roomQueue.set(roomId, next);
+  return next;
+}
+
+/** Connects to the room's channel, so its members see you there and you see them. Never joins the call. */
+function enterRoom(roomId: string): Promise<void> {
+  opened.set(roomId, (opened.get(roomId) ?? 0) + 1);
+  return queued(roomId, async () => {
+    if (!opened.get(roomId) || presence.has(roomId)) return;
+    const session = await api().rooms.join(roomId);
+    selfId = session.selfId;
+    presence.set(roomId, session.participants);
+    notify();
+  });
+}
+
+function exitRoom(roomId: string): Promise<void> {
+  const n = Math.max(0, (opened.get(roomId) ?? 0) - 1);
+  if (n) opened.set(roomId, n); else opened.delete(roomId);
+  return queued(roomId, async () => {
+    if (opened.get(roomId) || voice()?.snapshot.roomId === roomId) return;
+    try { await api().rooms.leave(roomId); } finally { presence.delete(roomId); notify(); }
+  });
+}
+
+/** Someone you don't know yet has the room open: they just accepted an invitation. */
+function newcomers(roomId: string, participants: Participant[]) {
+  const members = known.get(roomId)?.members;
+  if (members && participants.some((p) => !members.some((m) => m.userId === p.userId))) void loadAccess(roomId);
+}
+
+/** You may have lost the room: check with the database, never just the (self-reported) event. */
+async function checkAccess(roomId: string, byId: string | null, kind: AccessLost['kind'] = 'removed') {
+  const r = await api().rooms.get(roomId);
+  if (r.ok) { void loadAccess(roomId); return; }
+  if (r.error.code !== 'not-found') return;
+  const by = byId ? known.get(roomId)?.members.find((m) => m.userId === byId) : undefined;
+  lose(roomId, { kind, byName: by ? (by.name || by.email.split('@')[0]).split(/\s+/)[0] : undefined });
+}
+
+/** Tears a room down here: off its call, off its channel, out of the list. */
+function lose(roomId: string, why: AccessLost) {
+  lostRooms.set(roomId, { roomName: known.get(roomId)?.room.name, ...why });
+  if (voice()?.snapshot.roomId === roomId) void voice()!.leave();
+  opened.delete(roomId);
+  void queued(roomId, () => api().rooms.leave(roomId)).catch(() => {});
+  presence.delete(roomId);
+  known.delete(roomId);
+  invitations.delete(roomId);
+  order = order.filter((id) => id !== roomId);
+  notify();
+}
+
 let workTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Starts listening once someone is signed in; safe to call more than once. */
@@ -179,9 +267,18 @@ export function startRealWorkspace() {
   if (started || !window.journey) return;
   started = true;
   const j = api();
-  j.rooms.onEvent((e) => { if (e.type === 'record:changed') void changed(e.roomId); });
-  j.rooms.onPresence(({ roomId, participants }) => { presence.set(roomId, participants); notify(); });
-  j.rooms.onStatus(({ roomId, status }) => { if (status === 'left') { presence.delete(roomId); notify(); } });
+  j.rooms.onEvent((e) => {
+    if (e.type === 'record:changed') void changed(e.roomId);
+    if (e.type === 'members:changed') {
+      const { what, userId } = e.payload as { what: string; userId: string | null };
+      if (userId && isMe(userId) && what === 'removed') void checkAccess(e.roomId, e.senderId);
+      else void loadAccess(e.roomId).then(() => changed(e.roomId));
+    }
+  });
+  j.rooms.onPresence(({ roomId, participants }) => { presence.set(roomId, participants); newcomers(roomId, participants); notify(); });
+  // The server closed the channel: most often because you're no longer a member.
+  j.rooms.onStatus(({ roomId, status }) => { if (status === 'left') { presence.delete(roomId); notify(); void checkAccess(roomId, null); } });
+  startVoice();
   // Claude Code's live activity: whatever shows a room's work reads it again, a few seconds at most behind.
   j.claudeCode.onEvent(() => {
     if (workTimer) return;
@@ -190,7 +287,11 @@ export function startRealWorkspace() {
   account.subscribe(() => {
     const user = account.state.user;
     if (user) void refresh();
-    else { known.clear(); order = []; presence.clear(); work.clear(); selfId = null; workspaceId = null; notify(); }
+    else {
+      void voice()?.leave();
+      known.clear(); order = []; presence.clear(); work.clear(); invitations.clear(); linkUrls.clear(); lostRooms.clear(); opened.clear();
+      selfId = null; workspaceId = null; notify();
+    }
   });
   if (account.state.user) void refresh();
 }
@@ -199,6 +300,7 @@ export function startRealWorkspace() {
 async function ensureWorkspace(): Promise<string> {
   if (workspaceId) return workspaceId;
   const list = await api().workspaces.list();
+  // Your own workspaces are listed first, so new rooms go in yours rather than one you were invited into.
   workspaceId = (list[0] ?? await api().workspaces.create('Personal')).id;
   return workspaceId;
 }
@@ -244,7 +346,7 @@ const room: RoomDataSource = {
     const events = record.activity.map((a) => eventOf(a, who));
     const last = record.lastSeenAt;
     const since = last ? events.filter((e) => e.who?.tone !== 'me' && Date.parse(e.at) > Date.parse(last)) : [];
-    const { d, needsMe } = current(record);
+    const { d, needsMe } = current(record, k.room.role);
     const attention: RoomPreview['attention'] = [];
     if (d && needsMe) {
       const by = who(d.proposedBy.id, d.proposedBy);
@@ -267,6 +369,8 @@ const room: RoomDataSource = {
   visited(roomId) {
     api().record.seen(roomId).then(() => changed(roomId), () => {});
   },
+  enter: enterRoom,
+  exit: exitRoom,
   // The scripted canvas's cast; real rooms have members instead.
   people: () => ({}) as ReturnType<RoomDataSource['people']>,
   invite: () => Promise.reject(new Error('Inviting someone isn’t in this build yet.')),
@@ -278,25 +382,60 @@ const room: RoomDataSource = {
 /** Why a room's repository couldn't be attached when it was made. */
 export const attachErrors = new Map<string, string>();
 
-/* ---------- The call: presence on the room's Realtime channel. No audio in this build. ---------- */
+/* ---------- The call: LiveKit audio, announced in the room's presence. ---------- */
+
+let callService: CallService | null = null;
+/** The voice call, one at a time across rooms. Null in the browser preview, which has no main process. */
+export function voice(): CallService | null {
+  if (!callService && window.journey) callService = new CallService(window.journey.calls);
+  return callService;
+}
+
+/** What the app does when the call ends without you asking: set by app.tsx (the call session). */
+export const callEnded: { dropped(roomId: string): void; ended(roomId: string): void } = { dropped: () => {}, ended: () => {} };
+
+let announced: { roomId: string; muted: boolean } | null = null;
+function startVoice() {
+  const v = voice();
+  if (!v) return;
+  // Your presence says whether you're on the call, and muted, from the call itself.
+  v.onChange((snap) => {
+    const on = snap.roomId && (snap.status === 'connected' || snap.status === 'reconnecting') ? { roomId: snap.roomId, muted: !snap.micEnabled } : null;
+    if (on && (!announced || announced.roomId !== on.roomId || announced.muted !== on.muted)) {
+      if (announced && announced.roomId !== on.roomId) void api().rooms.setCall(announced.roomId, null);
+      announced = on;
+      void api().rooms.setCall(on.roomId, { muted: on.muted });
+    } else if (!on && announced) {
+      void api().rooms.setCall(announced.roomId, null);
+      announced = null;
+    }
+    notify();
+  });
+  v.onEvent((e) => {
+    if (e.type === 'dropped') callEnded.dropped(e.roomId);
+    // Taken off the call by the room (removed, or the call closed): see whether you still have the room.
+    if (e.type === 'ended' && e.reason) { callEnded.ended(e.roomId); void checkAccess(e.roomId, null); }
+  });
+}
 
 const call: CallDataSource = {
   async join(roomId) {
-    const session = await api().rooms.join(roomId);
-    selfId = session.selfId;
-    presence.set(roomId, session.participants);
+    const v = voice();
+    if (!v) throw new Error('Calls need the app.');
+    await enterRoom(roomId);
+    await v.join(roomId);
     await unwrap(api().record.call(roomId, 'call-started')).catch(() => {});
     await changed(roomId);
   },
   async leave(roomId) {
+    // Leaving the call keeps the room open: only its channel's call flag changes.
+    await voice()?.leave();
     await unwrap(api().record.call(roomId, 'call-left')).catch(() => {});
-    try { await api().rooms.leave(roomId); } finally {
-      presence.delete(roomId);
-      await changed(roomId);
-    }
+    await exitRoom(roomId);
+    await changed(roomId);
   },
-  // Nothing to mute or caption: voice isn't connected in this build, and the call bar says so.
-  setMuted: () => {},
+  setMuted: (muted) => { void voice()?.setMicrophoneEnabled(!muted).catch(() => {}); },
+  // Captions aren't connected in this build; the call bar says so.
   setCaptions: () => {},
 };
 
@@ -353,7 +492,8 @@ function decisionOf(d: RoomDecision, members: RoomMember[]) {
     const mine = d.signatures.filter((s) => s.userId === userId).map((s) => s.version);
     return mine.length ? Math.max(...mine) : null;
   };
-  const approvers = members.map((m) => ({ personId: m.userId, signedVersion: best(m.userId) }));
+  // Viewers can't sign, so a decision is agreed once its owners and members have.
+  const approvers = members.filter((m) => m.role !== 'viewer').map((m) => ({ personId: m.userId, signedVersion: best(m.userId) }));
   return {
     id: d.id,
     version: d.version,
@@ -391,11 +531,12 @@ const record: RoomRecordSource = {
       state: STREAM_STATE[w.status], line: w.lastActivity ?? undefined,
     }]);
     const here = presence.get(roomId)?.length ?? 0;
+    const calling = presence.get(roomId)?.filter((p) => p.call).length ?? 0;
     const view: RoomRecordView = {
       panel: {
         people,
         meId,
-        subtitle: here ? `${here} here` : undefined,
+        subtitle: here ? `${here} here${calling ? ` · ${calling} on the call` : ''}` : undefined,
         goal: k.room.goal ? { text: k.room.goal, by: k.room.createdBy } : undefined,
         decision: d ? decisionOf(d, k.members) : undefined,
         threads: rec.threads.map((t) => ({
@@ -425,21 +566,181 @@ const record: RoomRecordSource = {
     await changed(roomId);
   },
   async sign(roomId, decisionId, version) {
+    notAsViewer(roomId, 'sign decisions');
     await unwrap(api().record.sign(roomId, decisionId, version));
     broadcast(roomId, 'signature');
     await changed(roomId);
   },
   async propose(roomId, d) {
+    notAsViewer(roomId, 'propose decisions');
     await unwrap(api().record.propose(roomId, d));
     broadcast(roomId, 'decision');
     await changed(roomId);
   },
   async amend(roomId, decisionId, change) {
+    notAsViewer(roomId, 'change decisions');
     await unwrap(api().record.amend(roomId, decisionId, change));
     broadcast(roomId, 'decision');
     await changed(roomId);
   },
 };
 
-export const realWorkspace = { room, call, work: workSource, record };
+/** Viewers read, comment and listen. The database refuses the rest anyway; this says so before asking it. */
+function notAsViewer(roomId: string, what: string) {
+  if (known.get(roomId)?.room.role === 'viewer') throw new RoomUnavailable('permission-denied', `Viewers can’t ${what}. Ask an owner to make you a member.`);
+}
+
+/* ---------- Membership: who's in each room, their invitations, and changing them. ---------- */
+
+const MEMBER_TONES: User['tone'][] = ['peer', 'peer2', 'peer3'];
+
+function failure(e: RoomFailure): Result & { ok: false } {
+  if (e.reason) return { ok: false, error: e.reason as MembershipError, detail: e.code === 'invalid' ? e.message : undefined };
+  const error: MembershipError = { network: 'network', 'permission-denied': 'not_permitted', conflict: 'last_owner', 'not-found': 'room_gone' }[e.code as string] as MembershipError
+    ?? 'not_permitted';
+  return { ok: false, error, detail: e.code === 'invalid' || e.code === 'unknown' || e.code === 'signed-out' || e.code === 'not-configured' ? e.message : undefined };
+}
+
+/** Runs a change, then re-reads the room's access and tells the others in it. */
+async function change(roomId: string, run: () => Promise<RoomResult<unknown>>, what: Parameters<typeof broadcastMembers>[1], userId: string | null = null): Promise<Result> {
+  let r: RoomResult<unknown>;
+  try { r = await run(); } catch (err) { return { ok: false, error: 'network', detail: (err as Error).message }; }
+  if (!r.ok) return failure(r.error);
+  await loadAccess(roomId);
+  await broadcastMembers(roomId, what, userId);
+  return { ok: true };
+}
+
+async function loadAccess(roomId: string): Promise<void> {
+  try {
+    const [members, invites, room] = await Promise.all([
+      unwrap(api().rooms.members(roomId)), unwrap(api().invites.list(roomId)), unwrap(api().rooms.get(roomId)),
+    ]);
+    learnSelf(members);
+    const k = known.get(roomId);
+    known.set(roomId, { room, record: k?.record ?? null, members });
+    invitations.set(roomId, invites);
+  } catch (err) {
+    if (err instanceof RoomUnavailable && err.code === 'not-found' && opened.has(roomId)) lose(roomId, { kind: 'room_gone' });
+  }
+  notify();
+}
+
+const expiryOf = (inv: RoomInvitation): LinkExpiry => {
+  const days = (Date.parse(inv.expiresAt) - Date.parse(inv.sentAt)) / 86_400_000;
+  return days <= 1.01 ? '24h' : days <= 7.01 ? '7d' : '30d';
+};
+
+const CONSUMER = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'yahoo.com']);
+
+function accessOf(roomId: string): RoomAccess | null {
+  const k = known.get(roomId);
+  if (!k || !k.members.length || !selfId) return null;
+  const order = [...k.members].sort((a, b) => Date.parse(a.joinedAt) - Date.parse(b.joinedAt));
+  const others = order.filter((m) => !isMe(m.userId));
+  const users: Record<string, User> = {};
+  for (const m of order) {
+    const name = m.name || m.email.split('@')[0];
+    users[m.userId] = {
+      id: m.userId, name: isMe(m.userId) ? (account.state.user?.name || name) : name, email: m.email, initials: initials(name) || '?',
+      tone: isMe(m.userId) ? 'me' : MEMBER_TONES[others.indexOf(m) % MEMBER_TONES.length],
+    };
+  }
+  const here = new Map((presence.get(roomId) ?? []).map((p) => [p.userId, p]));
+  const snap = voice()?.snapshot;
+  const onCall = snap && snap.roomId === roomId ? new Map(snap.participants.map((p) => [p.identity, p])) : new Map();
+  const members: Member[] = order.map((m) => {
+    const p = here.get(m.userId);
+    const live = onCall.get(m.userId);
+    return {
+      userId: m.userId, role: m.role, joinedAt: Date.parse(m.joinedAt),
+      presence: live || p?.call ? 'call' : p ? 'room' : 'away',
+      speaking: live?.isSpeaking ?? false,
+      muted: live ? live.isMuted : p?.call?.muted,
+    };
+  });
+  const all = invitations.get(roomId) ?? [];
+  const invites: Invitation[] = all.filter((i) => i.kind === 'email' && i.email).map((i) => ({
+    id: i.id, email: i.email!, role: i.role, status: i.status, invitedBy: i.invitedBy, sentAt: Date.parse(i.sentAt), expiresAt: Date.parse(i.expiresAt),
+    acceptedAt: i.acceptedAt ? Date.parse(i.acceptedAt) : undefined, revokedAt: i.revokedAt ? Date.parse(i.revokedAt) : undefined, resends: i.resends,
+  }));
+  const newest = all.find((i) => i.kind === 'link');
+  const link: InviteLink | null = newest ? {
+    id: newest.id, url: linkUrls.get(newest.id) ?? null, role: newest.role, expiry: expiryOf(newest), expiresAt: Date.parse(newest.expiresAt),
+    domain: newest.domain, status: newest.status === 'pending' ? 'active' : newest.status === 'revoked' ? 'revoked' : 'expired', uses: newest.uses,
+    createdBy: newest.invitedBy,
+  } : null;
+  const owner = order.find((m) => m.role === 'owner' && !isMe(m.userId)) ?? order.find((m) => m.role === 'owner');
+  const domain = account.state.user?.email?.split('@')[1]?.toLowerCase() ?? null;
+  return {
+    roomId, roomName: k.room.name, viewerId: selfId, users, members, invites, link,
+    ownerName: owner ? (isMe(owner.userId) ? 'an owner' : users[owner.userId].name.split(/\s+/)[0]) : 'an owner',
+    domain: domain && !CONSUMER.has(domain) ? domain : null,
+  };
+}
+
+const membership: MembershipSource = {
+  access: accessOf,
+  load: loadAccess,
+  subscribe: (listener) => room.subscribe(listener),
+  async invite(roomId, emails, role) {
+    return change(roomId, () => api().invites.send(roomId, emails, role), 'invitation');
+  },
+  async resend(roomId, invitationId) {
+    const inv = invitations.get(roomId)?.find((i) => i.id === invitationId);
+    if (!inv?.email) return { ok: false, error: 'invite_not_found' };
+    return change(roomId, () => api().invites.send(roomId, [inv.email!], inv.role), 'invitation');
+  },
+  async revokeInvite(roomId, invitationId) {
+    return change(roomId, () => api().invites.revoke(invitationId), 'invitation');
+  },
+  async createLink(roomId, settings) {
+    return change(roomId, async () => {
+      const r = await api().invites.createLink(roomId, settings);
+      if (r.ok) linkUrls.set(r.value.invitation.id, r.value.url);
+      return r;
+    }, 'invitation');
+  },
+  async revokeLink(roomId) {
+    const live = invitations.get(roomId)?.find((i) => i.kind === 'link' && i.status === 'pending');
+    if (!live) return { ok: true };
+    const r = await change(roomId, () => api().invites.revoke(live.id), 'invitation');
+    if (r.ok) linkUrls.delete(live.id);
+    return r;
+  },
+  async changeRole(roomId, userId, role: RoomRole) {
+    return change(roomId, () => api().rooms.setMemberRole(roomId, userId, role), 'role', userId);
+  },
+  async remove(roomId, userId) {
+    return change(roomId, () => api().rooms.removeMember(roomId, userId), 'removed', userId);
+  },
+  async leave(roomId) {
+    if (voice()?.snapshot.roomId === roomId) await voice()!.leave();
+    // Said before going, while you can still reach the room's channel.
+    await broadcastMembers(roomId, 'left', selfId);
+    let r: RoomResult<void>;
+    try { r = await api().rooms.removeMember(roomId); } catch (err) { return { ok: false, error: 'network', detail: (err as Error).message }; }
+    if (!r.ok) return failure(r.error);
+    lose(roomId, { kind: 'left', byName: undefined });
+    void refresh();
+    return { ok: true };
+  },
+  lost: (roomId) => lostRooms.get(roomId) ?? null,
+  dismissLost: (roomId) => { lostRooms.delete(roomId); notify(); },
+};
+
+/** Your side of invitations: what's waiting for you, and redeeming a link someone shared. */
+const invites: InviteSource = {
+  async mine() { return unwrap(api().invites.mine()); },
+  async resolve(key) { return unwrap(api().invites.resolve(key)); },
+  async accept(key) {
+    const r = await api().invites.accept(key);
+    if (!r.ok) throw Object.assign(new RoomUnavailable(r.error.code, r.error.message), { reason: r.error.reason });
+    lostRooms.delete(r.value);
+    await refresh();
+    return r.value;
+  },
+};
+
+export const realWorkspace = { room, call, work: workSource, record, membership, invites };
 export type RealWorkspace = typeof realWorkspace;

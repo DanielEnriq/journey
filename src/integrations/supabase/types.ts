@@ -198,6 +198,88 @@ export type Database = {
           },
         ]
       }
+      room_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          domain: string | null
+          email: string | null
+          expires_at: string
+          id: string
+          invited_by: string
+          kind: Database["public"]["Enums"]["invitation_kind"]
+          resends: number
+          revoked_at: string | null
+          role: Database["public"]["Enums"]["room_role"]
+          room_id: string
+          sent_at: string
+          status: Database["public"]["Enums"]["invitation_status"]
+          token_hash: string
+          uses: number
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          domain?: string | null
+          email?: string | null
+          expires_at: string
+          id?: string
+          invited_by: string
+          kind: Database["public"]["Enums"]["invitation_kind"]
+          resends?: number
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["room_role"]
+          room_id: string
+          sent_at?: string
+          status?: Database["public"]["Enums"]["invitation_status"]
+          token_hash: string
+          uses?: number
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          domain?: string | null
+          email?: string | null
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          kind?: Database["public"]["Enums"]["invitation_kind"]
+          resends?: number
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["room_role"]
+          room_id?: string
+          sent_at?: string
+          status?: Database["public"]["Enums"]["invitation_status"]
+          token_hash?: string
+          uses?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_invitations_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_invitations_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_invitations_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_members: {
         Row: {
           joined_at: string
@@ -509,9 +591,59 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accept_room_invitation: {
+        Args: { invitation?: string; token?: string }
+        Returns: string
+      }
+      create_room_link: {
+        Args: {
+          link_role: Database["public"]["Enums"]["room_role"]
+          only_domain?: string
+          room: string
+          valid_for: string
+        }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          token: string
+        }[]
+      }
+      invite_to_room: {
+        Args: {
+          emails: string[]
+          invite_role?: Database["public"]["Enums"]["room_role"]
+          room: string
+        }
+        Returns: {
+          invitation_id: string
+          invited_email: string
+          resent: boolean
+        }[]
+      }
+      my_room_invitations: {
+        Args: never
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          inviter_name: string
+          role: Database["public"]["Enums"]["room_role"]
+          room_id: string
+          room_name: string
+          sent_at: string
+        }[]
+      }
+      resolve_room_invitation: {
+        Args: { invitation?: string; token?: string }
+        Returns: Json
+      }
+      revoke_room_invitation: {
+        Args: { invitation: string }
+        Returns: undefined
+      }
     }
     Enums: {
+      invitation_kind: "email" | "link"
+      invitation_status: "pending" | "accepted" | "expired" | "revoked"
       room_activity_kind:
         | "thread"
         | "reply"
@@ -521,7 +653,11 @@ export type Database = {
         | "repository"
         | "call-started"
         | "call-left"
-      room_role: "owner" | "member"
+        | "joined"
+        | "left"
+        | "removed"
+        | "role"
+      room_role: "owner" | "member" | "viewer"
       thread_kind:
         | "note"
         | "concern"
@@ -657,6 +793,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      invitation_kind: ["email", "link"],
+      invitation_status: ["pending", "accepted", "expired", "revoked"],
       room_activity_kind: [
         "thread",
         "reply",
@@ -666,8 +804,12 @@ export const Constants = {
         "repository",
         "call-started",
         "call-left",
+        "joined",
+        "left",
+        "removed",
+        "role",
       ],
-      room_role: ["owner", "member"],
+      room_role: ["owner", "member", "viewer"],
       thread_kind: [
         "note",
         "concern",

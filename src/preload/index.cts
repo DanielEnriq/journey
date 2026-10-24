@@ -79,6 +79,16 @@ const api: JourneyApi = {
     onEvent: (listener) => subscribe('rooms:event', listener),
     onPresence: (listener) => subscribe('rooms:presence', listener),
     onStatus: (listener) => subscribe('rooms:status', listener),
+    setCall: (roomId, call) => invoke('rooms:setCall', roomId, call),
+  },
+  invites: {
+    list: (roomId) => invoke('invites:list', roomId),
+    send: (roomId, emails, role) => invoke('invites:send', roomId, emails, role),
+    createLink: (roomId, settings) => invoke('invites:createLink', roomId, settings),
+    revoke: (invitationId) => invoke('invites:revoke', invitationId),
+    mine: () => invoke('invites:mine'),
+    resolve: (key) => invoke('invites:resolve', key),
+    accept: (key) => invoke('invites:accept', key),
   },
   record: {
     get: (roomId) => invoke('record:get', roomId),
@@ -94,6 +104,7 @@ const api: JourneyApi = {
   calls: {
     access: (roomId) => invoke('calls:access', roomId),
     requestMicrophone: () => invoke('calls:requestMicrophone'),
+    openMicrophoneSettings: () => invoke('calls:openMicrophoneSettings'),
   },
   agent: {
     status: () => invoke('agent:status'),

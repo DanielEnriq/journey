@@ -1,5 +1,6 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 import type {
+  MembershipErrorCode,
   NewRoom,
   RoomDetails,
   RoomErrorCode,
@@ -26,6 +27,8 @@ export class RoomError extends Error {
   constructor(
     readonly code: RoomErrorCode,
     message: string,
+    /** Which membership state explains it, for invitations and role changes. */
+    readonly reason?: MembershipErrorCode,
   ) {
     super(message);
     this.name = 'RoomError';
@@ -153,7 +156,7 @@ export function createRoomService(client: () => Promise<Cloud>) {
     async addMember(roomId: string, userId: string, role: RoomRole = 'member'): Promise<RoomMember> {
       const id = requireId(roomId, 'Room');
       const target = requireId(userId, 'User');
-      if (role !== 'owner' && role !== 'member') throw new RoomError('invalid', 'Role must be owner or member');
+      if (!isRole(role)) throw new RoomError('invalid', 'Role must be owner, member or viewer');
       const { supabase } = await signedIn();
       const room = await getRoom(id);
 
@@ -172,7 +175,7 @@ export function createRoomService(client: () => Promise<Cloud>) {
     async setMemberRole(roomId: string, userId: string, role: RoomRole): Promise<RoomMember> {
       const id = requireId(roomId, 'Room');
       const target = requireId(userId, 'User');
-      if (role !== 'owner' && role !== 'member') throw new RoomError('invalid', 'Role must be owner or member');
+      if (!isRole(role)) throw new RoomError('invalid', 'Role must be owner, member or viewer');
       const { supabase } = await signedIn();
       const { data, error } = await supabase
         .from('room_members')
@@ -267,6 +270,10 @@ function member(row: {
     name: row.user.name,
     avatarUrl: row.user.avatar_url,
   };
+}
+
+function isRole(value: unknown): value is RoomRole {
+  return value === 'owner' || value === 'member' || value === 'viewer';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -368,7 +375,9 @@ export function toRoomError(error: unknown): RoomError {
     case '42501': // RLS or column privileges
       return new RoomError('permission-denied', 'You don’t have permission to do that');
     case 'VR001': // keep_room_owner
-      return new RoomError('conflict', message);
+      return new RoomError('conflict', message, 'last_owner');
+    case 'VI001': // the invitation functions: the message is the reason
+      return invitationError(message);
     case '23505':
       return new RoomError('conflict', 'That already exists');
     case '23503': // e.g. adding a user id that isn't a user
@@ -382,6 +391,25 @@ export function toRoomError(error: unknown): RoomError {
       return new RoomError('signed-out', 'Your cloud session ended; sign in again');
   }
   return new RoomError('unknown', message);
+}
+
+const INVITATION_ERRORS: Record<string, [RoomErrorCode, string]> = {
+  not_permitted: ['permission-denied', 'Only the room’s owners can do that'],
+  invalid_email: ['invalid', 'That doesn’t look like an email address'],
+  rate_limited: ['conflict', 'Too many invitations at once; wait a minute and try again'],
+  wrong_account: ['permission-denied', 'This invitation is for a different account'],
+  invite_not_found: ['not-found', 'This invitation isn’t valid'],
+  invite_expired: ['invalid', 'This invitation has expired'],
+  invite_revoked: ['invalid', 'This invitation was withdrawn'],
+  invite_used: ['invalid', 'This invitation was already used'],
+  link_revoked: ['invalid', 'This link was turned off'],
+  domain_not_allowed: ['permission-denied', 'This link is limited to another email domain'],
+};
+
+function invitationError(reason: string): RoomError {
+  const known = INVITATION_ERRORS[reason];
+  if (!known) return new RoomError('unknown', reason);
+  return new RoomError(known[0], known[1], reason as MembershipErrorCode);
 }
 
 function isNetworkFailure(e: { name?: unknown; status?: unknown }, code: string, message: string): boolean {

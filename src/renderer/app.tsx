@@ -7,15 +7,21 @@ import { useRooms } from './features/workspace/hooks.js';
 import {
   clearDemo, demoCanvas, demoScenario, EXAMPLE_REPOS, loadDemo, resetWorkspace, workspace as demoWorkspace,
 } from './features/workspace/mock/workspace.js';
-import { addLocalRepo, attachErrors, localRepos, realStatus, realWorkspace, startRealWorkspace } from './features/workspace/real/workspace.js';
+import {
+  addLocalRepo, attachErrors, callEnded, localRepos, realStatus, realWorkspace, RoomUnavailable, startRealWorkspace, voice,
+} from './features/workspace/real/workspace.js';
+import { HomeInvites } from './features/membership/HomeInvites.js';
+import { InviteLanding, type LandingState } from './features/membership/InviteLanding.js';
+import type { MembershipError } from './features/membership/model.js';
 import { NewRoomSheet } from './features/workspace/NewRoom.js';
+import { Lights } from './features/room/shell.js';
 import { HomeScreen, LoginScreen } from './features/welcome/WelcomeScreen.js';
 import { devFlags, type DevFlags } from './shared/devflags.js';
 import { useStore } from './shared/store.js';
 import { useAppearance, useThemeSetting } from './shared/theme/theme.js';
 import { account } from './shared/account.js';
 import type { NewRoom, RepoChoice } from './features/room/data/sources.js';
-import type { Theme } from '../shared/api.js';
+import type { InviteKey, Theme } from '../shared/api.js';
 
 // Vowe's renderer: sign-in → your rooms → a room's preview → its call, plus the design's reference
 // sheets and a developer menu. Screens are hash routes kept in localStorage, so a relaunch lands back
@@ -41,6 +47,9 @@ const PREVIEW = !window.journey;
 const demoSession = new CallSession(demoWorkspace.call);
 const realSession = new CallSession(realWorkspace.call);
 if (!PREVIEW) startRealWorkspace();
+// The call ending without you asking: a lost connection offers a rejoin; being taken off it leaves.
+callEnded.dropped = (roomId) => { if (realSession.state.roomId === roomId) realSession.lost(); };
+callEnded.ended = (roomId) => { if (realSession.state.roomId === roomId) void realSession.leave(); };
 
 function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/');
@@ -113,6 +122,39 @@ function ReferenceScreen({ sheet, go, onClose }: { sheet: Sheet; go(s: Sheet): v
   );
 }
 
+/**
+ * An invite, opened from home: checked against the account you're signed in with, then previewed, then
+ * joined. The key (a link's token, or your email invitation's id) lives only in this screen's memory.
+ */
+function InviteScreen({ inviteKey, light, onDone, onOpenRoom }: { inviteKey: InviteKey; light: boolean; onDone(): void; onOpenRoom(id: string): void }) {
+  const [state, setState] = useState<LandingState>({ kind: 'checking' });
+  const [attempt, setAttempt] = useState(0);
+  const errorOf = (err: unknown): MembershipError => (err as { reason?: MembershipError }).reason
+    ?? ((err as RoomUnavailable).code === 'network' ? 'network' : (err as RoomUnavailable).code === 'not-found' ? 'invite_not_found' : 'network');
+  useEffect(() => {
+    setState({ kind: 'checking' });
+    realWorkspace.invites.resolve(inviteKey).then(
+      (r) => setState(r.kind === 'already-member' ? { kind: 'already-member', roomId: r.roomId, roomName: r.roomName } : r),
+      (err) => setState({ kind: 'error', error: errorOf(err) }),
+    );
+  }, [inviteKey, attempt]);
+  const join = async () => {
+    if (state.kind !== 'preview') return;
+    setState({ ...state, joining: true });
+    try { onOpenRoom(await realWorkspace.invites.accept(inviteKey)); }
+    catch (err) { setState({ kind: 'error', error: errorOf(err), invite: state.invite }); }
+  };
+  return (
+    <div class="room-screen">
+      <div class={`win ${light ? 'light ' : ''}outside`}>
+        <Lights />
+        <InviteLanding state={state} onJoinRoom={() => void join()} onNotNow={onDone} onHome={onDone} onOpenRoom={onOpenRoom}
+          onRetry={() => setAttempt((n) => n + 1)} onSwitchAccount={() => { void window.journey.auth.signOut(); }} />
+      </div>
+    </div>
+  );
+}
+
 const FLAG_LABELS: [keyof DevFlags, string][] = [
   ['slowCall', 'Slow call connection'], ['failCall', 'Call can’t connect'], ['slowWork', 'Slow work context'], ['failWork', 'Work context unavailable'],
 ];
@@ -168,6 +210,8 @@ function App() {
   const [newRoom, setNewRoom] = useState(false);
   const [homeError, setHomeError] = useState<string | null>(null);
   const [repos, setRepos] = useState<RepoChoice[]>([]);
+  /** An invite being opened; kept in memory only, never in the route or storage. */
+  const [invite, setInvite] = useState<InviteKey | null>(null);
   const light = useAppearance() === 'light';
   const demo = inDemo(route);
   const ws = demo ? demoWorkspace : realWorkspace;
@@ -184,7 +228,7 @@ function App() {
     if (user && route.screen === 'login') go({ screen: 'home', demo: false });
   }, [user, route.screen]);
   // Signing out, in the app or the preview, ends any call; so does crossing between the demo and your rooms.
-  useEffect(() => { if (route.screen === 'login') { void demoSession.leave(); void realSession.leave(); } }, [route.screen]);
+  useEffect(() => { if (route.screen === 'login') { void demoSession.leave(); void realSession.leave(); setInvite(null); } }, [route.screen]);
   useEffect(() => { void (demo ? realSession : demoSession).leave(); }, [demo]);
   // Repositories added on this machine, for the room pickers.
   const loadRepos = () => { if (!PREVIEW && user) localRepos().then(setRepos, () => setRepos([])); };
@@ -222,16 +266,25 @@ function App() {
   let screen;
   if (signedOut && user === undefined) screen = null;
   else if (signedOut || route.screen === 'login') screen = <><div class="drag-strip"></div><LoginScreen light={light} signIn={PREVIEW ? undefined : () => window.journey.auth.signIn()} onSignedIn={home} /></>;
-  else if (route.screen === 'home') {
+  else if (invite && !demo) {
+    screen = <InviteScreen inviteKey={invite} light={light} onDone={() => setInvite(null)} onOpenRoom={(id) => { setInvite(null); openRoom(id); }} />;
+  } else if (route.screen === 'home') {
     screen = <HomeScreen light={light} rooms={rooms} repos={choices} repoNote={repoNote} simulatedMic={demo} notice={notice} onOpenRoom={openRoom}
-      onCreate={(r) => { create(r).catch((err: Error) => setHomeError(`Couldn’t create the room: ${err.message}`)); }} onNewRoom={() => setNewRoom(true)} overlay={overlay} />;
+      onCreate={(r) => { create(r).catch((err: Error) => setHomeError(`Couldn’t create the room: ${err.message}`)); }} onNewRoom={() => setNewRoom(true)} overlay={overlay}
+      invites={demo || PREVIEW ? undefined : <HomeInvites source={realWorkspace.invites} onOpen={setInvite} refreshKey={rooms.length} />} />;
   } else if (route.screen === 'room') {
     const id = route.id;
     screen = (
       <RoomScreen key={`${demo}:${id}`} sources={ws} record={demo ? undefined : realWorkspace.record} roomId={id} inCall={inCall} session={session}
         canvas={demo && id === 'payments' ? demoCanvas() : null} attachError={demo ? undefined : attachErrors.get(id)} light={light} overlay={overlay}
         onOpenRoom={openRoom} onNewRoom={() => setNewRoom(true)} onHome={home}
-        onJoin={async () => { if (await session.join(id)) go({ screen: 'room', id, call: true, demo }); }}
+        membership={demo ? undefined : realWorkspace.membership} voice={demo ? undefined : voice()}
+        onJoin={async (o) => {
+          if (!(await session.join(id))) return;
+          go({ screen: 'room', id, call: true, demo });
+          // Chose "Join and talk": that choice, not the join, opens the mic (and asks the OS the first time).
+          if (o?.talk && !demo) void voice()?.setMicrophoneEnabled(true).catch(() => { /* the call bar says why */ });
+        }}
         onLeave={async () => { await session.leave(); go({ screen: 'room', id, call: false, demo }); }} />
     );
   }

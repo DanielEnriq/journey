@@ -1,4 +1,5 @@
-import { getCloud, isCloudConfigured } from './index.js';
+import { getCloud, getCloudUserId, isCloudConfigured } from './index.js';
+import { createInvitationService } from './invitations.js';
 import { createRoomRecordService } from './record.js';
 import { createRoomService, RoomError, toRoomError } from './rooms.js';
 import type { Enums, Tables } from './types.js';
@@ -11,11 +12,15 @@ export type Workspace = Tables<'workspaces'>;
 export type WorkspaceRole = Enums<'workspace_role'>;
 export type WorkspaceMember = Tables<'workspace_members'> & { user: CloudUser };
 
-/** Workspaces the signed-in user belongs to, oldest first. */
+/**
+ * Workspaces the signed-in user belongs to: the ones they made first, then ones they joined by
+ * accepting an invitation to one of its rooms; oldest first within each.
+ */
 export async function listWorkspaces(): Promise<Workspace[]> {
   const { data, error } = await (await getCloud()).from('workspaces').select().order('created_at');
   if (error) throw error;
-  return data;
+  const me = await getCloudUserId();
+  return [...data.filter((w) => w.created_by === me), ...data.filter((w) => w.created_by !== me)];
 }
 
 /** Creates a workspace; the database makes the creator its owner. */
@@ -80,3 +85,6 @@ export const rooms = createRoomService(roomCloud);
 
 /** Each room's threads, decisions and activity (./record.ts), as the signed-in user. */
 export const roomRecord = createRoomRecordService(roomCloud);
+
+/** Invitations into rooms (./invitations.ts), as the signed-in user. */
+export const invitations = createInvitationService(roomCloud);

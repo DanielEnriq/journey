@@ -11,7 +11,9 @@ import { rooms } from './workspaces.js';
  * `room:<room id>`, which RLS on realtime.messages opens to the room's members only
  * (supabase/migrations/*_room_realtime.sql). On it:
  *   broadcast  RoomEvents between connected members. Not stored: only those connected at the time get them.
- *   presence   who's connected, keyed by cloud user id so several windows or devices count once.
+ *   presence   who has the room open, keyed by cloud user id so several windows or devices count once,
+ *              and whether each is in the room's LiveKit call (`call`, set by setRoomCall). Having the room
+ *              open never puts anyone in the call.
  *
  * Runs in main, which owns the Supabase session; renderers reach it through IPC.
  * Everything arriving from the network is validated before it's emitted.
@@ -26,6 +28,10 @@ const validators: Validators = {
   'chat:message': (p): p is RoomEvents['chat:message'] => isRecord(p) && typeof p.text === 'string',
   'record:changed': (p): p is RoomEvents['record:changed'] =>
     isRecord(p) && ['thread', 'reply', 'decision', 'signature'].includes(p.what as string),
+  'members:changed': (p): p is RoomEvents['members:changed'] =>
+    isRecord(p) &&
+    ['joined', 'left', 'removed', 'role', 'invitation'].includes(p.what as string) &&
+    (p.userId === null || typeof p.userId === 'string'),
 };
 
 export const roomActivity = new EventEmitter<{
@@ -37,6 +43,8 @@ export const roomActivity = new EventEmitter<{
 interface LiveRoom {
   channel: RealtimeChannel;
   selfId: string;
+  /** What we announce in presence; setRoomCall changes its `call`. */
+  self: Participant;
 }
 
 const live = new Map<string, LiveRoom>();
@@ -66,6 +74,7 @@ async function connect(roomId: string): Promise<RoomSession> {
     name: profile.name,
     avatarUrl: profile.avatar_url,
     joinedAt: new Date().toISOString(),
+    call: null,
   };
 
   const channel = supabase.channel(`room:${roomId}`, {
@@ -85,7 +94,7 @@ async function connect(roomId: string): Promise<RoomSession> {
     channel.subscribe((status, err) => {
       if (status === 'SUBSCRIBED') {
         // Presence belongs to the connection, so announce again after every rejoin.
-        channel.track(self).then(
+        channel.track(live.get(roomId)?.self ?? self).then(
           (result) => result !== 'ok' && console.warn(`[rooms] presence not tracked in ${roomId}: ${result}`),
           (trackErr: Error) => console.warn(`[rooms] presence not tracked in ${roomId}:`, trackErr.message),
         );
@@ -107,9 +116,18 @@ async function connect(roomId: string): Promise<RoomSession> {
     });
   });
 
-  const room = { channel, selfId };
+  const room = { channel, selfId, self };
   live.set(roomId, room);
   return session(roomId, room);
+}
+
+/** Announces whether you're in the room's call, and muted; null once you've left the call (not the room). */
+export async function setRoomCall(roomId: string, call: { muted: boolean } | null): Promise<void> {
+  const room = live.get(roomId);
+  if (!room) return; // not in the room: nothing to announce, and the call needs the room
+  room.self = { ...room.self, call: call && { muted: Boolean(call.muted) } };
+  const result = await room.channel.track(room.self);
+  if (result !== 'ok') console.warn(`[rooms] presence not updated in ${roomId}: ${result}`);
 }
 
 /** Disconnects from a room. Membership stays, so connecting again needs no invite. */
@@ -151,7 +169,10 @@ function participants(channel: RealtimeChannel): Participant[] {
     const [first] = (presences as unknown[]) // shaped by whoever tracked it; check before trusting
       .filter(isParticipant)
       .sort((a, b) => a.joinedAt.localeCompare(b.joinedAt));
-    if (first) people.push({ userId: first.userId, name: first.name, avatarUrl: first.avatarUrl, joinedAt: first.joinedAt });
+    if (!first) continue;
+    // Any of their connections in the call puts them in it (e.g. the call runs in their other window).
+    const call = (presences as unknown[]).filter(isParticipant).map((p) => p.call ?? null).find((c) => c !== null) ?? null;
+    people.push({ userId: first.userId, name: first.name, avatarUrl: first.avatarUrl, joinedAt: first.joinedAt, call });
   }
   return people.sort((a, b) => a.joinedAt.localeCompare(b.joinedAt));
 }
@@ -175,7 +196,9 @@ function isParticipant(value: unknown): value is Participant {
     typeof value.userId === 'string' &&
     typeof value.joinedAt === 'string' &&
     (value.name === null || typeof value.name === 'string') &&
-    (value.avatarUrl === null || typeof value.avatarUrl === 'string')
+    (value.avatarUrl === null || typeof value.avatarUrl === 'string') &&
+    // Older clients don't send `call`.
+    (value.call === undefined || value.call === null || (isRecord(value.call) && typeof value.call.muted === 'boolean'))
   );
 }
 

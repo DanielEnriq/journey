@@ -148,6 +148,8 @@ export interface HomeProps {
   onCreate(room: { name: string; goal: string; repo: string | null }): void;
   onNewRoom(): void;
   overlay?: ComponentChildren;
+  /** Invitations waiting for you, and joining with a link; your real rooms only. */
+  invites?: ComponentChildren;
 }
 
 /** What the composer's text becomes: a short room name, and the whole sentence as its goal. */
@@ -202,7 +204,7 @@ function Overview({ rooms, onOpenRoom }: { rooms: RoomSummary[]; onOpenRoom(id: 
   );
 }
 
-export function HomeScreen({ light, rooms, repos, repoNote, simulatedMic, notice, onOpenRoom, onCreate, onNewRoom, overlay }: HomeProps) {
+export function HomeScreen({ light, rooms, repos, repoNote, simulatedMic, notice, onOpenRoom, onCreate, onNewRoom, overlay, invites }: HomeProps) {
   const me = firstName(useStore(account).user);
   const [text, setText] = useState('');
   const [focus, setFocus] = useState(false);
@@ -277,6 +279,7 @@ export function HomeScreen({ light, rooms, repos, repoNote, simulatedMic, notice
           <div class={'home-in' + (firstRun ? '' : ' has-rooms')}>
             <div class="hello"><span class="orb"></span>{firstRun ? 'Welcome to Vowe' : 'Your rooms'}</div>
             {notice && <p class="wnote" role="alert">{notice}</p>}
+            {invites}
             {firstRun ? (
               <>
                 <h1 class="home-h">What are we building<span>, {me}?</span></h1>
@@ -340,9 +343,13 @@ export function HomeScreen({ light, rooms, repos, repoNote, simulatedMic, notice
                 </div>
 
                 <div class="setup">
-                  <span class="s"><span class="todo"></span><NotYet label="Voice" note="Not in this build. Calls have the shared canvas and the room’s record, without audio." /></span>
+                  {simulatedMic
+                    ? <span class="s"><span class="todo"></span><NotYet label="Voice" note="Not in the demo. Its call is scripted." /></span>
+                    : <span class="s"><span class="ok"></span>Voice calls, mic off until you talk</span>}
                   <span class="s"><span class="todo"></span><NotYet label="Connect GitHub" note={simulatedMic ? 'Not in this build. The demo uses example repositories.' : 'Not in this build. Rooms use repositories added on this machine; only their remote is shared.'} /></span>
-                  <span class="s"><span class="todo"></span><NotYet label="Invite your team" note={simulatedMic ? 'Not in this build. Demo rooms are only on this machine.' : 'Not in this build yet: rooms are shared with their members, but adding members from the app isn’t built.'} /></span>
+                  {simulatedMic
+                    ? <span class="s"><span class="todo"></span><NotYet label="Invite your team" note="Not in the demo. Demo rooms are only on this machine." /></span>
+                    : <span class="s"><span class="ok"></span>Invite your team from a room’s Share</span>}
                 </div>
               </>
             ) : (
