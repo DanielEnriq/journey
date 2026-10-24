@@ -8,8 +8,8 @@ import type { RoomSummary } from '../room/types.js';
 
 // Sign-in and the workspace home, from the design prototype (Welcome.dc.html). With no rooms, home is
 // the design's first-run composer; with rooms, the same page leads with what needs you and which calls
-// are on. Sign-in and the microphone are simulated, and anything this build can't do says so where it
-// is pressed instead of pretending.
+// are on. The microphone is simulated, and so is sign-in in the preview; in the app, sign-in is the main
+// process's Google sign-in. Anything this build can't do says so where it is pressed instead of pretending.
 
 const TRIES = ['Retries are double-charging customers', 'Redesign the checkout states', 'Walk me through this repo'];
 
@@ -57,12 +57,24 @@ function Lights() {
   return <div class="lights" aria-hidden="true"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></div>;
 }
 
-export function LoginScreen({ light, onSignedIn }: { light: boolean; onSignedIn(): void }) {
+export interface LoginProps {
+  light: boolean;
+  /** The app's Google sign-in; absent in the preview, which simulates it. The app leaves this screen once a user is signed in. */
+  signIn?: () => Promise<unknown>;
+  /** Preview only: what "Continue as" does. */
+  onSignedIn(): void;
+}
+
+export function LoginScreen({ light, signIn: realSignIn, onSignedIn }: LoginProps) {
   const [login, setLogin] = useState<'idle' | 'waiting'>('idle');
+  const [failed, setFailed] = useState<string | null>(null);
   const signIn = () => {
-    mockLog('auth', 'Continue with Google: preview sign-in; no browser opens and no account is touched');
+    setFailed(null);
     setLogin('waiting');
+    if (!realSignIn) { mockLog('auth', 'Continue with Google: preview sign-in; no browser opens and no account is touched'); return; }
+    realSignIn().catch((err: Error) => { setLogin('idle'); setFailed(err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') || 'Sign-in did not complete.'); });
   };
+  // Cancel only stops waiting here; the browser's sign-in times out on its own, and pressing again reuses it.
   const cancel = () => setLogin('idle');
   return (
     <div class="welcome-screen">
@@ -97,12 +109,14 @@ export function LoginScreen({ light, onSignedIn }: { light: boolean; onSignedIn(
               {login === 'idle' ? (
                 <>
                   <button class="gbtn" type="button" onClick={signIn}><span class="gslot" title="Official Google “G” mark goes here">G</span>Continue with Google</button>
-                  <div class="fine">Opens your browser to sign in · <NotYet link label="Terms" note="Not written yet." /> · <NotYet link label="Privacy" note="Not written yet." /></div>
+                  <div class="fine">{failed ? `Sign-in didn’t finish: ${failed} · ` : 'Opens your browser to sign in · '}<NotYet link label="Terms" note="Not written yet." /> · <NotYet link label="Privacy" note="Not written yet." /></div>
                 </>
               ) : (
                 <div class="wait">
                   <div class="wait-row"><span class="spin"></span><span>Finish signing in in your browser</span><button class="x" type="button" onClick={cancel}>Cancel</button></div>
-                  <div class="fine">Preview build: no browser opens. <a href="#" onClick={(e) => { e.preventDefault(); onSignedIn(); }}>Continue as Daniel</a></div>
+                  {realSignIn
+                    ? <div class="fine">Waiting for Google in your browser.</div>
+                    : <div class="fine">Preview build: no browser opens. <a href="#" onClick={(e) => { e.preventDefault(); onSignedIn(); }}>Continue as Daniel</a></div>}
                 </div>
               )}
             </div>

@@ -12,7 +12,7 @@ import { devFlags, type DevFlags } from './shared/devflags.js';
 import { useStore } from './shared/store.js';
 import { localTheme, useAppearance } from './shared/theme/theme.js';
 import type { NewRoom } from './features/room/data/sources.js';
-import type { Theme } from '../shared/api.js';
+import type { Theme, User } from '../shared/api.js';
 
 // Vowe's renderer: sign-in → your rooms → a room's preview → its call, plus the design's reference
 // sheets and a developer menu. Screens are hash routes kept in localStorage, so a relaunch lands back
@@ -68,6 +68,17 @@ function useRoute(): [Route, (r: Route) => void] {
     try { localStorage.setItem(ROUTE_KEY, routeHash(route.screen === 'room' ? { ...route, call: false } : route)); } catch { /* storage may be unavailable */ }
   }, [route]);
   return [route, (r) => { location.hash = routeHash(r); }];
+}
+
+/** The app's signed-in user, from the main process: undefined until it answers. The preview has none. */
+function useUser(): User | null | undefined {
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+  useEffect(() => {
+    if (PREVIEW) return;
+    window.journey.auth.getUser().then(setUser, () => setUser(null));
+    return window.journey.auth.onChange(setUser);
+  }, []);
+  return user;
 }
 
 /** The design's static boards, each scaled to the window width. */
@@ -151,6 +162,14 @@ function App() {
   const light = useAppearance() === 'light';
   const rooms = useRooms(workspace.room);
   const cs = useStore(session.store);
+  const user = useUser();
+  // In the app, the main process's sign-in decides: signed out shows only sign-in, and signing in leaves it.
+  const signedOut = !PREVIEW && !user;
+  useEffect(() => {
+    if (PREVIEW || user === undefined) return;
+    if (!user && route.screen !== 'login') { void session.leave(); go({ screen: 'login' }); }
+    if (user && route.screen === 'login') go({ screen: 'home' });
+  }, [user, route.screen]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); setDev((d) => !d); }
@@ -162,7 +181,7 @@ function App() {
   // A call route with no call behind it (a reload, a failed join) shows the room from outside.
   const inCall = route.screen === 'room' && route.call && session.inRoom(route.id);
   useEffect(() => {
-    if (route.screen === 'room' && route.call && !inCall) go({ screen: 'room', id: route.id, call: false });
+    if (!signedOut && route.screen === 'room' && route.call && !inCall) go({ screen: 'room', id: route.id, call: false });
   }, [route, inCall, cs.status]);
 
   /** Leaving a room leaves its call: the call belongs to the room. */
@@ -173,7 +192,8 @@ function App() {
   const overlay = newRoom ? <NewRoomSheet repos={EXAMPLE_REPOS} onCreate={create} onClose={() => setNewRoom(false)} /> : null;
 
   let screen;
-  if (route.screen === 'login') screen = <><div class="drag-strip"></div><LoginScreen light={light} onSignedIn={home} /></>;
+  if (signedOut && user === undefined) screen = null;
+  else if (signedOut || route.screen === 'login') screen = <><div class="drag-strip"></div><LoginScreen light={light} signIn={PREVIEW ? undefined : () => window.journey.auth.signIn()} onSignedIn={home} /></>;
   else if (route.screen === 'home') screen = <HomeScreen light={light} rooms={rooms} repos={EXAMPLE_REPOS} onOpenRoom={openRoom} onCreate={create} onNewRoom={() => setNewRoom(true)} overlay={overlay} />;
   else if (route.screen === 'room') {
     const id = route.id;

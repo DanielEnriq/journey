@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { join } from 'node:path';
-import { createMainWindow } from './window.js';
+import { createMainWindow, restrictPermissions } from './window.js';
 
 // A development-only way to look at the UI without credentials: `pnpm preview:ui`. It opens the same
 // window and pages as the app, but registers no IPC, restores no session, opens no database and
@@ -19,6 +19,7 @@ app.on('window-all-closed', () => app.quit());
 
 app.whenReady().then(() => {
   console.log('[preview] UI preview: mock data only, no sign-in, no services');
+  restrictPermissions(); // the same narrow permissions as the app, not Electron's allow-everything default
   createMainWindow({ preview: true });
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createMainWindow({ preview: true }); });
 });
