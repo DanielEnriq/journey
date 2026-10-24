@@ -7,6 +7,7 @@ import { useLoaded } from '../../workspace/hooks.js';
 import type { RoomController } from '../controller.js';
 import type { RoomDataSource, RoomEvent, RoomPreview as Preview, WorkstreamDataSource } from '../data/sources.js';
 import { listNames, Who } from '../shell.js';
+import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 import { Glimpse } from './Glimpse.js';
 import { WorkContext } from './WorkContext.js';
 
@@ -114,9 +115,9 @@ export function RoomPreview({ sources, roomId, session, canvas, attachError, onJ
               <span class="rk">Last shared view</span>
               {p.lastView && <span class="gl-meta"><b>{p.lastView.name}</b> · {p.lastView.by ? (p.lastView.by.tone === 'me' ? 'you' : p.lastView.by.name) + ' · ' : ''}{ago(p.lastView.at)}</span>}
             </div>
-            {p.lastView && canvas ? (
+            {p.lastView && (canvas || p.lastView.scene) ? (
               <>
-                <Glimpse ctrl={canvas} />
+                {canvas ? <Glimpse ctrl={canvas} /> : <SceneGlimpse scene={p.lastView.scene!} />}
                 <span class="gl-q">{p.lastView.question}</span>
               </>
             ) : (

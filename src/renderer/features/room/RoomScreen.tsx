@@ -1,9 +1,13 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
-import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
+import { useEffect, useMemo, useRef, useState } from '../../vendor/preact-hooks.js';
 import { ClearInk, ToolComment, ToolDraw, ToolSelect } from '../../shared/components/icons.js';
+import { account } from '../../shared/account.js';
 import { useStore } from '../../shared/store.js';
+import { CanvasClient, ipcTransport } from '../canvas/client.js';
+import { LiveSurface } from '../canvas/LiveSurface.js';
 import type { CallSession } from '../call/session.js';
 import { useLoaded, useRooms } from '../workspace/hooks.js';
+import { selfCloudId } from '../workspace/real/workspace.js';
 import type { CallControls } from './call/CallBar.js';
 import { CallBar } from './call/CallBar.js';
 import { Surface } from './canvas/Surface.js';
@@ -152,6 +156,24 @@ function DemoCall(props: RoomScreenProps & { canvas: RoomController }) {
   );
 }
 
+/** A real room's canvas with nothing on it yet: the fresh call's empty state, told what works now. */
+function LiveEmpty({ client }: { client: CanvasClient }) {
+  const c = useStore(client.store);
+  if (c.status === 'loading' || Object.keys(c.doc.components).length) return null;
+  return (
+    <div class="fresh-empty">
+      <span class="orb"></span>
+      <b>{c.status === 'failed' ? 'Couldn’t read this room’s canvas' : 'Nothing drawn yet'}</b>
+      {c.status === 'failed' ? <span>{c.error}</span> : (
+        <>
+          <span>When Vowe sketches the system it lands here for everyone in the call, saved with the room. Circle, draw and pin comments on it together.</span>
+          <span class="fine">Voice, and Vowe drawing as you talk, aren’t connected in this build.</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 const FRESH_TOOLS = [
   { id: 'select' as const, label: 'Select', title: 'Select · V', Icon: ToolSelect },
   { id: 'draw' as const, label: 'Draw', title: 'Draw · P', Icon: ToolDraw },
@@ -181,6 +203,11 @@ function FreshCall(props: RoomScreenProps) {
   const [failure, setFailure] = useState<string | null>(null);
   const [lit, setLit] = useState<string | null>(null);
   const surf = useRef<HTMLElement>(null);
+  // A real room's semantic canvas: kept with the room, changed by Canvas Commands, shared with its call.
+  const live = useMemo(() => record && window.journey
+    ? new CanvasClient(roomId, ipcTransport(() => ({ kind: 'human', id: selfCloudId() ?? 'me', name: account.state.user?.name ?? 'You' })))
+    : null, [roomId, !!record]);
+  useEffect(() => () => live?.dispose(), [live]);
   const pts = useRef<[number, number][] | null>(null);
   const rec = useLoaded(
     () => record ? record.load(roomId) : Promise.resolve(null),
@@ -240,6 +267,39 @@ function FreshCall(props: RoomScreenProps) {
   };
   const pins = view?.pins ?? [];
   const empty = !ink.length && !drafts.length && !pins.length;
+  // Comments: saved pins from the room's record, and ones you placed but haven't written yet.
+  const marks = (
+    <>
+      {pins.map((p) => (
+        <div key={p.threadId} class={'pin saved' + (lit === p.threadId ? ' lit' : '')} style={`transform: translate(${p.x}px, ${p.y}px)`}>
+          <span class={'head ' + p.author.tone} title={p.author.name}>{p.author.initials}</span>
+          <span class="pin-note">{p.body}</span>
+        </div>
+      ))}
+      {drafts.map((p, i) => (
+        <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${p.x}px, ${p.y}px)`}>
+          <span class="head">{me.initials}</span>
+          <label style="display:flex"><span class="sr">Comment</span>
+            <input type="text" placeholder={record ? 'Add a comment, then Enter' : 'Add a comment…'}
+              onKeyDown={(e) => { if (e.key === 'Enter') save(i, (e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDrafts(drafts.filter((x) => x !== p)); }} />
+          </label>
+        </div>
+      ))}
+    </>
+  );
+  const overlays = (
+    <>
+      {cc && <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>}
+      {failure && (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>Not saved: {failure}</span>
+          <button class="mini ghost" type="button" onClick={() => setFailure(null)}>Dismiss</button>
+        </div>
+      )}
+      <Dropped session={session} onJoin={onJoin} onLeave={onLeave} />
+      <CallBar c={call} />
+    </>
+  );
 
   return (
     <div class={`win ${light ? 'light ' : ''}${side ? 'side-open ' : ''}${record && desk ? 'desk-open ' : ''}in-call`}>
@@ -253,60 +313,46 @@ function FreshCall(props: RoomScreenProps) {
           <span class="q">{summary?.repo ?? 'No repository'}</span>
           <div class="presence"><Who people={[me, ...others]} vowe={!voiceOff} /></div>
         </div>
-        <section ref={surf} class={'surface fresh tool-' + tool} tabIndex={0} aria-label="Shared canvas · V select, P draw, C comment, [ rooms"
-          onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-          <svg class="ink fresh-ink" aria-hidden="true">
-            {ink.map((d, i) => <path key={i} class="stroke" d={d}></path>)}
-            {stroke && <path class="stroke" d={stroke}></path>}
-          </svg>
-          {pins.map((p) => (
-            <div key={p.threadId} class={'pin saved' + (lit === p.threadId ? ' lit' : '')} style={`transform: translate(${p.x}px, ${p.y}px)`}>
-              <span class={'head ' + p.author.tone} title={p.author.name}>{p.author.initials}</span>
-              <span class="pin-note">{p.body}</span>
+        {live ? (
+          <LiveSurface client={live} onComment={(x, y) => setDrafts(drafts.concat([{ x: x - 10, y: y - 20 }]))}>
+            {marks}
+            {!pins.length && !drafts.length && <LiveEmpty client={live} />}
+            {overlays}
+          </LiveSurface>
+        ) : (
+          <section ref={surf} class={'surface fresh tool-' + tool} tabIndex={0} aria-label="Shared canvas · V select, P draw, C comment, [ rooms"
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+            <svg class="ink fresh-ink" aria-hidden="true">
+              {ink.map((d, i) => <path key={i} class="stroke" d={d}></path>)}
+              {stroke && <path class="stroke" d={stroke}></path>}
+            </svg>
+            {marks}
+            {empty && (
+              <div class="fresh-empty">
+                <span class="orb"></span>
+                <b>Nothing drawn yet</b>
+                {record ? (
+                  <>
+                    <span>Draw and pin comments here. Comments become the room’s threads and stay after the call; ink stays on your screen only.</span>
+                    <span class="fine">Voice, and Vowe drawing as you talk, aren’t connected in this build.</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Say what you’re building. Vowe sketches it here for everyone in the call, and you can point, circle and draw on it together.</span>
+                    <span class="fine">This build has no voice pipeline, so only the Payment Reliability demo draws by itself. Draw and comment work here.</span>
+                  </>
+                )}
+              </div>
+            )}
+            <div class="tools" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
+              {FRESH_TOOLS.map(({ id, label, title, Icon }) => (
+                <button key={id} class={tool === id ? 'on' : ''} type="button" aria-label={label} title={title} aria-pressed={tool === id} onClick={() => setTool(id)}><Icon /></button>
+              ))}
+              {(ink.length > 0 || drafts.length > 0) && <button type="button" aria-label="Clear your ink" title="Clear your ink and unsaved comments" onClick={() => { setInk([]); setDrafts([]); }}><ClearInk /></button>}
             </div>
-          ))}
-          {drafts.map((p, i) => (
-            <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${p.x}px, ${p.y}px)`}>
-              <span class="head">{me.initials}</span>
-              <label style="display:flex"><span class="sr">Comment</span>
-                <input type="text" placeholder={record ? 'Add a comment, then Enter' : 'Add a comment…'}
-                  onKeyDown={(e) => { if (e.key === 'Enter') save(i, (e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDrafts(drafts.filter((x) => x !== p)); }} />
-              </label>
-            </div>
-          ))}
-          {empty && (
-            <div class="fresh-empty">
-              <span class="orb"></span>
-              <b>Nothing drawn yet</b>
-              {record ? (
-                <>
-                  <span>Draw and pin comments here. Comments become the room’s threads and stay after the call; ink stays on your screen only.</span>
-                  <span class="fine">Voice, and Vowe drawing as you talk, aren’t connected in this build.</span>
-                </>
-              ) : (
-                <>
-                  <span>Say what you’re building. Vowe sketches it here for everyone in the call, and you can point, circle and draw on it together.</span>
-                  <span class="fine">This build has no voice pipeline, so only the Payment Reliability demo draws by itself. Draw and comment work here.</span>
-                </>
-              )}
-            </div>
-          )}
-          <div class="tools" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
-            {FRESH_TOOLS.map(({ id, label, title, Icon }) => (
-              <button key={id} class={tool === id ? 'on' : ''} type="button" aria-label={label} title={title} aria-pressed={tool === id} onClick={() => setTool(id)}><Icon /></button>
-            ))}
-            {(ink.length > 0 || drafts.length > 0) && <button type="button" aria-label="Clear your ink" title="Clear your ink and unsaved comments" onClick={() => { setInk([]); setDrafts([]); }}><ClearInk /></button>}
-          </div>
-          {cc && <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>}
-          {failure && (
-            <div class="receipt dropped" role="alert">
-              <span class="dot needs"></span><span>Not saved: {failure}</span>
-              <button class="mini ghost" type="button" onClick={() => setFailure(null)}>Dismiss</button>
-            </div>
-          )}
-          <Dropped session={session} onJoin={onJoin} onLeave={onLeave} />
-          <CallBar c={call} />
-        </section>
+            {overlays}
+          </section>
+        )}
       </main>
       {record && (
         <aside class="desk" aria-label="Where the room is" aria-hidden={!desk}>

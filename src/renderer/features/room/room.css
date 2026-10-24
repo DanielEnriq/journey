@@ -409,6 +409,8 @@
   /* ---- Cursors you can't see wait on the edge, pointing toward their person. */
   .edge{position:absolute;left:0;top:0;z-index:9;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px 0 7px;border:0;border-radius:12px;background:var(--peer);color:#fff;font-size:11px;font-weight:600;box-shadow:var(--studio-shadow);transition:transform 200ms var(--studio-ease);animation:rise 240ms var(--studio-ease) both}
   .edge.p2{background:var(--peer2)}
+  /* A real person's cursor follows their pointer, not the demo's scripted glide. */
+  .cursor.live{transition:transform 120ms linear}
   .edge svg{flex:0 0 12px}
   .edge:hover{filter:brightness(1.08)}
   .pin .head.peer{background:var(--peer)}
