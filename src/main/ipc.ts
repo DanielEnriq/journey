@@ -1,9 +1,16 @@
 import { BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type IpcMainInvokeEvent } from 'electron';
+import { z } from 'zod';
+import { ClaudeCodeAdapter } from '../agents/claude-code.js';
+import { Collaborator } from '../assistant/index.js';
+import { workContextTools } from '../assistant/tools.js';
+import { claudeCodeActivity, getHooksStatus, installHooks, sessionActivity, uninstallHooks } from '../agents/claude-code-hooks.js';
+import { WorkContextService } from '../context/index.js';
 import { addRepository, getRepository, listRepositories, markRepositoryOpened, removeRepository } from '../database/repositories.js';
 import { getAllSettings, updateSettings } from '../database/settings.js';
 import { detectRepositories } from '../git/detect.js';
 import { findWorkingTreeRoot, getStatus, listBranches, listWorktrees } from '../git/index.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
+import { anthropic } from '../integrations/anthropic/index.js';
 import { getCallAccess } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
 import { createRoom, createWorkspace, listRooms, listWorkspaces } from '../integrations/supabase/workspaces.js';
@@ -24,6 +31,42 @@ function repositoryPath(id: unknown): string {
   if (!repo) throw new Error('No such repository');
   return repo.path;
 }
+
+const claudeCode = new ClaudeCodeAdapter(sessionActivity);
+const workContext = new WorkContextService(claudeCode);
+
+/** Parses an untrusted IPC argument, naming it in the error. */
+function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
+  const result = schema.safeParse(value);
+  if (!result.success) throw new Error(`${what} is invalid: ${result.error.issues[0]?.message ?? 'unexpected value'}`);
+  return result.data;
+}
+const id = z.string().trim().min(1).max(200);
+const messagePage = z.object({ offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).optional() }).strict().default({});
+const agentContext = z.object({ repositoryId: id, workstreamId: id.nullable() }).strict();
+const agentText = z.string().trim().min(1).max(8000);
+
+/** Unanswered approval prompts; one left alone this long counts as declined, so a turn can't hang. */
+const APPROVAL_TIMEOUT_MS = 5 * 60_000;
+const approvals = new Map<string, { conversationId: string; settle: (approved: boolean) => void }>();
+
+const collaborator = new Collaborator({
+  provider: anthropic, // swap model providers here
+  work: workContext,
+  tools: workContextTools,
+  approve: (request) =>
+    new Promise((resolve) => {
+      const timer = setTimeout(() => settle(false), APPROVAL_TIMEOUT_MS);
+      const settle = (approved: boolean) => {
+        clearTimeout(timer);
+        approvals.delete(request.id);
+        resolve(approved);
+      };
+      approvals.set(request.id, { conversationId: request.conversationId, settle });
+      broadcast('agent:approval', request);
+    }),
+  onToolCall: (conversationId, call) => broadcast('agent:toolCall', { conversationId, call }),
+});
 
 /**
  * Registers a handler for a channel from the contract. Rejects calls from any frame
@@ -121,6 +164,42 @@ export function registerIpc() {
   handle('git:branches', (id) => listBranches(repositoryPath(id)));
   handle('git:worktrees', (id) => listWorktrees(repositoryPath(id)));
 
+  // Local transcripts and hook events only; nothing here reaches the cloud. The adapter checks each
+  // session belongs to the named repository.
+  handle('claudeCode:sessions', (repoId) => workContext.listSessions(parse(id, repoId, 'Repository id')));
+  handle('claudeCode:session', (repoId, sessionId) => claudeCode.getSession(repositoryPath(repoId), parse(id, sessionId, 'Session id')));
+  handle('claudeCode:messages', (repoId, sessionId, page) =>
+    claudeCode.getMessages(repositoryPath(repoId), parse(id, sessionId, 'Session id'), parse(messagePage, page, 'Page')),
+  );
+  handle('claudeCode:activity', (repoId) => workContext.getRecentActivity(parse(id, repoId, 'Repository id')));
+  handle('claudeCode:hooksStatus', () => getHooksStatus());
+  handle('claudeCode:installHooks', () => installHooks());
+  handle('claudeCode:uninstallHooks', () => uninstallHooks());
+
+  handle('context:work', (repoId) => workContext.getWorkContext(parse(id, repoId, 'Repository id')));
+  handle('context:repository', (repoId) => workContext.getRepositoryContext(parse(id, repoId, 'Repository id')));
+  handle('context:workstreams', (repoId) => workContext.listWorkstreams(parse(id, repoId, 'Repository id')));
+  handle('context:workstream', (workstreamId) => workContext.getWorkstreamContext(parse(id, workstreamId, 'Workstream id')));
+  handle('context:session', (sessionId) => workContext.getSessionContext(parse(id, sessionId, 'Session id')));
+
+  // The model provider only sees what the tools return; transcript excerpts need the user's approval.
+  handle('agent:status', () => collaborator.status());
+  handle('agent:send', (conversationId, context, text) =>
+    collaborator.send(
+      parse(id.nullable(), conversationId, 'Conversation id'),
+      parse(agentContext, context, 'Agent context'),
+      parse(agentText, text, 'Message'),
+    ),
+  );
+  handle('agent:approve', (approvalId, approved) => {
+    approvals.get(parse(id, approvalId, 'Approval id'))?.settle(parse(z.boolean(), approved, 'Answer'));
+  });
+  handle('agent:reset', (conversationId) => {
+    const conversation = parse(id, conversationId, 'Conversation id');
+    for (const pending of approvals.values()) if (pending.conversationId === conversation) pending.settle(false);
+    collaborator.reset(conversation);
+  });
+
   // Cloud: RLS decides what each call may see or change, so these only check argument shapes.
   handle('workspaces:list', () => listWorkspaces());
   handle('workspaces:create', (name) => createWorkspace(requireString(name, 'Workspace name').trim()));
@@ -136,6 +215,7 @@ export function registerIpc() {
   handle('calls:requestMicrophone', () => requestMicrophone());
 
   onUserChange((user) => broadcast('auth:changed', user));
+  claudeCodeActivity.on('event', (event) => broadcast('claudeCode:event', event));
   roomActivity.on('event', (event) => broadcast('rooms:event', event));
   roomActivity.on('presence', (update) => broadcast('rooms:presence', update));
   roomActivity.on('status', (update) => broadcast('rooms:status', update));

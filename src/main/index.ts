@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron';
+import { startClaudeCodeObserver, stopClaudeCodeObserver } from '../agents/claude-code-hooks.js';
 import { closeDb, getDb } from '../database/index.js';
 import { restoreSession, signIn, signOut } from '../integrations/google/auth.js';
 import { startCloudSync } from '../integrations/supabase/index.js';
@@ -15,7 +16,10 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (app.isReady() && BrowserWindow.getAllWindows().length === 0) createMainWindow();
 });
-app.on('will-quit', closeDb);
+app.on('will-quit', () => {
+  stopClaudeCodeObserver();
+  closeDb();
+});
 
 registerIpc();
 startCloudSync(); // before restoreSession, so a restored user connects too
@@ -24,6 +28,7 @@ async function main() {
   await app.whenReady();
   getDb();
   applySettings();
+  startClaudeCodeObserver(); // reads hook events, including any that arrived while the app was closed
   restrictPermissions();
 
   const user = await restoreSession();

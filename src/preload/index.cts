@@ -40,6 +40,23 @@ const api: JourneyApi = {
     branches: (repositoryId) => invoke('git:branches', repositoryId),
     worktrees: (repositoryId) => invoke('git:worktrees', repositoryId),
   },
+  claudeCode: {
+    sessions: (repositoryId) => invoke('claudeCode:sessions', repositoryId),
+    session: (repositoryId, sessionId) => invoke('claudeCode:session', repositoryId, sessionId),
+    messages: (repositoryId, sessionId, page = {}) => invoke('claudeCode:messages', repositoryId, sessionId, page),
+    activity: (repositoryId) => invoke('claudeCode:activity', repositoryId),
+    hooksStatus: () => invoke('claudeCode:hooksStatus'),
+    installHooks: () => invoke('claudeCode:installHooks'),
+    uninstallHooks: () => invoke('claudeCode:uninstallHooks'),
+    onEvent: (listener) => subscribe('claudeCode:event', listener),
+  },
+  context: {
+    work: (repositoryId) => invoke('context:work', repositoryId),
+    repository: (repositoryId) => invoke('context:repository', repositoryId),
+    workstreams: (repositoryId) => invoke('context:workstreams', repositoryId),
+    workstream: (workstreamId) => invoke('context:workstream', workstreamId),
+    session: (sessionId) => invoke('context:session', sessionId),
+  },
   workspaces: {
     list: () => invoke('workspaces:list'),
     create: (name) => invoke('workspaces:create', name),
@@ -57,6 +74,14 @@ const api: JourneyApi = {
   calls: {
     access: (roomId) => invoke('calls:access', roomId),
     requestMicrophone: () => invoke('calls:requestMicrophone'),
+  },
+  agent: {
+    status: () => invoke('agent:status'),
+    send: (conversationId, context, text) => invoke('agent:send', conversationId, context, text),
+    approve: (approvalId, approved) => invoke('agent:approve', approvalId, approved),
+    reset: (conversationId) => invoke('agent:reset', conversationId),
+    onApproval: (listener) => subscribe('agent:approval', listener),
+    onToolCall: (listener) => subscribe('agent:toolCall', listener),
   },
 };
 
