@@ -9,7 +9,7 @@ app.whenReady().then(async () => {
   let ok = false;
   try {
     const url = process.env.LIVEKIT_URL;
-    const transport = new LiveKitTransport(async () => ({ url, token: await voweToken('0b7c6c4e-55d2-4d0f-9f53-0d0b8a3ef0a1', 'u-check').toJwt() }));
+    const transport = new LiveKitTransport(async () => ({ url, token: await voweToken('0b7c6c4e-55d2-4d0f-9f53-0d0b8a3ef0a1', 'u-check', 'Check').toJwt() }), 'u-check');
     await transport.connect(() => {});
     await transport.play(new Int16Array(2400));
     await transport.setAttributes({ 'vowe.state': 'listening' });
