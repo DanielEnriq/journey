@@ -1,12 +1,9 @@
 import { h } from '../../../vendor/preact.js';
-import { useState } from '../../../vendor/preact-hooks.js';
 import { Back } from '../../../shared/components/icons.js';
-import { mockLog } from '../../../shared/mock.js';
 import type { RoomController } from '../controller.js';
 import { DecisionCard } from '../decisions/DecisionCard.js';
 import type { RoomModel } from '../model.js';
 import { RoomPanel } from '../panel/RoomPanel.js';
-import type { Comment } from '../panel/types.js';
 import { toPanel } from './toPanel.js';
 
 // "Where we are": the room panel (goal, decision, threads, what is running), fed from the room's
@@ -14,14 +11,7 @@ import { toPanel } from './toPanel.js';
 
 export function Desk({ ctrl, m }: { ctrl: RoomController; m: RoomModel }) {
   const s = ctrl.state;
-  // Replies have nowhere to live yet (no room store); they stay in this column until the room closes.
-  const [replies, setReplies] = useState<Record<string, Comment[]>>({});
   const openDec = (decMode: 'card' | 'handoff' = 'card') => ctrl.setState({ decOpen: true, decMode, desk: true });
-  const reply = (id: string, body: string) => {
-    mockLog('room', `reply on ${id}: kept in this window only`);
-    const c: Comment = { id: `${id}-${Date.now()}`, authorId: 'daniel', body, ago: 'now', fresh: true };
-    setReplies((r) => ({ ...r, [id]: [...(r[id] ?? []), c] }));
-  };
   return (
     <aside class="desk" aria-label="Where the room is" aria-hidden={!s.desk}>
       {s.decOpen ? (
@@ -32,12 +22,12 @@ export function Desk({ ctrl, m }: { ctrl: RoomController; m: RoomModel }) {
       ) : (
         <div class="desk-panel">
           <RoomPanel
-            {...toPanel(ctrl, m, replies)}
+            {...toPanel(ctrl, m)}
             onOpenDecision={() => openDec()}
             onSign={() => ctrl.signDec()}
             onProposeChange={() => { openDec(); ctrl.setDec({ amending: true, draft: s.dec.verify }); }}
             onHandOff={() => openDec('handoff')}
-            onReply={reply}
+            onReply={(id, body) => ctrl.reply(id, body)}
             onShowAnchor={(id) => ctrl.goTo(id, { asideOpen: null })}
             onDismissBrief={() => ctrl.setState({ brief: false })}
             onShowBrief={() => { ctrl.setState({ brief: false }); ctrl.go('impl', { last: null }); }}

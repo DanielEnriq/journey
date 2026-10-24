@@ -1,5 +1,6 @@
 import { mockLog } from '../../../shared/mock.js';
-import type { CanvasDataSource, IntentDataSource, PartState, WorkEvents, WorkstreamDataSource } from '../data/sources.js';
+import type { CanvasDataSource, IntentDataSource, PartState, ScriptedWorkSource, WorkEvents } from '../data/sources.js';
+import type { Scenario } from '../controller.js';
 import type {
   BoundDef, Decision, LabelDef, Note, PartDef, Person, PersonId, Rect, StepDef, ViewDef, ViewId, WireDef,
 } from '../types.js';
@@ -327,9 +328,15 @@ const intent: IntentDataSource = {
 };
 
 /* ---------- Coding agents. ---------- */
+/**
+ * The retry worker's last test run, which the call's panel and the room's preview both show: still
+ * failing during the live call, passing by the time you come back.
+ */
+export const retryTests = (scenario: Scenario) => scenario === 'returning' ? '22 of 22 passed' : '14 of 22 passed';
+
 /** The scripted coding agent behind the call: what was running, and the handoff of the decision. */
-export const script: Omit<WorkstreamDataSource, 'context' | 'share'> = {
-  running: () => [{ title: 'Retry worker', agent: 'Claude Code', meta: 'payments/retry-worker · tests 14 of 22' }],
+export const script: Omit<ScriptedWorkSource, 'context' | 'share' | 'transcript'> = {
+  running: (scenario) => [{ title: 'Retry worker', agent: 'Claude Code', meta: `payments/retry-worker · tests ${retryTests(scenario)}`, state: scenario === 'returning' ? 'done' : 'running' }],
   stages: () => ['Creating the worktree and reading the decision.', 'Reading the retry path and the ledger schema.', 'Adding an attempt key to every charge.', 'Running the checks from the decision.', 'All checks pass. Ready for review.'],
   files: () => [
     { path: 'payments/retry/worker.ts', a: '48', d: '−12' }, { path: 'payments/retry/idempotency.ts', a: '96', d: '' },

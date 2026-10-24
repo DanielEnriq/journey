@@ -7,6 +7,7 @@ import { mockLog } from '../../shared/mock.js';
 import { useStore } from '../../shared/store.js';
 import { ago } from '../../shared/time.js';
 import { roomLine, Who } from '../room/shell.js';
+import type { RepoChoice } from '../room/data/sources.js';
 import type { RoomSummary } from '../room/types.js';
 
 // Sign-in and the workspace home, from the design prototype (Welcome.dc.html). With no rooms, home is
@@ -135,7 +136,13 @@ export interface HomeProps {
   light: boolean;
   /** Your rooms; with none, home is the first-run composer from the design. */
   rooms: RoomSummary[];
-  repos: string[];
+  repos: RepoChoice[];
+  /** What the repository list is: repositories on this machine, or the demo's examples. */
+  repoNote: string;
+  /** The demo only: the microphone types an example as if it were heard. */
+  simulatedMic?: boolean;
+  /** Why the rooms couldn't be read; shown instead of pretending there are none. */
+  notice?: string | null;
   onOpenRoom(id: string): void;
   /** Start room: makes the room and opens its preview. */
   onCreate(room: { name: string; goal: string; repo: string | null }): void;
@@ -195,7 +202,7 @@ function Overview({ rooms, onOpenRoom }: { rooms: RoomSummary[]; onOpenRoom(id: 
   );
 }
 
-export function HomeScreen({ light, rooms, repos, onOpenRoom, onCreate, onNewRoom, overlay }: HomeProps) {
+export function HomeScreen({ light, rooms, repos, repoNote, simulatedMic, notice, onOpenRoom, onCreate, onNewRoom, overlay }: HomeProps) {
   const me = firstName(useStore(account).user);
   const [text, setText] = useState('');
   const [focus, setFocus] = useState(false);
@@ -207,7 +214,8 @@ export function HomeScreen({ light, rooms, repos, onOpenRoom, onCreate, onNewRoo
   const [side, setSide] = useState(true);
   const listen = useRef(false);
   const later = useTimers();
-  const firstRun = rooms.length === 0;
+  const firstRun = rooms.length === 0 && !notice;
+  const repoLabel = repos.find((r) => r.id === repo)?.label ?? null;
 
   const mic = () => {
     if (listen.current) { listen.current = false; setListening(false); setText(heard); return; }
@@ -268,6 +276,7 @@ export function HomeScreen({ light, rooms, repos, onOpenRoom, onCreate, onNewRoo
         <main class="home">
           <div class={'home-in' + (firstRun ? '' : ' has-rooms')}>
             <div class="hello"><span class="orb"></span>{firstRun ? 'Welcome to Vowe' : 'Your rooms'}</div>
+            {notice && <p class="wnote" role="alert">{notice}</p>}
             {firstRun ? (
               <>
                 <h1 class="home-h">What are we building<span>, {me}?</span></h1>
@@ -294,18 +303,18 @@ export function HomeScreen({ light, rooms, repos, onOpenRoom, onCreate, onNewRoo
                   <span class="repo-wrap">
                     <button class="repo" type="button" title="Pick a repository" aria-expanded={picking} onClick={() => setPicking(!picking)}>
                       <Repo />
-                      {repo ?? 'No repo yet'}
+                      {repoLabel ?? 'No repo yet'}
                     </button>
                     {picking && (
                       <span class="repo-pop" role="listbox" aria-label="Repository">
-                        <span class="rp-note">Examples · GitHub isn’t connected in this build</span>
+                        <span class="rp-note">{repoNote}</span>
                         {[null, ...repos].map((r) => (
-                          <button key={r ?? 'none'} type="button" role="option" aria-selected={repo === r} class={repo === r ? 'on' : ''} onClick={() => { setRepo(r); setPicking(false); }}>{r ?? 'No repository'}</button>
+                          <button key={r?.id ?? 'none'} type="button" role="option" aria-selected={repo === (r?.id ?? null)} class={repo === (r?.id ?? null) ? 'on' : ''} onClick={() => { setRepo(r?.id ?? null); setPicking(false); }}>{r?.label ?? 'No repository'}</button>
                         ))}
                       </span>
                     )}
                   </span>
-                  <button class={'mic ' + (listening ? 'on' : '')} type="button" aria-label={listening ? 'Stop listening' : 'Say it instead'} title={listening ? 'Stop listening' : 'Say it instead (simulated)'} onClick={mic}><HomeMic /></button>
+                  {simulatedMic && <button class={'mic ' + (listening ? 'on' : '')} type="button" aria-label={listening ? 'Stop listening' : 'Say it instead'} title={listening ? 'Stop listening' : 'Say it instead (simulated)'} onClick={mic}><HomeMic /></button>}
                   <button class={'go ' + (text.trim() ? '' : 'dim')} type="button" onClick={start}>Start room <kbd>↵</kbd></button>
                 </div>
               </div>
@@ -331,9 +340,9 @@ export function HomeScreen({ light, rooms, repos, onOpenRoom, onCreate, onNewRoo
                 </div>
 
                 <div class="setup">
-                  <span class="s"><span class="ok"></span>Microphone allowed</span>
-                  <span class="s"><span class="todo"></span><NotYet label="Connect GitHub" note="Not in this build. Rooms use example repositories." /></span>
-                  <span class="s"><span class="todo"></span><NotYet label="Invite your team" note="Not in this build. Rooms are only on this machine." /></span>
+                  <span class="s"><span class="todo"></span><NotYet label="Voice" note="Not in this build. Calls have the shared canvas and the room’s record, without audio." /></span>
+                  <span class="s"><span class="todo"></span><NotYet label="Connect GitHub" note={simulatedMic ? 'Not in this build. The demo uses example repositories.' : 'Not in this build. Rooms use repositories added on this machine; only their remote is shared.'} /></span>
+                  <span class="s"><span class="todo"></span><NotYet label="Invite your team" note={simulatedMic ? 'Not in this build. Demo rooms are only on this machine.' : 'Not in this build yet: rooms are shared with their members, but adding members from the app isn’t built.'} /></span>
                 </div>
               </>
             ) : (

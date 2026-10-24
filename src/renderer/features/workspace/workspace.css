@@ -112,6 +112,9 @@
   .wlog{display:flex;flex-direction:column;gap:3px}
   .wlog ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px}
   .wlog li{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;line-height:1.45;color:var(--ink-5)}
+  .wtranscript{max-height:260px;overflow-y:auto}
+  .wtranscript li span:first-child{min-width:0;overflow-wrap:anywhere;white-space:pre-line}
+  .wtranscript b{color:var(--ink-3);font-weight:600}
   .wfoot{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--ink-8)}
   .wfoot .mini{margin-left:auto}
 

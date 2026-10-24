@@ -2,14 +2,20 @@ import type {
   AgentTarget, BoundDef, ChangedFile, Decision, LabelDef, Note, PartDef, Person, PersonId, PersonRef, RoomSummary, StepDef,
   ViewDef, ViewId, WireDef, Workstream,
 } from '../types.js';
+import type { RoomPanelProps } from '../panel/types.js';
+import type { Scenario } from '../controller.js';
 
-// The seams between the app and the services behind it. Today every one is a mock (features/workspace/mock
-// for rooms, calls and work context; ../mock/ for the Payment Reliability canvas); the real ones
-// (Supabase, LiveKit + ElevenLabs, Vowe's composer, the intent service, WorkContextService) implement
-// the same shapes, and the components only ever see these.
+// The seams between the app and the services behind it. Two workspaces implement them: the real one
+// (features/workspace/real: Supabase rooms and their record, Realtime presence, WorkContextService and
+// Claude Code transcripts over IPC) and the Payment Reliability demo (features/workspace/mock, plus
+// ../mock/ for its scripted canvas, call and coding agent). The components only ever see these shapes.
 
 /* ---------- Rooms: persistent, listed by the workspace, previewed outside the call. ---------- */
 
+/** A repository the room picker offers: one added on this machine, or a demo example. */
+export interface RepoChoice { id: string; label: string }
+
+/** `repo` is a RepoChoice id. */
 export interface NewRoom { name: string; goal: string; repo: string | null }
 
 /** Something that happened in a room, newest first wherever it is listed. */
@@ -41,13 +47,20 @@ export interface RoomDataSource {
   list(): RoomSummary[];
   /** Called whenever a room, its call, or its preview changes. */
   subscribe(listener: () => void): () => void;
-  create(room: NewRoom): RoomSummary;
+  create(room: NewRoom): Promise<RoomSummary>;
+  /** You, as the room shows you. */
+  me(): PersonRef;
   preview(roomId: string): Promise<RoomPreview>;
   /** You were here: "since you were last here" counts from now. */
   visited(roomId: string): void;
   people(): Record<PersonId, Person>;
   /** Asks a teammate to join; resolves once they have. Only ever called after the room said yes. */
   invite(person: PersonId): Promise<void>;
+  /** Repositories a room can be connected to; absent where rooms can't be (the demo). */
+  repos?(): Promise<RepoChoice[]>;
+  /** Adds a repository on this machine with a folder picker; null if cancelled. */
+  addRepo?(): Promise<RepoChoice | null>;
+  attach?(roomId: string, repoId: string): Promise<void>;
 }
 
 /** What a part draws inside itself in a given view. */
@@ -151,17 +164,34 @@ export interface RoomWorkContext {
   repo: string | null;
   generatedAt: string;
   workstreams: RoomWorkstream[];
+  /** Why there is nothing to show even though the room has a repository, e.g. it isn't cloned here. */
+  unavailable?: string;
 }
 
-/** Coding agents working from signed decisions. Real: the Claude Code / Codex adapters, each in its own worktree. */
+/** One message of a Claude Code session, reduced to what a person reads. */
+export interface TranscriptLine { id: string; role: 'user' | 'assistant' | 'tool'; text: string; at: string | null }
+
+export interface Transcript {
+  title: string;
+  /** Messages in the whole session; `lines` are the latest of them, oldest first. */
+  total: number;
+  lines: TranscriptLine[];
+}
+
+/** The coding work behind a room. Real: WorkContextService and Claude Code's transcripts, on this machine. */
 export interface WorkstreamDataSource {
   /** The room's repositories, worktrees and sessions. Rejects when the context can't be read right now. */
   context(roomId: string): Promise<RoomWorkContext>;
-  /** Shares a workstream seen only on your machine with the room's members. */
-  share(roomId: string, streamId: string): Promise<void>;
-  /* The Payment Reliability call's scripted handoff. */
+  /** Shares a workstream seen only on your machine with the room's members; absent where that isn't built. */
+  share?(roomId: string, streamId: string): Promise<void>;
+  /** The latest of a workstream's most recent Claude Code session; absent where there are no transcripts. */
+  transcript?(roomId: string, streamId: string): Promise<Transcript>;
+}
+
+/** The Payment Reliability call's scripted coding agent and its handoff. */
+export interface ScriptedWorkSource extends WorkstreamDataSource {
   /** Work already running before this room's decision was handed off. */
-  running(): Workstream[];
+  running(scenario: Scenario): Workstream[];
   stages(): string[];
   files(): ChangedFile[];
   branch(): string;
@@ -174,5 +204,29 @@ export interface RoomSources {
   canvas: CanvasDataSource;
   call: CallDataSource;
   intent: IntentDataSource;
-  work: WorkstreamDataSource;
+  work: ScriptedWorkSource;
+}
+
+/* ---------- A room's record in its call: threads, replies, the decision. ---------- */
+
+export interface RoomPin { threadId: string; x: number; y: number; body: string; author: PersonRef }
+
+/** The record as the call shows it: the right column's panel, and the comments pinned on the canvas. */
+export interface RoomRecordView {
+  panel: Omit<RoomPanelProps, `on${string}` | 'children'>;
+  pins: RoomPin[];
+  /** The decision being worked on, to amend from; null until someone proposes one. */
+  decision: { id: string; title: string; verify: string } | null;
+}
+
+/** Real: the record:* channels, refreshed when another member changes it. Everything here persists. */
+export interface RoomRecordSource {
+  load(roomId: string): Promise<RoomRecordView>;
+  subscribe(roomId: string, listener: () => void): () => void;
+  /** A comment pinned to a point on the canvas starts a thread. */
+  pin(roomId: string, at: { x: number; y: number }, body: string): Promise<void>;
+  reply(roomId: string, threadId: string, body: string): Promise<void>;
+  sign(roomId: string, decisionId: string, version: number): Promise<void>;
+  propose(roomId: string, decision: { title: string; verify: string }): Promise<void>;
+  amend(roomId: string, decisionId: string, change: { title: string; verify: string }): Promise<void>;
 }

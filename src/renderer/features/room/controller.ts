@@ -1,3 +1,4 @@
+import { minutesBefore } from '../../shared/time.js';
 import { Store } from '../../shared/store.js';
 import type { RoomSources, QuestionState, WorkEvents } from './data/sources.js';
 import { inside, parse, plain, STAGE_W, toD } from './geometry.js';
@@ -14,6 +15,7 @@ export interface Line { who: PersonId; words: Word[]; n: number }
 export interface Spoken { who: PersonId; words: Word[]; cut: boolean }
 export interface Circle { d: string; items: { short: string; id: string }[]; x: number; y: number; asked: boolean }
 export type Scenario = 'live' | 'returning';
+export interface NoteReply { id: string; who: PersonId; body: string; at: string }
 type Offer = 'none' | 'pin' | 'done' | 'dropped';
 
 export interface RoomState {
@@ -26,6 +28,8 @@ export interface RoomState {
   cc: boolean; muted: boolean; talking: boolean;
   asideOpen: string | null; srikar: 'absent' | 'invited' | 'present'; srikarAside: Offer; offerCatch: boolean; toast: string | null;
   notes: Note[]; capFor: string | null;
+  /** Replies to notes, by note id; kept with the room, so leaving the call doesn't lose them. */
+  replies: Record<string, NoteReply[]>;
   dec: Decision; decOpen: boolean; decMode: 'card' | 'handoff'; target: AgentTarget; handed: boolean; handedTo: string;
   p: number; question: QuestionState; qAnswer: string;
   filesOpen: boolean; brief: boolean; sw: number; sh: number;
@@ -77,7 +81,7 @@ export class RoomController {
       line: null, last: null, liveRef: null, agent: 'listening', holdNext: false, chime: 'pauses', partOpen: false,
       cc: false, muted: true, talking: false,
       asideOpen: null, srikar: 'absent', srikarAside: 'pin', offerCatch: false, toast: null,
-      notes: intent.notes(), capFor: null,
+      notes: stamp(intent.notes(), options.scenario), capFor: null, replies: {},
       dec: intent.decision(),
       decOpen: false, decMode: 'card', target: 'claude', handed: false, handedTo: '', p: 0, question: 'none', qAnswer: '',
       filesOpen: false, brief: false, sw: 0, sh: 0,
@@ -388,8 +392,14 @@ export class RoomController {
   capture(kind: NoteKind, partId: string) {
     const s = this.state, last = s.last || { who: 'vowe' as PersonId, words: [] };
     const text = plain(last.words).replace(/^…/, '') || 'Note';
-    const item: Note = { id: 'c' + (++this.nid), kind, text, who: last.who, on: partId, fresh: true };
+    const item: Note = { id: 'c' + (++this.nid), kind, text, who: last.who, on: partId, fresh: true, at: new Date().toISOString() };
     this.setState({ notes: s.notes.map((n) => n.fresh ? { ...n, fresh: false } : n).concat([item]), capFor: null });
+  }
+
+  /** You replied to a note. The demo's replies stay in this window. */
+  reply(noteId: string, body: string) {
+    const r = this.state.replies, c: NoteReply = { id: `${noteId}-${Date.now()}`, who: 'daniel', body, at: new Date().toISOString() };
+    this.setState({ replies: { ...r, [noteId]: [...(r[noteId] ?? []), c] } });
   }
 
   keepNote(id: string) { this.setState({ notes: this.state.notes.map((x) => x.id === id ? { ...x, suggested: false } : x) }); }
@@ -484,4 +494,11 @@ export class RoomController {
 
   /** Back in the call, muted, with the canvas where it was left. */
   resume() { this.present = true; }
+}
+
+/** How long before the call each of the demo's notes was made; coming back later, a few hours more. */
+const NOTE_AGE: Record<string, number> = { n2: 26, n3: 25, n4: 38, n5: 12 };
+function stamp(notes: Note[], scenario: Scenario): Note[] {
+  const now = Date.now(), later = scenario === 'returning' ? 180 : 0;
+  return notes.map((n) => ({ ...n, at: minutesBefore(now, (NOTE_AGE[n.id] ?? 0) + later) }));
 }

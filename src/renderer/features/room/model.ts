@@ -247,13 +247,14 @@ export function deriveRoom(ctrl: RoomController) {
     ccCls: 'cbtn' + (s.cc ? ' on' : ''),
 
     goal: intent.goal(),
-    roomSub: s.srikar === 'present' ? '4 here' : '3 here',
+    // Coming back later, nobody else is in the call (as the room's preview says).
+    roomSub: ctrl.options.scenario === 'returning' ? 'You and Vowe' : s.srikar === 'present' ? '4 here' : '3 here',
     rdecCls: 'rdec' + (approved || s.handed ? '' : ' proposed') + (s.liveRef === 'decision' ? ' pointed' : ''),
     rdecMeta: 'v' + d.v + ' · ' + (s.handed ? 'agreed and handed off' : approved ? 'both signed' : d.amending ? 'being amended' : d.sig.daniel === d.v ? 'you signed · John reviewing' : 'John signed · your signature next'),
     openRows: openNotes.map((n) => ({
       id: n.id, on: n.on, text: n.text, kind: KIND_LABEL[n.kind], onName: nodeName[n.on], who: n.suggested ? 'suggested by Vowe' : people[n.who].full, cls: 'rrow' + (n.suggested ? ' suggested' : ''),
     })),
-    running: work.running(),
+    running: work.running(ctrl.options.scenario),
     idemCls: 'stream' + (qOpen ? ' needs' : ''), idemDot: 'dot ' + (qOpen ? 'needs' : s.p >= 4 ? 'live' : 'run'),
     idemLine: qOpen ? 'Paused on one question, pinned on the provider.' : stageLines[s.p],
     files: work.files(), branch: work.branch(),

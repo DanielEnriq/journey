@@ -96,6 +96,8 @@ export interface Note {
   suggested?: boolean;
   /** Just kept, with Undo. */
   fresh?: boolean;
+  /** When it was noted, ISO 8601. */
+  at?: string;
 }
 
 export interface Decision {
@@ -119,6 +121,8 @@ export interface Workstream {
   title: string;
   agent: string;
   meta: string;
+  /** `done` once its checks passed. */
+  state: 'running' | 'done';
 }
 
 /** A word on the live line; `ref` names the part it points at while spoken. */

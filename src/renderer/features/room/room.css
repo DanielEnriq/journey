@@ -411,4 +411,9 @@
   .edge.p2{background:var(--peer2)}
   .edge svg{flex:0 0 12px}
   .edge:hover{filter:brightness(1.08)}
+  .pin .head.peer{background:var(--peer)}
+  .pin .head.p2{background:var(--peer2)}
+  .pin .head.p3{background:var(--peer3)}
+  .pin .pin-note{max-width:220px;padding:5px 9px;border-radius:7px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);color:var(--ink);font-size:12px;line-height:1.4}
+  .pin.lit .pin-note{box-shadow:0 0 0 1.5px var(--me),var(--studio-shadow)}
 }

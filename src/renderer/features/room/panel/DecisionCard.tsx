@@ -41,7 +41,7 @@ export function DecisionCard({
   const everyoneSigned = d.approvers.every((a) => signedCurrent(a.signedVersion));
   const agreed = d.status === 'agreed' || d.status === 'handed' || everyoneSigned;
   const needsMe = d.status === 'proposed' && !!me && !signedCurrent(me.signedVersion);
-  const canHandOff = agreed && d.status !== 'handed';
+  const canHandOff = agreed && d.status !== 'handed' && !!onHandOff;
   const proposer = people[d.proposedBy];
   const stack = Math.min(2, d.earlierVersions);
 
@@ -131,7 +131,7 @@ export function DecisionCard({
                   : 'First version'}
             </span>
           )}
-          {needsMe ? (
+          {needsMe && onProposeChange ? (
             <button class="rp-link rp-end" type="button" onClick={() => onProposeChange?.(d.id)}>
               Propose a change
             </button>

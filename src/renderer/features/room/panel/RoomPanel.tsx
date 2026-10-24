@@ -71,6 +71,15 @@ export function RoomPanel(props: RoomPanelProps) {
             onHandOff={props.onHandOff}
           />
         </section>
+      ) : props.onPropose ? (
+        <section class="rp-sec">
+          <span class="rp-rk">
+            Decision<span>none yet</span>
+          </span>
+          <button class="rp-link" type="button" onClick={props.onPropose}>
+            Propose a decision
+          </button>
+        </section>
       ) : null}
 
       <section class="rp-sec">

@@ -2,18 +2,20 @@ import { devFlags, wait } from '../../../shared/devflags.js';
 import { mockLog } from '../../../shared/mock.js';
 import { minutesBefore } from '../../../shared/time.js';
 import type { Scenario } from '../../room/controller.js';
+import { account, initials } from '../../../shared/account.js';
 import type {
-  CallDataSource, NewRoom, RoomDataSource, RoomEvent, RoomPreview, RoomSources, RoomWorkContext, RoomWorkstream, WorkCheck,
-  WorkstreamDataSource,
+  CallDataSource, RepoChoice, RoomDataSource, RoomEvent, RoomPreview, RoomSources, RoomWorkContext, RoomWorkstream, ScriptedWorkSource,
+  WorkCheck,
 } from '../../room/data/sources.js';
-import { demoController, onDemoChange, peekDemo, resetDemo } from '../../room/demo.js';
+import { demoController, onDemoChange, resetDemo } from '../../room/demo.js';
 import * as payments from '../../room/mock/payment-reliability.js';
 import type { PersonRef, RoomSummary } from '../../room/types.js';
 import { classify } from '../../work/status.js';
 
-// The workspace as local mock data: the rooms you made (kept in localStorage, so they survive a
-// restart), who is in each room's call, what happened there, and the coding work behind it. The demo
-// scenario, loaded from the developer menu, adds four example rooms around Payment Reliability.
+// The demo workspace, as local mock data: the rooms made in the demo (kept in localStorage, so they
+// survive a restart), who is in each room's call, what happened there, and the coding work behind it.
+// The demo scenario, loaded from the developer menu, adds four example rooms around Payment Reliability.
+// Only the demo routes (#/demo/…) and the browser preview use it; the app's own rooms never do.
 // Nothing here talks to a service; every pretend action logs a "[vowe mock]" line.
 
 const KEY = 'vowe.workspace';
@@ -52,15 +54,16 @@ onDemoChange(notify);
 // A flipped dev flag (slow or failing work context) shows on the next read.
 devFlags.subscribe(notify);
 
-const YOU: PersonRef = { name: 'You', initials: 'DE', tone: 'me' };
+/** You, by the signed-in account's initials; the demo's cast plays everyone else. */
+const you = (): PersonRef => ({ name: 'You', initials: initials(account.state.user?.name || account.state.user?.email || 'You'), tone: 'me' });
 const JOHN: PersonRef = { name: 'John', initials: 'JM', tone: 'peer' };
 const SRIKAR: PersonRef = { name: 'Srikar', initials: 'SR', tone: 'p2' };
 const PRIYA: PersonRef = { name: 'Priya', initials: 'PK', tone: 'p3' };
 const MEI: PersonRef = { name: 'Mei', initials: 'ML', tone: 'p2' };
 const CLAUDE: PersonRef = { name: 'Claude Code', initials: 'CC', tone: 'p3' };
 
-/** Example repositories the room picker offers; nothing is cloned or read. */
-export const EXAMPLE_REPOS = ['acme/payments', 'acme/web', 'acme/ledger'];
+/** Example repositories the demo's room picker offers; nothing is cloned or read. */
+export const EXAMPLE_REPOS: RepoChoice[] = ['acme/payments', 'acme/web', 'acme/ledger'].map((r) => ({ id: r, label: r }));
 
 const now = () => Date.now();
 const iso = () => new Date().toISOString();
@@ -76,9 +79,9 @@ function paymentsSources(): RoomSources {
   return { room, call, work, canvas: payments.canvas, intent: payments.intent };
 }
 
+/** The canvas for the loaded scenario; loading the other scenario replaces it, never the one in use. */
 function paymentsCtrl() {
-  const scenario = saved.demo?.scenario ?? 'live';
-  return peekDemo() ?? demoController(paymentsSources(), scenario);
+  return demoController(paymentsSources(), saved.demo?.scenario ?? 'live');
 }
 
 function paymentsState() {
@@ -107,16 +110,16 @@ function paymentsEvents(T: number, returning: boolean): RoomEvent[] {
   ] : [
     ev('p-sign', minutesBefore(T, 4), 'John signed decision v2: idempotent processing for concurrent workers.', JOHN),
     ev('p-view', minutesBefore(T, 12), 'Vowe drew the Failure flow from job #4182.', null),
-    ev('p-note', minutesBefore(T, 26), 'You noted on the worker: a crash after the charge redelivers the job.', YOU),
+    ev('p-note', minutesBefore(T, 26), 'You noted on the worker: a crash after the charge redelivers the job.', you()),
     ev('p-retry', minutesBefore(T, 40), 'John shared the retry worker stream with the room.', JOHN),
   ];
   // What the room has done in the call since: the newest come first.
   if (s.composed) list.push(ev('p-tmo', seen('tmo'), 'Vowe drew Provider timeout.', null));
   if (s.srikar === 'present') list.push(ev('p-srikar', seen('srikar'), 'Srikar joined the call.', SRIKAR));
-  if (!returning && d.sig.daniel === d.v) list.push(ev('p-you' + d.v, seen('sign' + d.v), `You signed decision v${d.v}.`, YOU));
-  if (s.handed && !returning) list.push(ev('p-hand', seen('hand'), `Decision v${d.v} went to ${s.handedTo}.`, YOU));
+  if (!returning && d.sig.daniel === d.v) list.push(ev('p-you' + d.v, seen('sign' + d.v), `You signed decision v${d.v}.`, you()));
+  if (s.handed && !returning) list.push(ev('p-hand', seen('hand'), `Decision v${d.v} went to ${s.handedTo}.`, you()));
   if (qOpen && !returning) list.push(ev('p-q2', seen('q'), `${s.handedTo} asked the room about refunds, on the provider.`, CLAUDE, 'needs'));
-  if (s.question === 'answered') list.push(ev('p-ans', seen('ans'), `The room answered: ${s.qAnswer}`, YOU));
+  if (s.question === 'answered') list.push(ev('p-ans', seen('ans'), `The room answered: ${s.qAnswer}`, you()));
   if (s.handed && s.p >= 4) list.push(ev('p-pass', seen('pass'), 'All checks pass on the idempotency branch.', CLAUDE, 'pass'));
   return list;
 }
@@ -138,13 +141,13 @@ function paymentsWork(T: number, returning: boolean): RoomWorkstream[] {
     out.push({ ...item, status: classify(item) });
   }
   const retry = returning ? {
-    lastActivityAt: minutesBefore(T, 95), lastActivity: 'Ran worker.test.ts: 22 of 22 passed.',
+    lastActivityAt: minutesBefore(T, 95), lastActivity: `Ran worker.test.ts: ${payments.retryTests('returning')}.`,
     checks: [{ text: 'Retry worker tests', result: 'pass' as const }],
-    observed: [{ at: minutesBefore(T, 95), text: 'Ran worker.test.ts: 22 of 22 passed.' }, { at: minutesBefore(T, 130), text: 'Edited payments/retry/worker.ts' }],
+    observed: [{ at: minutesBefore(T, 95), text: `Ran worker.test.ts: ${payments.retryTests('returning')}.` }, { at: minutesBefore(T, 130), text: 'Edited payments/retry/worker.ts' }],
   } : {
-    lastActivityAt: minutesBefore(T, 3), lastActivity: 'Ran worker.test.ts: 14 of 22 passed.',
+    lastActivityAt: minutesBefore(T, 3), lastActivity: `Ran worker.test.ts: ${payments.retryTests('live')}.`,
     observed: [
-      { at: minutesBefore(T, 3), text: 'Ran worker.test.ts: 14 of 22 passed.' }, { at: minutesBefore(T, 9), text: 'Edited payments/retry/worker.ts' },
+      { at: minutesBefore(T, 3), text: `Ran worker.test.ts: ${payments.retryTests('live')}.` }, { at: minutesBefore(T, 9), text: 'Edited payments/retry/worker.ts' },
       { at: minutesBefore(T, 21), text: 'Edited payments/retry/backoff.ts' }, { at: minutesBefore(T, 40), text: 'Session started in the retry-worker worktree.' },
     ],
   };
@@ -222,7 +225,7 @@ function demoRoomsAt() {
   return d ? { T: d.at, returning: d.scenario === 'returning' } : null;
 }
 
-function withYou(id: string, others: PersonRef[]) { return inCallYou === id ? [YOU, ...others] : others; }
+function withYou(id: string, others: PersonRef[]) { return inCallYou === id ? [you(), ...others] : others; }
 
 function ownEvents(id: string) { return saved.events[id] || []; }
 
@@ -252,7 +255,7 @@ function summaryOf(id: string): RoomSummary | null {
 const byNewest = (a: RoomEvent, b: RoomEvent) => Date.parse(b.at) - Date.parse(a.at);
 
 function record(roomId: string, text: string) {
-  const list = [ev('e' + now(), iso(), text, YOU)].concat(ownEvents(roomId)).slice(0, 20);
+  const list = [ev('e' + now(), iso(), text, you())].concat(ownEvents(roomId)).slice(0, 20);
   commit({ events: { ...saved.events, [roomId]: list } });
 }
 
@@ -262,7 +265,8 @@ const room: RoomDataSource = {
     return ids.map(summaryOf).filter((r): r is RoomSummary => !!r);
   },
   subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-  create({ name, goal, repo }) {
+  me: you,
+  async create({ name, goal, repo }) {
     const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'room';
     const id = `${base}-${now().toString(36).slice(-4)}`;
     mockLog('room', `created room "${name}" (stored in localStorage, not shared with anyone)`, { goal, repo });
@@ -282,7 +286,7 @@ const room: RoomDataSource = {
       events = paymentsEvents(demo.T, demo.returning).concat(events);
       const view = ctrl.curView(), opening = view === 'failure';
       lastView = {
-        name: def.name, question: def.question, by: opening ? JOHN : YOU,
+        name: def.name, question: def.question, by: opening ? JOHN : you(),
         at: demo.returning ? minutesBefore(demo.T, 170) : opening ? minutesBefore(demo.T, 12) : seen('view:' + view),
       };
       if (needsSign && !demo.returning) attention.push({ id: 'sign', text: `Decision v${d.v} needs your signature`, detail: 'John signed it: use idempotent processing for concurrent worker execution. Sign it in the call, where the room can see the checks.' });
@@ -294,7 +298,7 @@ const room: RoomDataSource = {
       for (const w of other.work(demo.T)) if (w.question) attention.push({ id: w.id, text: `${w.agent} is asking about ${w.title.toLowerCase()}`, detail: w.question, streamId: w.id });
     } else {
       const mine = saved.rooms.find((r) => r.id === id);
-      if (mine?.goal) goal = { text: mine.goal, by: YOU };
+      if (mine?.goal) goal = { text: mine.goal, by: you() };
     }
     events.sort(byNewest);
     const since = last ? events.filter((e) => e.who?.tone !== 'me' && Date.parse(e.at) > Date.parse(last)) : [];
@@ -336,7 +340,7 @@ const call: CallDataSource = {
 
 /* ---------- Work context. ---------- */
 
-const work: WorkstreamDataSource = {
+const work: ScriptedWorkSource = {
   async context(roomId) {
     const f = devFlags.state;
     if (f.slowWork) await wait(1800);

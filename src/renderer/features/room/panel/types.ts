@@ -118,6 +118,8 @@ export interface RoomPanelProps {
   onOpenDecision?: (decisionId: string) => void;
   onSign?: (decisionId: string, version: number) => void;
   onProposeChange?: (decisionId: string) => void;
+  /** Vowe addition: with no decision yet, offers to write one down. */
+  onPropose?: () => void;
   onHandOff?: (decisionId: string) => void;
   onReply?: (threadId: string, body: string) => void;
   onShowAnchor?: (anchorId: string) => void;

@@ -5,7 +5,7 @@ import type { RoomSummary } from '../room/types.js';
 /** The workspace's rooms, kept current. */
 export function useRooms(room: RoomDataSource): RoomSummary[] {
   const [rooms, setRooms] = useState(() => room.list());
-  useEffect(() => room.subscribe(() => setRooms(room.list())), [room]);
+  useEffect(() => { setRooms(room.list()); return room.subscribe(() => setRooms(room.list())); }, [room]);
   return rooms;
 }
 

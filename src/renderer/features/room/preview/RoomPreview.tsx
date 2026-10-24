@@ -5,7 +5,7 @@ import { ago } from '../../../shared/time.js';
 import type { CallSession } from '../../call/session.js';
 import { useLoaded } from '../../workspace/hooks.js';
 import type { RoomController } from '../controller.js';
-import type { RoomEvent, RoomPreview as Preview, RoomSources } from '../data/sources.js';
+import type { RoomDataSource, RoomEvent, RoomPreview as Preview, WorkstreamDataSource } from '../data/sources.js';
 import { listNames, Who } from '../shell.js';
 import { Glimpse } from './Glimpse.js';
 import { WorkContext } from './WorkContext.js';
@@ -14,7 +14,7 @@ import { WorkContext } from './WorkContext.js';
 // someone, and the coding work behind it. It answers "do I want to join?"; the canvas itself only
 // opens in the call.
 
-type Sources = Pick<RoomSources, 'room' | 'work'>;
+type Sources = { room: RoomDataSource; work: WorkstreamDataSource };
 const NO_CANVAS = new Store({});
 
 function EventRow({ e }: { e: RoomEvent }) {
@@ -52,12 +52,14 @@ function CallCard({ p, session, onJoin }: { p: Preview; session: CallSession; on
   );
 }
 
-export function RoomPreview({ sources, roomId, session, canvas, onJoin }: {
+export function RoomPreview({ sources, roomId, session, canvas, attachError, onJoin }: {
   sources: Sources;
   roomId: string;
   session: CallSession;
   /** The room's canvas, if it has one, for the still of its last view. */
   canvas: RoomController | null;
+  /** Why the room's repository couldn't be attached when it was made. */
+  attachError?: string;
   onJoin(): void;
 }) {
   const { room, work } = sources;
@@ -147,7 +149,12 @@ export function RoomPreview({ sources, roomId, session, canvas, onJoin }: {
             </div>
           )}
           <WorkContext work={ctx} repo={p.room.repo} openId={openId} setOpen={setOpen} onJoin={onJoin}
-            share={(id) => { void work.share(roomId, id); }} />
+            share={work.share && ((id) => { void work.share!(roomId, id); })}
+            transcript={work.transcript && ((id) => work.transcript!(roomId, id))}
+            connect={room.repos && room.addRepo && room.attach ? {
+              repos: room.repos, addRepo: room.addRepo, attach: (id) => room.attach!(roomId, id), error: attachError,
+            } : undefined}
+            addClone={room.addRepo && (async () => { await room.addRepo!(); })} />
         </div>
       </div>
     </section>
