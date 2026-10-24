@@ -2,31 +2,29 @@ import { config } from '../config.js';
 import { isApiConfigured, postApi } from '../integrations/api/index.js';
 import { getCurrentUser } from '../integrations/google/auth.js';
 import { getCloud, getCloudUserId } from '../integrations/supabase/index.js';
-import type { Speaker, VoiceReasoning } from './contract.js';
 import { VoiceHost } from './host.js';
 import type { LiveKitAccess } from './livekit.js';
 import { ElevenLabsRecognizer, ElevenLabsSynthesizer, agentVoice, type ElevenLabsAccess } from './providers/elevenlabs.js';
 
 export type { VoiceHostEvent, VoiceStatus } from './host.js';
-export type { TurnContext, VoiceState } from './contract.js';
-export type { VoiceEvent } from './participant.js';
+export type { HeardSpeech, VoiceState } from './contract.js';
 
 /**
- * Vowe's voice for this app, with credentials resolved here in main:
- *   - its seat in a call always comes from the Vowe API (POST /vowe/token), which holds the LiveKit secret
- *     and checks you're a member of the room; the app never mints LiveKit tokens
- *   - speech goes through the Vowe API too when VOWE_API_URL is set; otherwise, for local development,
- *     through ELEVENLABS_API_KEY in this machine's .env (as the existing ElevenLabs integration does)
+ * Your Vowe's voice for this app, with credentials resolved here in main:
+ *   - its seat in a call always comes from the Vowe API (POST /vowe/token), which holds the LiveKit secret,
+ *     checks you're a member of the room, and seats it as `vowe:<your user id>`; the app never mints tokens
+ *   - speech goes through the Vowe API too when VOWE_API_URL is set, billed to Vowe's ElevenLabs account
+ *     (never to anyone's ChatGPT plan); otherwise, for local development, through ELEVENLABS_API_KEY in
+ *     this machine's .env (as the existing ElevenLabs integration does)
  */
-export function createVoiceHost(reasoning: (roomId: string, self: Speaker) => VoiceReasoning): VoiceHost {
+export function createVoiceHost(): VoiceHost {
   return new VoiceHost({
-    self: async () => ({ identity: await getCloudUserId(), name: getCurrentUser()?.name ?? null }),
+    self: async () => ({ userId: await getCloudUserId(), name: getCurrentUser()?.name ?? null }),
     seat,
     speech: async (roomId) => {
       const access = await speechAccess(roomId);
       return { recognizer: new ElevenLabsRecognizer(access), synthesizer: new ElevenLabsSynthesizer(access) };
     },
-    reasoning,
   });
 }
 

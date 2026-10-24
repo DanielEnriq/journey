@@ -1,44 +1,94 @@
 /**
- * The language model behind Vowe's collaborator, independent of who provides it. Like the voice
- * agent providers (integrations/voice), a provider runs in main and keeps its credentials there.
+ * The language model behind Vowe, independent of who provides it. A provider runs in main and keeps
+ * its credentials there; the renderer never sees a key or token.
  *
- * Messages use the Anthropic Messages API shape because the first provider is Claude; another
- * provider translates to and from it inside complete(), and the runtime never notices.
+ * The transcript is provider-neutral: plain user and assistant text, tool calls and their results.
+ * Whatever a provider needs replayed on the next request (Anthropic thinking blocks, OpenAI encrypted
+ * reasoning) rides along as `opaque` items tagged with the provider's id; other providers skip them.
  */
 
-import type Anthropic from '@anthropic-ai/sdk';
-
-export type ModelMessage = Anthropic.Beta.BetaMessageParam;
-export type ModelContentBlock = Anthropic.Beta.BetaContentBlock;
+export type ModelItem =
+  | { type: 'user'; text: string }
+  | { type: 'assistant'; text: string }
+  | { type: 'tool_call'; id: string; name: string; input: unknown }
+  | { type: 'tool_result'; callId: string; content: string; isError?: boolean }
+  /** Provider state to send back verbatim, e.g. a reasoning item. Only the provider with this id reads it. */
+  | { type: 'opaque'; provider: string; data: unknown };
 
 export interface ModelToolDefinition {
   name: string;
+  /** What the model reads to decide when and how to use it. */
   description: string;
   /** JSON Schema of the tool's input. */
   inputSchema: Record<string, unknown>;
 }
 
 export interface ModelRequest {
-  system: string;
-  messages: ModelMessage[];
+  /** Developer instructions. */
+  instructions: string;
+  items: ModelItem[];
   tools: ModelToolDefinition[];
   /** False on the last step of a turn, so the model has to answer with what it has. */
   allowTools: boolean;
+  /** Aborts the request: a person interrupted, or the turn was cancelled. */
+  signal?: AbortSignal;
+  /** Answer text as it streams, for captions and speech. */
+  onTextDelta?(delta: string): void;
 }
 
 export interface ModelResponse {
-  /** Appended to the conversation as is, so nothing the provider needs back is lost. */
-  content: ModelContentBlock[];
-  stopReason: 'end_turn' | 'tool_use' | 'pause_turn' | 'max_tokens' | 'refusal' | 'other';
+  /** Appended to the transcript as is: text, tool calls, and any opaque state. */
+  items: ModelItem[];
+  stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | 'other';
   /** The model that actually answered, which can differ from the configured one after a fallback. */
   model: string;
 }
 
+/**
+ * Who pays for a request. `chatgpt-plan`: the signed-in person's ChatGPT plan; `api-key`: a key in
+ * this machine's .env. Shown to the person, so they always know which one is in use.
+ */
+export type ModelBilling = 'chatgpt-plan' | 'api-key';
+
 export interface ModelProvider {
-  /** For logs and the UI, e.g. "Anthropic". */
+  /** Stable id, e.g. "chatgpt", "openai", "anthropic"; tags opaque items. */
+  readonly id: string;
+  /** For the UI and approval prompts, e.g. "ChatGPT". */
   readonly name: string;
+  readonly billing: ModelBilling;
+  /** The configured model, when known before a request. */
   readonly model: string;
-  /** Whether credentials appear to be set; says nothing about whether they work. */
+  /** Whether it can be used now: credentials present (and, for a plan, the plan grant). Says nothing about whether they work. */
   isConfigured(): boolean;
   complete(request: ModelRequest): Promise<ModelResponse>;
 }
+
+export type ModelProviderErrorCode =
+  | 'not-signed-in'
+  | 'not-eligible'
+  | 'usage-limit'
+  | 'unavailable'
+  | 'unsupported'
+  | 'auth'
+  | 'rate-limit'
+  | 'cancelled'
+  | 'incomplete'
+  | 'other';
+
+/**
+ * A provider failure the runtime and UI can act on. `retryable` failures are worth trying again later
+ * with the same provider. None of them switch billing: a plan error never quietly falls back to an API key.
+ */
+export class ModelProviderError extends Error {
+  constructor(
+    readonly code: ModelProviderErrorCode,
+    message: string,
+    readonly detail: { retryable?: boolean; providerCode?: string; requestId?: string; status?: number; manageUrl?: string } = {},
+  ) {
+    super(message);
+    this.name = 'ModelProviderError';
+  }
+}
+
+export const isAbort = (err: unknown) =>
+  err instanceof Error && (err.name === 'AbortError' || (err instanceof ModelProviderError && err.code === 'cancelled'));

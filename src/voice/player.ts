@@ -4,16 +4,14 @@ import type { CallTransport, SpeechSynthesizer } from './contract.js';
  * Speaks one answer into the call, sentence by sentence, as the reasoning runtime streams it.
  *
  * The next sentences are synthesized while the current one plays, so there are no gaps between them.
- * A canvas command becomes a barrier: what Vowe says after it waits until the canvas shows it (or the
- * wait times out), so "here's the failure flow" doesn't come before the failure flow. Aborting the
- * signal stops everything at once: synthesis, waiting, and playback (the caller clears the call's queue).
+ * Aborting the signal stops everything at once: synthesis, waiting, and playback (the caller clears
+ * the call's queue).
  */
 
 /** Sentences synthesized ahead of the one playing. */
 const LOOKAHEAD = 2;
 
 interface Say {
-  kind: 'say';
   text: string;
   chunks: Int16Array[];
   started: boolean;
@@ -21,15 +19,7 @@ interface Say {
   error: Error | null;
   changed: Signal;
 }
-interface Barrier {
-  kind: 'barrier';
-  until: Promise<unknown>;
-}
-type Item = Say | Barrier;
-
 export interface PlayerHooks {
-  /** Before the first sound: resolves once nobody in the call is talking (Vowe is "holding" until then). */
-  waitForFloor(signal: AbortSignal): Promise<void>;
   /** The first sound of the answer is going out. */
   onSpeaking(): void;
   /** A sentence starts playing. */
@@ -39,7 +29,7 @@ export interface PlayerHooks {
 }
 
 export class SpeechPlayer {
-  private readonly items: Item[] = [];
+  private readonly items: Say[] = [];
   private ended = false;
   private added = new Signal();
   private playing = 0;
@@ -53,15 +43,8 @@ export class SpeechPlayer {
 
   say(text: string) {
     if (this.ended || !text.trim()) return;
-    this.items.push({ kind: 'say', text, chunks: [], started: false, done: false, error: null, changed: new Signal() });
+    this.items.push({ text, chunks: [], started: false, done: false, error: null, changed: new Signal() });
     this.pump();
-    this.added.fire();
-  }
-
-  /** What comes after waits for `until` (which must settle on its own; see CanvasRelay timeouts). */
-  barrier(until: Promise<unknown>) {
-    if (this.ended) return;
-    this.items.push({ kind: 'barrier', until: until.catch(() => {}) });
     this.added.fire();
   }
 
@@ -81,16 +64,11 @@ export class SpeechPlayer {
       }
       const item = this.items[this.playing];
       if (!item) break;
-      if (item.kind === 'barrier') {
-        if ((await Promise.race([item.until, aborted])) === ABORTED) return false;
-        continue;
-      }
       this.pump();
       for (let k = 0; ; ) {
         if (this.signal.aborted) return false;
         if (k < item.chunks.length) {
           if (!speaking) {
-            if ((await Promise.race([this.hooks.waitForFloor(this.signal), aborted])) === ABORTED) return false;
             this.hooks.onSpeaking();
             speaking = true;
           }
@@ -112,7 +90,6 @@ export class SpeechPlayer {
     let ahead = 0;
     for (let i = this.playing; i < this.items.length && ahead <= LOOKAHEAD; i++) {
       const item = this.items[i];
-      if (item.kind !== 'say') continue;
       ahead++;
       if (!item.started) {
         item.started = true;

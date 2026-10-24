@@ -1,9 +1,9 @@
-// Vowe's voice in a room's call: what the trusted process hosting it (the app's main process) needs from
-// the API, so the LiveKit and ElevenLabs secrets stay here. Every route is room-scoped: the caller must be
-// a member of the room (not a viewer), checked under their RLS like POST /livekit/token (livekit.ts).
-// Knowing a room's LiveKit name is never enough to bring Vowe in.
+// Your Vowe's voice in a room's call: what your app's main process needs from the API, so the LiveKit and
+// ElevenLabs secrets stay here. Every route is room-scoped: the caller must be a member of the room (not a
+// viewer), checked under their RLS like POST /livekit/token (livekit.ts). Knowing a room's LiveKit name is
+// never enough to bring Vowe in. Speech is billed to Vowe's ElevenLabs account, never to anyone's model plan.
 //
-// POST /vowe/token        { roomId }                    → 200 { url, token }   Vowe's seat in room:<roomId>
+// POST /vowe/token        { roomId }                    → 200 { url, token }   your Vowe's seat in room:<roomId>
 // POST /vowe/speech-token { roomId }                    → 200 { token }        single-use Scribe realtime token
 // POST /vowe/speech       { roomId, text, sampleRate }  → 200 audio/pcm        Vowe saying `text`, streamed
 //   → 401 not signed in, 403 not a member / a viewer, 400 bad request, 503 not configured
@@ -21,8 +21,11 @@ const ELEVENLABS = 'https://api.elevenlabs.io/v1';
 const MAX_TEXT = 1000;
 const RATES = new Set([16000, 22050, 24000]);
 
-/** Vowe's LiveKit identity. People's identities are user ids (uuids), so the two can't collide. */
-export const VOWE_IDENTITY = 'vowe';
+/**
+ * Your Vowe's LiveKit identity (renderer/shared/vowe-voice.ts VOWE_VOICE). People's identities are bare user
+ * ids, so a Vowe can never take a person's place, and each person's Vowe has a seat of its own.
+ */
+export const voweIdentity = (userId: string) => `vowe:${userId}`;
 
 /** Checks the caller may bring Vowe into this room; returns the room id. */
 async function requireSpeaker({ userId, supabase }: Caller, body: unknown): Promise<string> {
@@ -37,22 +40,23 @@ async function requireSpeaker({ userId, supabase }: Caller, body: unknown): Prom
 }
 
 /**
- * Vowe's grant: kind agent, so every app sees it isn't a person; the microphone only, as for people;
- * attributes it can update, which is how the call shows Vowe's state and who brought it in.
+ * Your Vowe's grant, for the signed-in caller only (the identity comes from their verified session, never the
+ * request): kind agent, so every app sees it isn't a person; the microphone only, as for people; no
+ * subscribing, since it hears through your own microphone in your app; and attributes it can update, which is
+ * how the call shows whose Vowe it is and what it's doing.
  */
-export function voweToken(roomId: string, summonedBy: string): AccessToken {
+export function voweToken(roomId: string, userId: string, name: string | null): AccessToken {
   const token = new AccessToken(env('LIVEKIT_API_KEY'), env('LIVEKIT_API_SECRET'), {
-    identity: VOWE_IDENTITY, // one Vowe per call: bringing it in again replaces the previous one
-    name: 'Vowe',
-    metadata: JSON.stringify({ kind: 'vowe' }),
-    attributes: { 'vowe.summonedBy': summonedBy, 'vowe.state': 'listening' },
+    identity: voweIdentity(userId), // one per person: bringing it in from a second device replaces the first
+    name: `Vowe (for ${name ?? 'a member'})`,
+    attributes: { kind: 'vowe', speaksFor: userId, state: 'listening' },
     ttl: '10m',
   });
   token.kind = 'agent';
   token.addGrant({
     room: `room:${roomId}`,
     roomJoin: true,
-    canSubscribe: true,
+    canSubscribe: false,
     canPublish: true,
     canPublishSources: [TrackSource.MICROPHONE],
     canPublishData: false,
@@ -64,7 +68,8 @@ export function voweToken(roomId: string, summonedBy: string): AccessToken {
 export async function issueVoweToken(caller: Caller, body: unknown): Promise<{ url: string; token: string }> {
   if (!isLiveKitConfigured()) throw new HttpError(503, 'Calls are not configured on the API');
   const roomId = await requireSpeaker(caller, body);
-  return { url: env('LIVEKIT_URL'), token: await voweToken(roomId, caller.userId).toJwt() };
+  const { data: profile } = await caller.supabase.from('users').select('name').eq('id', caller.userId).maybeSingle();
+  return { url: env('LIVEKIT_URL'), token: await voweToken(roomId, caller.userId, (profile?.name as string | null | undefined) ?? null).toJwt() };
 }
 
 export async function issueSpeechToken(caller: Caller, body: unknown): Promise<{ token: string }> {

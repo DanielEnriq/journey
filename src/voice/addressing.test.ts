@@ -11,6 +11,9 @@ describe('parseAddress', () => {
     assert.deepEqual(parseAddress('hey vow show me the failure flow'), { addressed: true, question: 'Show me the failure flow' });
     assert.deepEqual(parseAddress('Voe, what happens if this crashes?'), { addressed: true, question: 'What happens if this crashes?' });
     assert.deepEqual(parseAddress('Okay, Vowe. Why is the queue there?'), { addressed: true, question: 'Why is the queue there?' });
+    // How Scribe sometimes writes the name when it opens a question; only there.
+    assert.deepEqual(parseAddress('Whoa. What happens if this crashes after charging?'), { addressed: true, question: 'What happens if this crashes after charging?' });
+    assert.deepEqual(parseAddress('That retry charges twice, whoa.'), { addressed: false, question: '' });
   });
 
   it('takes the name off the end', () => {

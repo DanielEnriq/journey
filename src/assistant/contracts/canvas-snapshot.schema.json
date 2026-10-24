@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "view": {
+      "type": "string",
+      "enum": [
+        "arch",
+        "failure",
+        "alternatives",
+        "concurrency",
+        "impl",
+        "timeout",
+        "ui"
+      ]
+    },
+    "views": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "arch",
+              "failure",
+              "alternatives",
+              "concurrency",
+              "impl",
+              "timeout",
+              "ui"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "question": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "components": {
+      "maxItems": 200,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][\\w-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "service",
+              "queue",
+              "external",
+              "store",
+              "client",
+              "code"
+            ]
+          },
+          "short": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "tech": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "proposed": {
+            "type": "boolean"
+          },
+          "paths": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 300
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "relationships": {
+      "maxItems": 400,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^[A-Za-z][\\w-]{0,63}$"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^[A-Za-z][\\w-]{0,63}$"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "selection": {
+      "type": "object",
+      "properties": {
+        "selected": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][\\w-]{0,63}$"
+          }
+        },
+        "circled": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][\\w-]{0,63}$"
+          }
+        }
+      },
+      "required": [
+        "selected",
+        "circled"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "view",
+    "views",
+    "components",
+    "relationships",
+    "selection"
+  ],
+  "additionalProperties": false
+}

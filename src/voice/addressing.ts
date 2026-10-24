@@ -10,8 +10,10 @@
  * spell it as these. Kept to whole words, so "vowed" or "vowels" never match.
  */
 const NAME = String.raw`(?:vowe|vow|voe|vau|vao|vowie)`;
+/** Also heard for "Vowe" when it opens a question (Scribe, even with the keyterm); only counts there. */
+const OPENING_NAME = String.raw`(?:${NAME}|whoa)`;
 const GREETING = String.raw`(?:(?:hey|hi|okay|ok|so|um|uh|and)[\s,.]+)?`;
-const LEADING = new RegExp(String.raw`^\s*${GREETING}${NAME}\b[\s,.:;!?-]*`, 'i');
+const LEADING = new RegExp(String.raw`^\s*${GREETING}${OPENING_NAME}\b[\s,.:;!?-]*`, 'i');
 const TRAILING = new RegExp(String.raw`[\s,]+${NAME}[\s.!?]*$`, 'i');
 
 export interface Address {

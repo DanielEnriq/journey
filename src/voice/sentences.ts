@@ -37,12 +37,13 @@ export class SentenceSplitter {
 
 /**
  * Text written for a screen, made sayable: no Markdown marks, bullets, or code ticks, and evidence
- * citations ("session 1a2b3c4d #42", short hashes) left to the canvas and the record, not read out.
+ * citations ("session 1a2b3c4d #42", "src/payments/worker.ts:12") left to the canvas and the record, not read out.
  */
 export function spoken(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`session [0-9a-f]{6,} #\d+`/gi, '')
+    .replace(/`[\w./-]+\.\w+:\d+(?:-\d+)?`/g, '')
     .replace(/`([^`]*)`/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/^\s*(?:[-*+•]|\d+[.)])\s+/gm, '')

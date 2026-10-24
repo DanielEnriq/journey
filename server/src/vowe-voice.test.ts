@@ -18,6 +18,7 @@ function caller(memberships: Record<string, string>): Caller {
         select: () => query,
         eq: (column: string, value: unknown) => ((filters[column] = value), query),
         maybeSingle: async () => {
+          if ('id' in filters) return { data: filters.id === ME ? { name: 'Daniel' } : null, error: null }; // users: their own row
           const role = filters.user_id === ME ? memberships[filters.room_id as string] : undefined;
           return { data: role ? { role } : null, error: null };
         },
@@ -51,14 +52,16 @@ describe('POST /vowe/token', () => {
     assert.equal((await refusal(issueVoweToken(caller({ [ROOM]: 'viewer' }), { roomId: ROOM }))).status, 403);
   });
 
-  it('seats Vowe as an agent in that room only, with a microphone and nothing else', async () => {
-    const { url, token } = await issueVoweToken(caller({ [ROOM]: 'member' }), { roomId: ROOM });
+  it('seats the caller’s own Vowe as an agent in that room only: a microphone, no subscribing, nothing else', async () => {
+    // A body naming someone else changes nothing: the identity is the caller's.
+    const { url, token } = await issueVoweToken(caller({ [ROOM]: 'member' }), { roomId: ROOM, userId: 'someone-else', identity: 'vowe:someone-else' });
     assert.equal(url, 'wss://lk.test');
     const claims = await new TokenVerifier('devkey', 'a-secret-long-enough-for-hs256-signing').verify(token);
-    assert.equal(claims.sub, 'vowe');
-    assert.equal(claims.name, 'Vowe');
+    assert.equal(claims.sub, `vowe:${ME}`);
+    assert.equal(claims.name, 'Vowe (for Daniel)');
     assert.equal(claims.kind, 'agent');
-    assert.deepEqual(claims.attributes, { 'vowe.summonedBy': ME, 'vowe.state': 'listening' });
+    assert.deepEqual(claims.attributes, { kind: 'vowe', speaksFor: ME, state: 'listening' });
+    assert.equal(claims.video?.canSubscribe, false);
     assert.equal(claims.video?.room, `room:${ROOM}`);
     assert.equal(claims.video?.roomJoin, true);
     assert.deepEqual(claims.video?.canPublishSources, ['microphone']);

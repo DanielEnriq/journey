@@ -1,16 +1,22 @@
-import { BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type IpcMainInvokeEvent } from 'electron';
 import { z } from 'zod';
 import { ClaudeCodeAdapter } from '../agents/claude-code.js';
 import { Collaborator } from '../assistant/index.js';
+import { reasoningTools, roomTools } from '../assistant/room-tools.js';
+import { selectProvider } from '../assistant/select.js';
 import { workContextTools } from '../assistant/tools.js';
+import { config } from '../config.js';
 import { claudeCodeActivity, getHooksStatus, installHooks, sessionActivity, uninstallHooks } from '../agents/claude-code-hooks.js';
 import { WorkContextService } from '../context/index.js';
 import { addRepository, getRepository, listRepositories, markRepositoryOpened, removeRepository } from '../database/repositories.js';
 import { getAllSettings, updateSettings } from '../database/settings.js';
+import { getWorkstream } from '../database/work-context.js';
 import { detectRepositories } from '../git/detect.js';
 import { findWorkingTreeRoot, getRemoteUrl, getStatus, listBranches, listWorktrees } from '../git/index.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
 import { anthropic } from '../integrations/anthropic/index.js';
+import { chatgptAuth, chatgptPlan, openaiApiKey } from '../integrations/openai/index.js';
+import { getCloudUserId } from '../integrations/supabase/index.js';
 import { getCallAccess } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
 import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
@@ -26,7 +32,6 @@ import type {
   RoomResult,
 } from '../shared/api.js';
 import { createVoiceHost } from '../voice/index.js';
-import { CollaboratorReasoning } from '../voice/reasoning/collaborator.js';
 import { isAppPage } from './window.js';
 
 function requireString(value: unknown, what: string): string {
@@ -62,11 +67,29 @@ const agentText = z.string().trim().min(1).max(8000);
 const APPROVAL_TIMEOUT_MS = 5 * 60_000;
 const approvals = new Map<string, { conversationId: string; settle: (approved: boolean) => void }>();
 
+/** Checks the context names a real repository (and one of its workstreams), and describes it for the model. */
+function describeRepository({ repositoryId, workstreamId }: { repositoryId: string; workstreamId: string | null }): string {
+  const repo = getRepository(repositoryId);
+  if (!repo) throw new Error('No such repository');
+  const workstream = workstreamId ? getWorkstream(workstreamId) : null;
+  if (workstreamId && workstream?.repositoryId !== repositoryId) throw new Error('No such workstream in this repository');
+  const focus = workstream
+    ? `Selected workstream: ${workstream.branch || '(detached HEAD)'} in ${workstream.worktreePath} (id ${workstream.id}).`
+    : 'No workstream selected: the whole repository.';
+  return `[Vowe context] Repository: ${repo.name} at ${repo.path}. ${focus} Time: ${new Date().toISOString()}.`;
+}
+
+// The person's ChatGPT plan first; API keys only as fallbacks (or when VOWE_AGENT_PROVIDER pins one).
+const provider = () => selectProvider(config.agent.provider, chatgptPlan, [openaiApiKey, anthropic]);
+
 const collaborator = new Collaborator({
-  provider: anthropic, // swap model providers here
+  provider,
   work: workContext,
   tools: workContextTools,
-  approve: (request) =>
+  roomTools,
+  reasoningTools,
+  describeRepository,
+  approve: (request, signal) =>
     new Promise((resolve) => {
       const timer = setTimeout(() => settle(false), APPROVAL_TIMEOUT_MS);
       const settle = (approved: boolean) => {
@@ -74,27 +97,24 @@ const collaborator = new Collaborator({
         approvals.delete(request.id);
         resolve(approved);
       };
+      signal.addEventListener('abort', () => settle(false), { once: true });
       approvals.set(request.id, { conversationId: request.conversationId, settle });
       broadcast('agent:approval', request);
     }),
   onToolCall: (conversationId, call) => broadcast('agent:toolCall', { conversationId, call }),
+  rooms: {
+    // Read as the signed-in member: RLS lets a member see only their rooms.
+    source: { room: (id) => rooms.getRoom(id), members: (id) => rooms.listMembers(id), record: (id) => roomRecord.getRecord(id) },
+    checkout: (roomId) => roomCheckout(roomId),
+    localUser: () => getCloudUserId(),
+  },
 });
 
-/**
- * Vowe's voice in calls. Until the reasoning runtime (feat/mvp-vowe-runtime) lands, spoken questions go
- * to a Collaborator of their own that declines every approval: nobody can answer a sharing prompt
- * mid-call, so Claude Code transcripts are never sent on a spoken question.
- */
-const voiceCollaborator = new Collaborator({ provider: anthropic, work: workContext, tools: workContextTools, approve: async () => false });
-export const voice = createVoiceHost(
-  (roomId, self) => new CollaboratorReasoning({ collaborator: voiceCollaborator, owner: self, checkout: (id) => roomCheckout(id) }),
-);
-const voiceContext = z
-  .object({
-    selection: z.array(z.object({ id, label: z.string().max(200).optional() }).strict()).max(20),
-    view: z.string().max(100).nullable(),
-  })
-  .strict();
+/** Your Vowe's voice in calls: speech and audio only. Its turns go through the runtime (agent:ask) like typed ones. */
+export const voice = createVoiceHost();
+const turnId = z.string().min(1).max(100);
+/** One chunk of microphone audio: 16-bit samples, at most a second of them at 16 kHz. */
+const pcm = z.instanceof(Uint8Array).refine((b) => b.byteLength % 2 === 0 && b.byteLength <= 32_000, 'Expected up to 1 s of 16-bit PCM');
 
 /**
  * Registers a handler for a channel from the contract. Rejects calls from any frame
@@ -250,7 +270,7 @@ export function registerIpc() {
   handle('context:session', (sessionId) => workContext.getSessionContext(parse(id, sessionId, 'Session id')));
 
   // The model provider only sees what the tools return; transcript excerpts need the user's approval.
-  handle('agent:status', () => collaborator.status());
+  handle('agent:status', () => ({ ...collaborator.status(), chatgpt: chatgptAuth().status() }));
   handle('agent:send', (conversationId, context, text) =>
     collaborator.send(
       parse(id.nullable(), conversationId, 'Conversation id'),
@@ -266,6 +286,20 @@ export function registerIpc() {
     for (const pending of approvals.values()) if (pending.conversationId === conversation) pending.settle(false);
     collaborator.reset(conversation);
   });
+  // Room turns: validated by the runtime, which also checks the asker is the person signed in here.
+  handle('agent:ask', (turn) => {
+    const { turnId } = collaborator.ask(turn, (event) => broadcast('agent:event', event));
+    return { turnId };
+  });
+  handle('agent:cancel', (turnId) => {
+    collaborator.cancel(parse(id, turnId, 'Turn id'));
+  });
+
+  // Sign in with ChatGPT: separate from Google. Tokens stay here; the renderer sees status only.
+  handle('chatgpt:status', () => chatgptAuth().status());
+  handle('chatgpt:signIn', (account) => chatgptAuth().signIn(account === undefined ? undefined : parse(id, account, 'Account')));
+  handle('chatgpt:signOut', () => chatgptAuth().signOut());
+  handle('chatgpt:dismissWelcome', () => chatgptAuth().dismissWelcome());
 
   // Cloud: RLS decides what each call may see or change, so these only check argument shapes.
   handle('workspaces:list', () => listWorkspaces());
@@ -303,19 +337,26 @@ export function registerIpc() {
   handle('voice:start', (roomId) => voice.start(parse(z.uuid(), roomId, 'Room id')));
   handle('voice:stop', () => voice.stop());
   handle('voice:status', () => voice.status);
-  handle('voice:interrupt', () => voice.interrupt());
-  handle('voice:setContext', (roomId, context) => voice.setContext(parse(z.uuid(), roomId, 'Room id'), parse(voiceContext, context, 'Context')));
-  handle('voice:canvasResult', (commandId, outcome) => voice.canvasResult(parse(id, commandId, 'Command id'), parse(z.enum(['applied', 'rejected']), outcome, 'Outcome')));
+  handle('voice:audio', (roomId, chunk) => {
+    const bytes = parse(pcm, chunk, 'Audio');
+    voice.audio(parse(z.uuid(), roomId, 'Room id'), new Int16Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)));
+  });
+  handle('voice:begin', (id) => voice.begin(parse(turnId, id, 'Turn id')));
+  handle('voice:say', (id, text) => voice.say(parse(turnId, id, 'Turn id'), parse(z.string().max(8000), text, 'Text')));
+  handle('voice:end', (id) => voice.end(parse(turnId, id, 'Turn id')));
+  handle('voice:cancel', (id) => voice.cancel(parse(turnId, id, 'Turn id')));
 
   onUserChange((user) => {
     broadcast('auth:changed', user);
-    if (!user) void voice.stop(); // signed out: Vowe leaves any call it was brought into
+    if (!user) void voice.stop(); // signed out: your Vowe leaves the call
   });
   voice.onEvent((e) => {
     if (e.type === 'status') broadcast('voice:status', e.status);
-    else if (e.type === 'voice') broadcast('voice:event', { roomId: e.roomId, event: e.event });
-    else broadcast('voice:canvasCommand', { roomId: e.roomId, turnId: e.turnId, requester: e.requester, command: e.command });
+    else if (e.type === 'speech') broadcast('voice:speech', { roomId: e.roomId, speech: e.speech });
+    else broadcast('voice:said', { roomId: e.roomId, turnId: e.turnId, text: e.text });
   });
+  // The sign-in reads the keychain, so it's created once the app is ready.
+  void app.whenReady().then(() => chatgptAuth().onChange((status) => broadcast('chatgpt:changed', status)));
   claudeCodeActivity.on('event', (event) => broadcast('claudeCode:event', event));
   roomActivity.on('event', (event) => broadcast('rooms:event', event));
   roomActivity.on('presence', (update) => broadcast('rooms:presence', update));

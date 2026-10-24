@@ -8,13 +8,12 @@ import type {
 } from './contract.js';
 
 /**
- * In-memory stand-ins for the call and the speech providers, so the participant's turn-taking can be
- * tested without LiveKit or ElevenLabs. Real playback takes time, so FakeTransport "plays" at a
+ * In-memory stand-ins for the call and the speech providers, so hearing and speaking can be tested
+ * without LiveKit or ElevenLabs. Real playback takes time, so FakeTransport "plays" at a
  * configurable speed and remembers what reached the call.
  */
 
 export class FakeTransport implements CallTransport {
-  readonly inputRate = 16000;
   readonly outputRate = 16000;
   /** Samples that went out to the call, per sentence of speech as it was queued. */
   readonly played: Int16Array[] = [];
@@ -74,19 +73,13 @@ export class FakeTransport implements CallTransport {
   }
 }
 
-/** A recognizer the test speaks through: `say(identity, …)` delivers recognition events to that person's stream. */
+/** A recognizer the test speaks through: `event(…)` delivers recognition events to the open stream. */
 export class ScriptedRecognizer implements SpeechRecognizer {
   readonly name = 'scripted';
-  readonly streams = new Map<string, { onEvent: (e: RecognitionEvent) => void; closed: boolean; received: number }>();
+  stream: { onEvent: (e: RecognitionEvent) => void; closed: boolean; received: number } | null = null;
   opened = 0;
   /** Makes the next `open` calls fail. */
   failNext = 0;
-  private order: string[] = [];
-
-  /** The participant opens streams in the order speakers join; tests name them in that order. */
-  expect(...identities: string[]) {
-    this.order.push(...identities);
-  }
 
   async open(_rate: number, onEvent: (e: RecognitionEvent) => void): Promise<RecognitionStream> {
     this.opened++;
@@ -94,19 +87,17 @@ export class ScriptedRecognizer implements SpeechRecognizer {
       this.failNext--;
       throw new Error('recognizer unavailable');
     }
-    const identity = this.order.shift() ?? `stream-${this.opened}`;
     const entry = { onEvent, closed: false, received: 0 };
-    this.streams.set(identity, entry);
+    this.stream = entry;
     return {
       send: (samples) => void (entry.received += samples.length),
       close: () => void (entry.closed = true),
     };
   }
 
-  event(identity: string, e: RecognitionEvent) {
-    const stream = this.streams.get(identity);
-    if (!stream || stream.closed) throw new Error(`no open stream for ${identity}`);
-    stream.onEvent(e);
+  event(e: RecognitionEvent) {
+    if (!this.stream || this.stream.closed) throw new Error('no open recognition stream');
+    this.stream.onEvent(e);
   }
 }
 

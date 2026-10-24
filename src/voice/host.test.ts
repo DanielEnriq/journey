@@ -1,156 +1,97 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { Collaborator } from '../assistant/index.js';
-import type { AgentReply } from '../shared/api.js';
-import type { ReasoningEvent, SpokenTurn } from './contract.js';
 import { VoiceHost, type VoiceHostEvent } from './host.js';
-import { CollaboratorReasoning } from './reasoning/collaborator.js';
-import { FixtureReasoning } from './reasoning/fixture.js';
-import { FakeSynthesizer, FakeTransport, ScriptedRecognizer, until } from './testing.js';
+import { FakeSynthesizer, FakeTransport, ScriptedRecognizer, frame, until } from './testing.js';
 
 const ROOM = '0b7c6c4e-55d2-4d0f-9f53-0d0b8a3ef001';
-const DANIEL = { identity: 'u-daniel', name: 'Daniel' };
+const DANIEL = { userId: 'u-daniel', name: 'Daniel' };
 
-function host(o: { seatFails?: boolean } = {}) {
+function host(o: { connect?: () => Promise<void> } = {}) {
   const transport = new FakeTransport(2);
+  if (o.connect) transport.connect = o.connect;
   const recognizer = new ScriptedRecognizer();
-  const reasoning = new FixtureReasoning({
-    authorized: [DANIEL.identity],
-    script: () => ({ steps: [{ say: 'Here is the failure flow for the worker you selected. ' }, { canvas: { id: 'cmd-1', view: 'failure-flow' } }, { say: 'The retry charges twice.' }], deltaMs: 1 }),
-  });
+  const synthesizer = new FakeSynthesizer(3, 1);
+  const owners: string[] = [];
   const h = new VoiceHost({
     self: async () => DANIEL,
-    seat: async () => {
-      if (o.seatFails) throw new Error('Could not bring Vowe into the call: Viewers can listen but not bring Vowe in');
-      return { url: 'wss://lk.test', token: 't' };
-    },
-    speech: async () => ({ recognizer, synthesizer: new FakeSynthesizer(2, 1) }),
-    reasoning: () => reasoning,
-    transport: (seat) => {
-      void seat();
-      return transport;
-    },
+    seat: async () => ({ url: 'wss://lk.test', token: 't' }),
+    speech: async () => ({ recognizer, synthesizer }),
+    timing: { settleMs: 10 },
+    transport: (_seat, owner) => (owners.push(owner), transport),
   });
   const events: VoiceHostEvent[] = [];
   h.onEvent((e) => events.push(e));
-  return { h, transport, recognizer, reasoning, events };
+  return { h, transport, recognizer, synthesizer, events, owners };
 }
 
+const states = (events: VoiceHostEvent[]) => events.flatMap((e) => (e.type === 'status' ? [e.status.state] : [])).filter((s, i, all) => s !== all[i - 1]);
+
 describe('VoiceHost', () => {
-  it('brings Vowe in, attaches your selection to your questions, and relays canvas commands to the renderer', async () => {
-    const { h, transport, recognizer, reasoning, events } = host();
+  it('joins as your Vowe and passes on your speech', async () => {
+    const { h, recognizer, events, owners } = await host();
     assert.equal((await h.start(ROOM)).status, 'on');
-    h.setContext(ROOM, { selection: [{ id: 'payment-worker', label: 'Payment Worker' }], view: 'architecture' });
-    h.setContext('another-room', { selection: [{ id: 'nope' }], view: null });
-    recognizer.expect(DANIEL.identity);
-    transport.send({ type: 'speaker-joined', speaker: DANIEL });
-    await until(() => recognizer.streams.has(DANIEL.identity));
-    recognizer.event(DANIEL.identity, { type: 'final', text: 'Vowe, what if this crashes after charging?' });
-
-    await until(() => events.some((e) => e.type === 'canvas-command'), 2000, 'the canvas command');
-    const relayed = events.find((e) => e.type === 'canvas-command')!;
-    assert.deepEqual(relayed.type === 'canvas-command' && [relayed.roomId, relayed.requester, relayed.command], [ROOM, DANIEL, { id: 'cmd-1', view: 'failure-flow' }]);
-    h.canvasResult('cmd-1', 'applied');
-    await until(() => events.some((e) => e.type === 'voice' && e.event.type === 'turn-ended'), 3000, 'the answer');
-    assert.deepEqual(reasoning.turns[0].context.selection, [{ id: 'payment-worker', label: 'Payment Worker' }]);
-    assert.ok(events.some((e) => e.type === 'voice' && e.event.type === 'canvas' && e.event.outcome === 'applied'));
-
+    assert.deepEqual(owners, [DANIEL.userId]);
+    recognizer.event({ type: 'final', text: 'Vowe, what if this crashes after charging?' });
+    await until(() => events.some((e) => e.type === 'speech'));
+    const heard = events.find((e) => e.type === 'speech');
+    assert.deepEqual(heard?.type === 'speech' && [heard.roomId, heard.speech.participant, heard.speech.addressed], [ROOM, DANIEL, true]);
     await h.stop();
-    assert.equal(h.status.status, 'off');
+  });
+
+  it('speaks a streamed answer sentence by sentence, showing thinking then speaking', async () => {
+    const { h, transport, synthesizer, events } = await host();
+    await h.start(ROOM);
+    h.begin('t1');
+    h.say('t1', 'If it crashes after charging, the lease ');
+    h.say('t1', 'runs out and the job comes back. The retry charges ');
+    h.say('other-turn', 'Not this turn.');
+    h.say('t1', 'the card again.');
+    h.end('t1');
+    await until(() => states(events).at(-1) === 'listening' && synthesizer.said.length === 2, 3000, 'the answer');
+    assert.deepEqual(synthesizer.said, ['If it crashes after charging, the lease runs out and the job comes back.', 'The retry charges the card again.']);
+    assert.deepEqual(states(events), ['listening', 'thinking', 'speaking', 'listening']);
+    assert.deepEqual(events.flatMap((e) => (e.type === 'said' ? [e.text] : [])), synthesizer.said);
+    assert.ok(transport.attributes.some((a) => a.state === 'speaking'));
+    await h.stop();
+  });
+
+  it('goes silent at once when you talk over it, before the runtime has ended the turn', async () => {
+    const { h, transport, events } = await host();
+    await h.start(ROOM);
+    h.begin('t1');
+    h.say('t1', 'This is a long answer that keeps going for a while. It has several sentences in it. ');
+    await until(() => states(events).at(-1) === 'speaking');
+    const cleared = transport.cleared;
+    for (let i = 0; i < 12; i++) h.audio(ROOM, frame(true));
+    assert.equal(transport.cleared, cleared + 1);
+    assert.equal(states(events).at(-1), 'listening');
+    const interruption = events.findLast((e) => e.type === 'speech');
+    assert.deepEqual(interruption?.type === 'speech' && [interruption.speech.text, interruption.speech.final], ['…', false]);
+    h.say('t1', 'More words that arrive late. '); // the runtime hasn't cancelled yet: ignored
+    await h.stop();
+  });
+
+  it('stops when the runtime cancels the turn, and leaves when you do', async () => {
+    const { h, transport, events } = await host();
+    await h.start(ROOM);
+    h.begin('t1');
+    h.say('t1', 'An answer that will be cut short by the person. Then more. ');
+    await until(() => states(events).at(-1) === 'speaking');
+    h.cancel('t1');
+    assert.equal(states(events).at(-1), 'listening');
+    transport.send({ type: 'owner-left' });
+    await until(() => h.status.status === 'off');
+    assert.equal(h.status.error, 'You left the call');
     assert.equal(transport.connected, false);
   });
 
-  it('reports why Vowe could not join', async () => {
-    const { h } = host({ seatFails: true });
-    const transport = new FakeTransport();
-    transport.connect = async () => {
-      throw new Error('Could not bring Vowe into the call: Viewers can listen but not bring Vowe in');
-    };
-    const failing = new VoiceHost({
-      self: async () => DANIEL,
-      seat: async () => ({ url: '', token: '' }),
-      speech: async () => ({ recognizer: new ScriptedRecognizer(), synthesizer: new FakeSynthesizer() }),
-      reasoning: () => new FixtureReasoning({ authorized: [], script: () => ({ steps: [] }) }),
-      transport: () => transport,
+  it('reports why your Vowe could not join', async () => {
+    const { h } = await host({
+      connect: async () => {
+        throw new Error('Could not bring Vowe into the call: Viewers can listen but not bring Vowe in');
+      },
     });
-    await assert.rejects(failing.start(ROOM), /Viewers can listen/);
-    assert.deepEqual([failing.status.status, failing.status.error], ['failed', 'Could not bring Vowe into the call: Viewers can listen but not bring Vowe in']);
-    await h.stop();
-  });
-
-  it('goes off when the call ends from its side', async () => {
-    const { h, transport, events } = host();
-    await h.start(ROOM);
-    transport.send({ type: 'alone' });
-    await until(() => h.status.status === 'off', 1000, 'off');
-    assert.equal(h.status.error, 'Everyone left the call');
-    assert.ok(events.some((e) => e.type === 'voice' && e.event.type === 'stopped'));
-  });
-});
-
-describe('CollaboratorReasoning (interim)', () => {
-  const turn = (requester = DANIEL): SpokenTurn => ({
-    turnId: 't1',
-    roomId: ROOM,
-    requester,
-    text: 'What happens if this crashes after charging?',
-    heard: 'Vowe, what happens if this crashes after charging?',
-    context: { selection: [{ id: 'payment-worker', label: 'Payment Worker' }], view: 'architecture' },
-    source: 'voice',
-    at: new Date().toISOString(),
-  });
-  const reply: AgentReply = { conversationId: 'c1', text: 'It charges twice.', toolCalls: [{ id: 'x', name: 'git_status', input: {}, error: null }], model: 'm', stop: 'answered' };
-
-  function adapter(send: Collaborator['send'], configured = true) {
-    const sent: { conversationId: string | null; text: string }[] = [];
-    const collaborator = {
-      status: () => ({ provider: 'Anthropic', model: 'm', configured }),
-      send: (conversationId: string | null, context: never, text: string) => (sent.push({ conversationId, text }), send(conversationId, context, text)),
-    } as unknown as Collaborator;
-    const reasoning = new CollaboratorReasoning({
-      collaborator,
-      owner: DANIEL,
-      checkout: async (roomId) => (roomId === ROOM ? { roomId, repository: 'github.com/acme/pay', repositoryId: 'repo-1', path: '/x' } : null),
-    });
-    return { reasoning, sent };
-  }
-
-  async function collect(it: AsyncIterable<ReasoningEvent>) {
-    const out: ReasoningEvent[] = [];
-    for await (const e of it) out.push(e);
-    return out;
-  }
-
-  it('answers only the person whose model access it runs on', async () => {
-    const { reasoning } = adapter(async () => reply);
-    assert.deepEqual(await reasoning.authorize(DANIEL), { ok: true });
-    const john = await reasoning.authorize({ identity: 'u-john', name: 'John' });
-    assert.equal(john.ok, false);
-    assert.match(!john.ok ? john.message : '', /John, I can only use Daniel’s model access/);
-    assert.equal((await adapter(async () => reply, false).reasoning.authorize(DANIEL)).ok, false);
-  });
-
-  it('frames the spoken question with who asked and what they selected, and keeps follow-ups in one conversation', async () => {
-    const { reasoning, sent } = adapter(async () => reply);
-    const events = await collect(reasoning.respond(turn(), new AbortController().signal));
-    assert.match(sent[0].text, /Spoken aloud in the room's call by Daniel\. Selected on the canvas: Payment Worker \(payment-worker\)\. Canvas view: architecture\./);
-    assert.match(sent[0].text, /What happens if this crashes after charging\?$/);
-    assert.deepEqual(events.map((e) => e.type), ['tool', 'tool', 'text', 'done']);
-    await collect(reasoning.respond(turn(), new AbortController().signal));
-    assert.deepEqual(sent.map((s) => s.conversationId), [null, 'c1']);
-  });
-
-  it('says why when the room’s repository is not on this machine', async () => {
-    const { reasoning } = adapter(async () => reply);
-    const events = await collect(reasoning.respond({ ...turn(), roomId: 'elsewhere' }, new AbortController().signal));
-    assert.equal(events[0].type === 'error' && events[0].code, 'unavailable');
-  });
-
-  it('stops waiting when interrupted', async () => {
-    const { reasoning } = adapter(() => new Promise(() => {}));
-    const abort = new AbortController();
-    const done = collect(reasoning.respond(turn(), abort.signal));
-    abort.abort();
-    assert.deepEqual(await done, []);
+    await assert.rejects(h.start(ROOM), /Viewers can listen/);
+    assert.deepEqual([h.status.status, h.status.error], ['failed', 'Could not bring Vowe into the call: Viewers can listen but not bring Vowe in']);
   });
 });

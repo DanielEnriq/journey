@@ -29,5 +29,6 @@ describe('spoken', () => {
   it('reads Markdown the way a person would say it', () => {
     assert.equal(spoken('The **ledger** guards it in `ledger.ts` (`session 1a2b3c4d #42`).'), 'The ledger guards it in ledger.ts.');
     assert.equal(spoken('See [the worker](src/worker.ts).'), 'See the worker.');
+    assert.equal(spoken('It charges before it acknowledges (`src/payments/worker.ts:12-14`).'), 'It charges before it acknowledges.');
   });
 });

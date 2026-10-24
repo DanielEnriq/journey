@@ -6,7 +6,7 @@ import { rooms } from '../supabase/workspaces.js';
 
 /**
  * Voice calls run on LiveKit, one LiveKit room per Journey room (`room:<room id>`). Audio is
- * WebRTC, so the call itself lives in the renderer (src/renderer/call.ts); main only gets it in.
+ * WebRTC, so the call itself lives in the renderer (src/renderer/calls/service.ts); main only gets it in.
  *
  * Access tokens come from the Vowe API's POST /livekit/token when VOWE_API_URL is set (server/), else
  * from the `livekit-token` Edge Function (supabase/functions/). Both hold the LiveKit API secret and
