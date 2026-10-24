@@ -10,9 +10,10 @@ import { NewRoomSheet } from './features/workspace/NewRoom.js';
 import { HomeScreen, LoginScreen } from './features/welcome/WelcomeScreen.js';
 import { devFlags, type DevFlags } from './shared/devflags.js';
 import { useStore } from './shared/store.js';
-import { localTheme, useAppearance } from './shared/theme/theme.js';
+import { useAppearance, useThemeSetting } from './shared/theme/theme.js';
+import { account } from './shared/account.js';
 import type { NewRoom } from './features/room/data/sources.js';
-import type { Theme, User } from '../shared/api.js';
+import type { Theme } from '../shared/api.js';
 
 // Vowe's renderer: sign-in → your rooms → a room's preview → its call, plus the design's reference
 // sheets and a developer menu. Screens are hash routes kept in localStorage, so a relaunch lands back
@@ -70,17 +71,6 @@ function useRoute(): [Route, (r: Route) => void] {
   return [route, (r) => { location.hash = routeHash(r); }];
 }
 
-/** The app's signed-in user, from the main process: undefined until it answers. The preview has none. */
-function useUser(): User | null | undefined {
-  const [user, setUser] = useState<User | null | undefined>(undefined);
-  useEffect(() => {
-    if (PREVIEW) return;
-    window.journey.auth.getUser().then(setUser, () => setUser(null));
-    return window.journey.auth.onChange(setUser);
-  }, []);
-  return user;
-}
-
 /** The design's static boards, each scaled to the window width. */
 function ReferenceScreen({ sheet, go, onClose }: { sheet: Sheet; go(s: Sheet): void; onClose(): void }) {
   const scroll = useRef<HTMLDivElement>(null);
@@ -113,9 +103,7 @@ const FLAG_LABELS: [keyof DevFlags, string][] = [
 ];
 
 function DevMenu({ route, go, onClose }: { route: Route; go(r: Route): void; onClose(): void }) {
-  const [theme, setTheme] = useState<Theme | null>(PREVIEW ? localTheme.state.theme : null);
-  useEffect(() => { if (!PREVIEW) window.journey.settings.get().then((s) => setTheme(s.theme)).catch(() => setTheme(null)); }, []);
-  const pickTheme = (t: Theme) => { setTheme(t); if (PREVIEW) localTheme.setState({ theme: t }); else void window.journey.settings.update({ theme: t }); };
+  const [theme, pickTheme] = useThemeSetting();
   const flags = useStore(devFlags);
   const cs = useStore(session.store);
   const on = (cond: boolean) => cond ? 'on' : '';
@@ -162,14 +150,16 @@ function App() {
   const light = useAppearance() === 'light';
   const rooms = useRooms(workspace.room);
   const cs = useStore(session.store);
-  const user = useUser();
+  const { user } = useStore(account);
   // In the app, the main process's sign-in decides: signed out shows only sign-in, and signing in leaves it.
   const signedOut = !PREVIEW && !user;
   useEffect(() => {
     if (PREVIEW || user === undefined) return;
-    if (!user && route.screen !== 'login') { void session.leave(); go({ screen: 'login' }); }
+    if (!user && route.screen !== 'login') go({ screen: 'login' });
     if (user && route.screen === 'login') go({ screen: 'home' });
   }, [user, route.screen]);
+  // Signing out, in the app or the preview, ends any call.
+  useEffect(() => { if (route.screen === 'login') void session.leave(); }, [route.screen]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); setDev((d) => !d); }

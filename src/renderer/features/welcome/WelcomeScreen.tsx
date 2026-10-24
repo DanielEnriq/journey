@@ -1,5 +1,6 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
 import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
+import { AccountFoot } from '../../shared/components/Account.js';
 import { Compose, HomeMic, PanelLeft, Repo } from '../../shared/components/icons.js';
 import { mockLog } from '../../shared/mock.js';
 import { ago } from '../../shared/time.js';
@@ -258,10 +259,7 @@ export function HomeScreen({ light, rooms, repos, onOpenRoom, onCreate, onNewRoo
           ) : (
             <div class="side-empty"><b>No rooms yet</b>Rooms you start or get invited to will live here, with whatever needs you on top.</div>
           )}
-          <div class="side-foot">
-            <span class="avatar">DE</span>
-            <div style="display:flex;flex-direction:column;min-width:0"><span class="nm">Daniel Enriquez</span><span class="em">Signed in with Google</span></div>
-          </div>
+          <AccountFoot sub="Signed in with Google" />
         </aside>
 
         <main class="home">

@@ -73,6 +73,21 @@
 .dot.work{background:var(--attention)}
 .dot.ask{background:var(--ask)}
 .side-foot{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px 16px 16px}
+.account{position:relative;padding:8px 8px 10px}
+.account-me{appearance:none;border:0;background:none;font:inherit;color:inherit;display:flex;align-items:center;gap:10px;width:100%;min-width:0;padding:6px 8px;border-radius:8px;text-align:left;cursor:pointer}
+.account-me:hover,.account-me[aria-expanded=true]{background:var(--hover-strong)}
+.account-who{display:flex;flex-direction:column;min-width:0}
+.account .nm{font-size:12.5px;font-weight:500;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.account .em{font-size:11px;color:var(--ink-8)}
+.account-panel{position:absolute;left:8px;right:8px;bottom:calc(100% - 2px);padding:10px;border-radius:10px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);display:flex;flex-direction:column;gap:8px;z-index:20}
+.account-email{font-size:11.5px;color:var(--ink-6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.account-label{font-size:11px;color:var(--ink-8)}
+.account-seg{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--fill-2);margin-top:-4px}
+.account-seg button{flex:1;appearance:none;border:0;background:none;font:inherit;font-size:12px;color:var(--ink-5);padding:4px 0;border-radius:5px;cursor:pointer}
+.account-seg button.on{background:var(--chip-strong);color:var(--ink);box-shadow:0 0 0 1px var(--border)}
+.account-out{appearance:none;border:0;background:none;font:inherit;font-size:12.5px;color:var(--ink-4);text-align:left;padding:6px 4px 2px;border-top:1px solid var(--hairline);cursor:pointer}
+.account-out:hover{color:var(--bad)}
+.account-out:disabled{opacity:.6;cursor:default}
 .avatar{width:22px;height:22px;border-radius:50%;flex:0 0 22px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--pane);background:var(--me)}
 .avatar.peer{background:var(--peer)}
 

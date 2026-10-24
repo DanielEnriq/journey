@@ -1,5 +1,6 @@
 import { h } from '../../vendor/preact.js';
 import { Compose, Home, PanelLeft, PanelRight } from '../../shared/components/icons.js';
+import { AccountFoot } from '../../shared/components/Account.js';
 import type { PersonRef, RoomSummary } from './types.js';
 
 // The window around every room screen, in the call or not: the band with its toggles, the rooms panel,
@@ -90,10 +91,7 @@ export function RoomsPanel({ rooms, current, ask, onOpenRoom, hidden }: PanelPro
           ];
         })}
       </nav>
-      <div class="side-foot">
-        <span class="avatar">DE</span>
-        <span style="font-size:12.5px;color:var(--ink-4)">Daniel Enriquez</span>
-      </div>
+      <AccountFoot />
     </aside>
   );
 }
