@@ -2,10 +2,13 @@ import { app, BrowserWindow } from 'electron';
 import { closeDb, getDb } from '../database/index.js';
 import { restoreSession, signIn, signOut } from '../integrations/google/auth.js';
 import { startCloudSync } from '../integrations/supabase/index.js';
+import { disconnectAllRooms } from '../integrations/supabase/realtime.js';
 import { applySettings, registerIpc } from './ipc.js';
 import { createMainWindow } from './window.js';
 
 app.on('window-all-closed', () => {
+  // Rooms are joined from the UI; with no window left (macOS keeps running), stop appearing present.
+  void disconnectAllRooms();
   if (process.platform !== 'darwin') app.quit();
 });
 app.on('activate', () => {

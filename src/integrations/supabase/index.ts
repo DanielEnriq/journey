@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../../config.js';
-import { getIdentityTokens, onUserChange } from '../google/auth.js';
+import { getCurrentUser, getIdentityTokens, onUserChange } from '../google/auth.js';
 import type { Database } from './types.js';
 
 /**
@@ -9,8 +9,11 @@ import type { Database } from './types.js';
  *
  * Google sign-in stays the source of identity. Each time the user signs in or a
  * session is restored, the Google ID token is exchanged for a Supabase session
- * (signInWithIdToken), so RLS sees them as auth.uid(). The Supabase session lives
- * in memory only: nothing new is persisted, and the next launch exchanges again.
+ * (signInWithIdToken), so RLS sees them as auth.uid(). Supabase links the Google
+ * account by its `sub`, so the same person always gets the same auth.uid(). The
+ * Supabase session lives in memory only: nothing new is persisted, and the next
+ * launch exchanges again. If the exchange fails (offline at launch) or Supabase ends
+ * the session, getCloud() retries it from the stored Google session.
  *
  * Schema: supabase/migrations/. Types: ./types.ts (`pnpm cloud:types`).
  */
@@ -18,7 +21,14 @@ import type { Database } from './types.js';
 export type Cloud = SupabaseClient<Database>;
 
 let client: Cloud | undefined;
-let connecting: Promise<void> | undefined;
+let queue: Promise<unknown> = Promise.resolve();
+
+/** Runs session changes one at a time, so a quick sign-in → sign-out applies in order. */
+function enqueue(task: () => Promise<void>): Promise<void> {
+  const run = queue.then(task);
+  queue = run.catch(() => {});
+  return run;
+}
 
 export function isCloudConfigured(): boolean {
   return Boolean(config.supabase.url && config.supabase.publishableKey);
@@ -35,12 +45,25 @@ function cloud(): Cloud {
   return client;
 }
 
-/** The signed-in Supabase client. Waits for an in-flight sign-in; throws if signed out. */
+async function hasSession(supabase: Cloud): Promise<boolean> {
+  const { data } = await supabase.auth.getSession(); // refreshes an expiring token first
+  return Boolean(data.session);
+}
+
+/**
+ * The signed-in Supabase client. Waits for an in-flight sign-in, reconnects if the user
+ * is signed in to Google but has no cloud session, and throws if signed out.
+ */
 export async function getCloud(): Promise<Cloud> {
-  await connecting;
+  await queue;
   const supabase = cloud();
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) throw new Error('Not signed in to the cloud');
+  if (await hasSession(supabase)) return supabase;
+  if (getCurrentUser()) {
+    await enqueue(async () => {
+      if (getCurrentUser() && !(await hasSession(supabase))) await connect();
+    });
+  }
+  if (!(await hasSession(supabase))) throw new Error('Not signed in to the cloud');
   return supabase;
 }
 
@@ -57,6 +80,8 @@ async function connect() {
 }
 
 async function disconnect() {
+  // Leave live rooms first, while the session can still authorize the unsubscribe.
+  await cloud().removeAllChannels();
   // scope 'local': drop this client's session without signing the user out elsewhere.
   const { error } = await cloud().auth.signOut({ scope: 'local' });
   if (error) console.warn('[cloud] sign-out failed:', error.message);
@@ -66,10 +91,7 @@ async function disconnect() {
 export function startCloudSync() {
   if (!isCloudConfigured()) return;
   onUserChange((user) => {
-    // Chained so a quick sign-in → sign-out applies in order.
-    connecting = Promise.resolve(connecting)
-      .then(() => (user ? connect() : disconnect()))
-      .then(
+    enqueue(() => (user ? connect() : disconnect())).then(
       () => console.log(user ? `[cloud] connected as ${user.email}` : '[cloud] disconnected'),
       (err: Error) => console.warn('[cloud] session change failed:', err.message),
     );

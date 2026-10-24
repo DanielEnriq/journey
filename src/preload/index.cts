@@ -32,6 +32,20 @@ const api: JourneyApi = {
     add: () => invoke('repos:add'),
     remove: (id) => invoke('repos:remove', id),
   },
+  workspaces: {
+    list: () => invoke('workspaces:list'),
+    create: (name) => invoke('workspaces:create', name),
+  },
+  rooms: {
+    list: (workspaceId) => invoke('rooms:list', workspaceId),
+    create: (workspaceId, name) => invoke('rooms:create', workspaceId, name),
+    join: (roomId) => invoke('rooms:join', roomId),
+    leave: (roomId) => invoke('rooms:leave', roomId),
+    send: (roomId, type, payload) => invoke('rooms:send', roomId, type, payload) as Promise<never>,
+    onEvent: (listener) => subscribe('rooms:event', listener),
+    onPresence: (listener) => subscribe('rooms:presence', listener),
+    onStatus: (listener) => subscribe('rooms:status', listener),
+  },
 };
 
 contextBridge.exposeInMainWorld('journey', api);

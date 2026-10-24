@@ -6,6 +6,8 @@
  * expose it in preload/index.cts + `JourneyApi`. The compiler checks all three agree.
  */
 
+import type { Tables } from '../integrations/supabase/types.js';
+
 export interface User {
   id: string;
   email: string;
@@ -28,6 +30,54 @@ export interface Repository {
   lastOpenedAt: string | null;
 }
 
+// ─── Cloud ───────────────────────────────────────────────────────────────────
+// Cloud ids (created_by, Participant.userId, RoomEvent.senderId) are Supabase user ids,
+// not the Google `sub` in User.id. RoomSession.selfId is the signed-in user's.
+
+export type Workspace = Tables<'workspaces'>;
+export type Room = Tables<'rooms'>;
+
+/** Someone connected to a live room. Several windows or devices of one user count once. */
+export interface Participant {
+  userId: string;
+  name: string | null;
+  avatarUrl: string | null;
+  /** When they connected, ISO 8601. */
+  joinedAt: string;
+}
+
+/**
+ * Every event a room carries, by type. Add an entry here plus its validator in
+ * integrations/supabase/realtime.ts; the compiler then checks senders and receivers.
+ */
+export interface RoomEvents {
+  'chat:message': { text: string };
+}
+
+export type RoomEventType = keyof RoomEvents;
+
+/** A room event as delivered: `type` narrows `payload`. */
+export type RoomEvent<K extends RoomEventType = RoomEventType> = {
+  [T in K]: {
+    id: string;
+    roomId: string;
+    type: T;
+    payload: RoomEvents[T];
+    /** Self-reported by the sender; the room only admits its members, but members could lie. */
+    senderId: string;
+    sentAt: string;
+  };
+}[K];
+
+export interface RoomSession {
+  roomId: string;
+  selfId: string;
+  participants: Participant[];
+}
+
+/** `reconnecting` after a dropped connection (rejoins automatically); `left` once the room is closed. */
+export type RoomStatus = 'connected' | 'reconnecting' | 'left';
+
 /**
  * IPC channel names. `invoke` channels are request/response handled by main
  * (arguments are untrusted at runtime; handlers must validate them). `event`
@@ -44,9 +94,19 @@ export interface Channels {
     /** Main shows a folder picker; resolves null if cancelled. The renderer never sends paths. */
     'repos:add': () => Repository | null;
     'repos:remove': (id: string) => void;
+    'workspaces:list': () => Workspace[];
+    'workspaces:create': (name: string) => Workspace;
+    'rooms:list': (workspaceId: string) => Room[];
+    'rooms:create': (workspaceId: string, name: string) => Room;
+    'rooms:join': (roomId: string) => RoomSession;
+    'rooms:leave': (roomId: string) => void;
+    'rooms:send': <K extends RoomEventType>(roomId: string, type: K, payload: RoomEvents[K]) => RoomEvent<K>;
   };
   event: {
     'auth:changed': User | null;
+    'rooms:event': RoomEvent;
+    'rooms:presence': { roomId: string; participants: Participant[] };
+    'rooms:status': { roomId: string; status: RoomStatus };
   };
 }
 
@@ -72,5 +132,25 @@ export interface JourneyApi {
     list(): Promise<Repository[]>;
     add(): Promise<Repository | null>;
     remove(id: string): Promise<void>;
+  };
+  workspaces: {
+    /** Workspaces the signed-in user belongs to. */
+    list(): Promise<Workspace[]>;
+    /** Creates a workspace owned by the signed-in user. */
+    create(name: string): Promise<Workspace>;
+  };
+  rooms: {
+    list(workspaceId: string): Promise<Room[]>;
+    /** Creates a room in a workspace you belong to; you become a member but aren't connected yet. */
+    create(workspaceId: string, name: string): Promise<Room>;
+    /** Becomes a member if needed, connects, and announces you to the room. Joining twice is a no-op. */
+    join(roomId: string): Promise<RoomSession>;
+    /** Disconnects from the room; you stay a member and can join again. */
+    leave(roomId: string): Promise<void>;
+    /** Sends to everyone else connected; resolves with the event once the server has it. */
+    send<K extends RoomEventType>(roomId: string, type: K, payload: RoomEvents[K]): Promise<RoomEvent<K>>;
+    onEvent(listener: (event: RoomEvent) => void): () => void;
+    onPresence(listener: (update: { roomId: string; participants: Participant[] }) => void): () => void;
+    onStatus(listener: (update: { roomId: string; status: RoomStatus }) => void): () => void;
   };
 }
