@@ -40,7 +40,10 @@ export interface VoiceTiming {
   settleMs: number;
   /** Silence needed before Vowe starts an answer ("holding" until then). */
   floorMs: number;
-  /** Sustained voice over Vowe that counts as an interruption. */
+  /**
+   * Voice over Vowe that counts as an interruption. Pauses only slowly undo it, so a short "wait, wait"
+   * counts, while a cough or a click does not.
+   */
   bargeInMs: number;
   /** RMS (of 16-bit samples) above which a frame counts as voice. */
   voiceRms: number;
@@ -52,9 +55,9 @@ export interface VoiceTiming {
 
 export const DEFAULT_TIMING: VoiceTiming = {
   wakeWindowMs: 6000,
-  settleMs: 700,
+  settleMs: 350,
   floorMs: 600,
-  bargeInMs: 300,
+  bargeInMs: 200,
   voiceRms: 600,
   canvasWaitMs: 2000,
   recognitionRetryMs: [250, 1000, 3000, 8000],
@@ -242,14 +245,13 @@ export class VoiceParticipant {
     if (!l) return;
     l.stream?.send(samples);
 
+    const voiced = rms(samples) >= this.timing.voiceRms;
+    if (voiced) l.lastVoiceAt = Date.now();
+    // Only voice over Vowe counts toward an interruption, not the question that came before it.
+    if (this._state !== 'speaking') return;
     const frameMs = (samples.length / sampleRate) * 1000;
-    if (rms(samples) >= this.timing.voiceRms) {
-      l.lastVoiceAt = Date.now();
-      l.voicedMs += frameMs;
-    } else {
-      l.voicedMs = Math.max(0, l.voicedMs - frameMs);
-    }
-    if (this._state === 'speaking' && l.voicedMs >= this.timing.bargeInMs) {
+    l.voicedMs = voiced ? l.voicedMs + frameMs : Math.max(0, l.voicedMs - frameMs / 4);
+    if (l.voicedMs >= this.timing.bargeInMs) {
       l.voicedMs = 0;
       this.interrupt(identity);
     }
@@ -435,6 +437,7 @@ export class VoiceParticipant {
   private setState(state: VoiceState) {
     if (this._state === state) return;
     this._state = state;
+    if (state === 'speaking') for (const l of this.listeners.values()) l.voicedMs = 0;
     this.emit({ type: 'state', state });
     void this.publishState();
   }

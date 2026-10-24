@@ -9,7 +9,7 @@
  * "Vowe" as speech recognition writes it. Rhymes with "now"; recognizers that don't know the word
  * spell it as these. Kept to whole words, so "vowed" or "vowels" never match.
  */
-const NAME = String.raw`(?:vowe|vow|vau|vao|vowie)`;
+const NAME = String.raw`(?:vowe|vow|voe|vau|vao|vowie)`;
 const GREETING = String.raw`(?:(?:hey|hi|okay|ok|so|um|uh|and)[\s,.]+)?`;
 const LEADING = new RegExp(String.raw`^\s*${GREETING}${NAME}\b[\s,.:;!?-]*`, 'i');
 const TRAILING = new RegExp(String.raw`[\s,]+${NAME}[\s.!?]*$`, 'i');

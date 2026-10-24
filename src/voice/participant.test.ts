@@ -179,6 +179,18 @@ describe('VoiceParticipant', () => {
     assert.equal(s.of('interrupted').length, 0);
   });
 
+  it("doesn't take the question itself for an interruption", async () => {
+    const s = setup({ script: { steps: [{ say: 'The worker charges first. '.repeat(10) }], deltaMs: 1 }, synthChunks: 10, msPerChunk: 20 });
+    await joined(s, DANIEL);
+    for (let i = 0; i < 100; i++) s.transport.send({ type: 'audio', identity: DANIEL.identity, pcm: { samples: frame(true), sampleRate: 16000 } });
+    s.recognizer.event(DANIEL.identity, { type: 'final', text: 'Vowe, walk me through the worker.' });
+    await until(() => s.participant.state === 'speaking', 2000, 'Vowe to speak');
+    s.transport.send({ type: 'audio', identity: DANIEL.identity, pcm: { samples: frame(false), sampleRate: 16000 } });
+    await tick(50);
+    assert.equal(s.of('interrupted').length, 0);
+    assert.equal(s.participant.state, 'speaking');
+  });
+
   it('holds its answer while someone is still talking, then speaks in the pause', async () => {
     const s = setup();
     await joined(s, DANIEL, JOHN);

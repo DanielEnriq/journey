@@ -9,6 +9,7 @@ describe('parseAddress', () => {
       question: 'What happens if this crashes after charging?',
     });
     assert.deepEqual(parseAddress('hey vow show me the failure flow'), { addressed: true, question: 'Show me the failure flow' });
+    assert.deepEqual(parseAddress('Voe, what happens if this crashes?'), { addressed: true, question: 'What happens if this crashes?' });
     assert.deepEqual(parseAddress('Okay, Vowe. Why is the queue there?'), { addressed: true, question: 'Why is the queue there?' });
   });
 
