@@ -14,6 +14,7 @@ pnpm start
 |---|---|
 | `pnpm start` | Build and launch |
 | `pnpm typecheck` | Type-check without emitting |
+| `pnpm test` | Build and run `*.test.ts`; room integration tests need a local Supabase stack (`docs/rooms.md`) |
 | `pnpm db:generate` | Write a migration after editing `src/database/schema.ts` |
 | `pnpm cloud:push` | Apply `supabase/migrations/` to the linked Supabase project |
 | `pnpm cloud:types` | Regenerate `src/integrations/supabase/types.ts` from the linked project |
@@ -49,8 +50,8 @@ Optional: leave `SUPABASE_*` unset and the app stays local-only. SQLite keeps wh
 | `users` | yourself and anyone you share a workspace with | yourself (`name`, `avatar_url`); rows are created on sign-up |
 | `workspaces` | members | anyone creates (and becomes owner); owners rename/delete |
 | `workspace_members` | members | owners add/remove/change roles; anyone can leave |
-| `rooms` | workspace members | members create; creator or owner renames/deletes |
-| `room_members` | workspace members | members add workspace members; leave yourself; creator or owner removes |
+| `rooms` | room members | workspace members create (and become owner); room owners rename/delete/set goal and repository |
+| `room_members` | room members | room owners add workspace members, remove anyone, change roles; anyone can leave; a room always keeps an owner |
 
 Every table has row-level security and nothing is granted to `anon`, so the publishable key on its own reads nothing. Google stays the identity provider: after Google sign-in (or session restore) main exchanges the Google ID token for a Supabase session with `signInWithIdToken`, kept in memory only. Supabase links the account by its Google `sub`, so one Google account is always the same cloud user; if the exchange fails (say, offline at launch), the next cloud call retries it from the stored Google session, with no second sign-in. Cloud user ids are Supabase UUIDs, not the Google `sub` used locally. `public.users.email` follows the Google account; `name` and `avatar_url` are filled from it once and then left to the user.
 
@@ -58,7 +59,7 @@ Every table has row-level security and nothing is granted to `anon`, so the publ
 
 A connected room is a private Realtime channel, `room:<room id>`, run from main (`src/integrations/supabase/realtime.ts`) and reached by renderers through `window.journey.rooms`:
 
-- `join(roomId)` makes you a room member if needed (you must be in its workspace), connects, and tracks your presence. `leave(roomId)` disconnects but keeps membership.
+- `join(roomId)` connects to a room you're a member of and tracks your presence. `leave(roomId)` disconnects but keeps membership.
 - `send(roomId, type, payload)` broadcasts a typed event to everyone else connected; `onEvent` receives them. Events aren't stored.
 - `onPresence` reports who's connected (one entry per user, however many windows); `onStatus` reports `reconnecting` / `connected` / `left`.
 
@@ -71,14 +72,14 @@ Setup, once per project:
 3. Realtime → Settings: turn off **Allow public access**, so channels are private-only.
 4. `pnpm exec supabase login && pnpm exec supabase link --project-ref <ref>`, then `pnpm cloud:push`.
 
-Typed queries live in `src/integrations/supabase/workspaces.ts`. To change the schema, add a migration (`pnpm exec supabase migration new <name>`), `pnpm cloud:push`, then `pnpm cloud:types`.
+Typed queries live in `src/integrations/supabase/workspaces.ts`; persistent rooms and their membership in `rooms.ts` (see `docs/rooms.md`). To change the schema, add a migration (`pnpm exec supabase migration new <name>`), `pnpm cloud:push`, then `pnpm cloud:types`.
 
 ### Voice calls (LiveKit)
 
 Every room has an audio call: one LiveKit room per Journey room, named `room:<room id>`. WebRTC needs a browser, so the call runs in the renderer (`src/renderer/call.ts`, `CallController`); main only lets you in:
 
 1. `calls.requestMicrophone()` asks the OS for the microphone (macOS prompts once; a refusal must be undone in System Settings). Electron itself grants our page audio capture and nothing else (`restrictPermissions` in `src/main/window.ts`).
-2. `calls.access(roomId)` makes you a room member if needed and calls the `livekit-token` Edge Function (`supabase/functions/livekit-token`), which checks the same rule as the Realtime channel (in the room *and* still in its workspace) and returns a 10-minute token for that room only, microphone publishing only. The LiveKit API secret lives in Supabase, never in the app.
+2. `calls.access(roomId)` (room members only) calls the `livekit-token` Edge Function (`supabase/functions/livekit-token`), which checks the same rule as the Realtime channel (in the room *and* still in its workspace) and returns a 10-minute token for that room only, microphone publishing only. The LiveKit API secret lives in Supabase, never in the app.
 3. The renderer connects with `livekit-client` and reports status (`connecting` / `connected` / `reconnecting`) and each participant's speaking, muted, and connection quality (`lost` while they're dropped).
 
 LiveKit identities are cloud user ids, so joining from a second window or device replaces the first connection. A call is separate from the Realtime presence above: you can be in a room's channel without being in its call.

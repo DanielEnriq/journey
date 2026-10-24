@@ -2,12 +2,21 @@ import { BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type Ip
 import { addRepository, getRepository, listRepositories, markRepositoryOpened, removeRepository } from '../database/repositories.js';
 import { getAllSettings, updateSettings } from '../database/settings.js';
 import { detectRepositories } from '../git/detect.js';
-import { findWorkingTreeRoot, getStatus, listBranches, listWorktrees } from '../git/index.js';
+import { findWorkingTreeRoot, getRemoteUrl, getStatus, listBranches, listWorktrees } from '../git/index.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
 import { getCallAccess } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
-import { createRoom, createWorkspace, listRooms, listWorkspaces } from '../integrations/supabase/workspaces.js';
-import type { Channels, EventChannel, InvokeArgs, InvokeChannel, InvokeResult, MicrophoneAccess } from '../shared/api.js';
+import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
+import { createWorkspace, listWorkspaces, rooms } from '../integrations/supabase/workspaces.js';
+import type {
+  Channels,
+  EventChannel,
+  InvokeArgs,
+  InvokeChannel,
+  InvokeResult,
+  MicrophoneAccess,
+  RoomResult,
+} from '../shared/api.js';
 import { isAppPage } from './window.js';
 
 function requireString(value: unknown, what: string): string {
@@ -44,6 +53,27 @@ function handle<K extends InvokeChannel>(
 /** Pushes an event to every open window. */
 export function broadcast<K extends EventChannel>(channel: K, payload: Channels['event'][K]) {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
+}
+
+/** Runs a room operation, resolving with a RoomResult so the error code survives IPC. */
+async function roomResult<T>(run: () => Promise<T>): Promise<RoomResult<T>> {
+  try {
+    return { ok: true, value: await run() };
+  } catch (err) {
+    const { code, message } = toRoomError(err);
+    if (code === 'unknown') console.warn('[rooms]', err);
+    return { ok: false, error: { code, message } };
+  }
+}
+
+/** The shared identity of a local repository's `origin`. Only the identity leaves this machine, never the path. */
+async function originIdentity(repositoryId: unknown): Promise<string> {
+  const repo = typeof repositoryId === 'string' ? getRepository(repositoryId) : undefined;
+  if (!repo) throw new RoomError('invalid', 'No such local repository');
+  const remote = await getRemoteUrl(repo.path);
+  const identity = remote && repositoryIdentity(remote);
+  if (!identity) throw new RoomError('invalid', `${repo.name} has no shareable origin remote`);
+  return identity;
 }
 
 /**
@@ -124,9 +154,18 @@ export function registerIpc() {
   // Cloud: RLS decides what each call may see or change, so these only check argument shapes.
   handle('workspaces:list', () => listWorkspaces());
   handle('workspaces:create', (name) => createWorkspace(requireString(name, 'Workspace name').trim()));
-  handle('rooms:list', (workspaceId) => listRooms(requireString(workspaceId, 'Workspace id')));
-  handle('rooms:create', (workspaceId, name) =>
-    createRoom(requireString(workspaceId, 'Workspace id'), requireString(name, 'Room name').trim()),
+  // The room service validates its own arguments. Opening a room only reads it: no call, mic, agent, or files.
+  handle('rooms:list', (workspaceId) => roomResult(() => rooms.listRooms(workspaceId)));
+  handle('rooms:get', (roomId) => roomResult(() => rooms.getRoom(roomId)));
+  handle('rooms:create', (room) => roomResult(() => rooms.createRoom(room)));
+  handle('rooms:update', (roomId, patch) => roomResult(() => rooms.updateRoom(roomId, patch)));
+  handle('rooms:delete', (roomId) => roomResult(() => rooms.deleteRoom(roomId)));
+  handle('rooms:members', (roomId) => roomResult(() => rooms.listMembers(roomId)));
+  handle('rooms:addMember', (roomId, userId, role) => roomResult(() => rooms.addMember(roomId, userId, role)));
+  handle('rooms:setMemberRole', (roomId, userId, role) => roomResult(() => rooms.setMemberRole(roomId, userId, role)));
+  handle('rooms:removeMember', (roomId, userId) => roomResult(() => rooms.removeMember(roomId, userId)));
+  handle('rooms:attachRepository', (roomId, repositoryId) =>
+    roomResult(async () => rooms.updateRoom(roomId, { repository: await originIdentity(repositoryId) })),
   );
   handle('rooms:join', (roomId) => connectRoom(requireString(roomId, 'Room id')));
   handle('rooms:leave', (roomId) => disconnectRoom(requireString(roomId, 'Room id')));

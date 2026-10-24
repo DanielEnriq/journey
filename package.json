@@ -10,6 +10,7 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "typecheck": "tsc -p . --noEmit",
+    "test": "tsc -p . && node --test \"dist/**/*.test.js\"",
     "db:generate": "drizzle-kit generate",
     "cloud:push": "supabase db push --linked",
     "cloud:types": "supabase gen types typescript --linked --schema public > src/integrations/supabase/types.ts",

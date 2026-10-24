@@ -1,0 +1,393 @@
+import type { PostgrestError } from '@supabase/supabase-js';
+import type {
+  NewRoom,
+  RoomDetails,
+  RoomErrorCode,
+  RoomMember,
+  RoomPatch,
+  RoomRole,
+  RoomSummary,
+} from '../../shared/api.js';
+import type { Cloud } from './index.js';
+
+/**
+ * Persistent rooms: the shared, cloud-side record of a room and who belongs to it. RLS in
+ * supabase/migrations/*_room_membership.sql is the authority; this module only shapes calls and
+ * turns failures into a RoomError with a code the UI can act on.
+ *
+ * Opening a room here reads rows and nothing else: no call, no microphone, no coding agent, no
+ * local files. Connecting to a room's call or channel is realtime.ts / livekit, and needs membership.
+ *
+ * Non-members get `not-found` rather than `permission-denied`, so a room's existence isn't leaked.
+ * `permission-denied` means you can see the room but not do that to it (e.g. a member renaming it).
+ */
+
+export class RoomError extends Error {
+  constructor(
+    readonly code: RoomErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RoomError';
+  }
+}
+
+export type RoomService = ReturnType<typeof createRoomService>;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_NAME = 200;
+const MAX_GOAL = 2000;
+
+/**
+ * `client` returns a signed-in Supabase client, or throws a RoomError (signed-out, not-configured,
+ * network). The app passes getCloud; tests pass clients signed in as different people.
+ */
+export function createRoomService(client: () => Promise<Cloud>) {
+  async function signedIn(): Promise<{ supabase: Cloud; selfId: string }> {
+    const supabase = await client();
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw toRoomError(error);
+    if (!data.session) throw new RoomError('signed-out', 'Sign in to use rooms');
+    return { supabase, selfId: data.session.user.id };
+  }
+
+  /** The room with your role, or not-found if it doesn't exist or you aren't a member. */
+  async function getRoom(roomId: string): Promise<RoomDetails> {
+    const id = requireId(roomId, 'Room');
+    const { supabase, selfId } = await signedIn();
+    const { data, error } = await supabase
+      .from('rooms')
+      .select('*, membership:room_members!inner(role), room_members(count)')
+      .eq('id', id)
+      .eq('membership.user_id', selfId)
+      .maybeSingle();
+    if (error) throw toRoomError(error);
+    if (!data) throw notFound();
+    const { membership, room_members, ...room } = data;
+    return { ...summary(room, membership[0]!.role), memberCount: room_members[0]?.count ?? 0 };
+  }
+
+  return {
+    /** Rooms you're a member of, most recently changed first; optionally only one workspace's. */
+    async listRooms(workspaceId?: string): Promise<RoomSummary[]> {
+      const { supabase, selfId } = await signedIn();
+      let query = supabase
+        .from('rooms')
+        .select('*, membership:room_members!inner(role)')
+        .eq('membership.user_id', selfId)
+        .order('updated_at', { ascending: false });
+      if (workspaceId !== undefined) query = query.eq('workspace_id', requireId(workspaceId, 'Workspace'));
+      const { data, error } = await query;
+      if (error) throw toRoomError(error);
+      return data.map(({ membership, ...room }) => summary(room, membership[0]!.role));
+    },
+
+    getRoom,
+
+    /** Creates a room in a workspace you belong to. You become its owner; nobody is connected to it. */
+    async createRoom(input: NewRoom): Promise<RoomDetails> {
+      if (!isRecord(input)) throw new RoomError('invalid', 'A new room needs a workspace id and a name');
+      const workspaceId = requireId(input.workspaceId, 'Workspace');
+      const row = {
+        workspace_id: workspaceId,
+        name: requireName(input.name),
+        goal: optionalGoal(input.goal),
+        repository: optionalRepository(input.repository),
+      };
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('rooms').insert(row).select('id').single();
+      if (error) {
+        // RLS refuses rooms in workspaces you aren't in; the workspace may as well not exist.
+        if (isRlsRefusal(error)) throw new RoomError('not-found', 'No such workspace, or you are not a member of it');
+        throw toRoomError(error);
+      }
+      return getRoom(data.id);
+    },
+
+    /** Owners only. Fields left out stay as they are; null clears `goal` or `repository`. */
+    async updateRoom(roomId: string, patch: RoomPatch): Promise<RoomDetails> {
+      const id = requireId(roomId, 'Room');
+      if (!isRecord(patch)) throw new RoomError('invalid', 'Room changes must be an object');
+      const changes: { name?: string; goal?: string | null; repository?: string | null } = {};
+      if (patch.name !== undefined) changes.name = requireName(patch.name);
+      if (patch.goal !== undefined) changes.goal = optionalGoal(patch.goal);
+      if (patch.repository !== undefined) changes.repository = optionalRepository(patch.repository);
+      if (!Object.keys(changes).length) return getRoom(id);
+
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('rooms').update(changes).eq('id', id).select('id');
+      if (error) throw toRoomError(error);
+      // RLS filters out rooms you may not change: tell "member, not owner" apart from "no such room".
+      if (!data.length) throw await refusalFor(id);
+      return getRoom(id);
+    },
+
+    /** Owners only. Removes the room for everyone, with its membership. */
+    async deleteRoom(roomId: string): Promise<void> {
+      const id = requireId(roomId, 'Room');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('rooms').delete().eq('id', id).select('id');
+      if (error) throw toRoomError(error);
+      if (!data.length) throw await refusalFor(id);
+    },
+
+    /** The room's members, owners first, then by when they joined. */
+    async listMembers(roomId: string): Promise<RoomMember[]> {
+      const id = requireId(roomId, 'Room');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase
+        .from('room_members')
+        .select('*, user:users!inner(*)')
+        .eq('room_id', id)
+        .order('role')
+        .order('joined_at');
+      if (error) throw toRoomError(error);
+      if (!data.length) throw notFound(); // a member always sees at least themselves
+      return data.map(member);
+    },
+
+    /**
+     * Owners only. `userId` is a cloud user id of someone already in the room's workspace; there's no
+     * invitation by email yet. Adding an existing member returns them unchanged.
+     */
+    async addMember(roomId: string, userId: string, role: RoomRole = 'member'): Promise<RoomMember> {
+      const id = requireId(roomId, 'Room');
+      const target = requireId(userId, 'User');
+      if (role !== 'owner' && role !== 'member') throw new RoomError('invalid', 'Role must be owner or member');
+      const { supabase } = await signedIn();
+      const room = await getRoom(id);
+
+      const { error } = await supabase.from('room_members').insert({ room_id: id, user_id: target, role });
+      if (error && error.code !== '23505') {
+        if (!isRlsRefusal(error)) throw toRoomError(error);
+        if (room.role !== 'owner') throw new RoomError('permission-denied', 'Only room owners can add members');
+        throw new RoomError('invalid', 'Only members of the room’s workspace can be added');
+      }
+      const added = await findMember(supabase, id, target);
+      if (!added) throw notFound();
+      return added;
+    },
+
+    /** Owners only; hands on or shares ownership. A room always keeps at least one owner. */
+    async setMemberRole(roomId: string, userId: string, role: RoomRole): Promise<RoomMember> {
+      const id = requireId(roomId, 'Room');
+      const target = requireId(userId, 'User');
+      if (role !== 'owner' && role !== 'member') throw new RoomError('invalid', 'Role must be owner or member');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase
+        .from('room_members')
+        .update({ role })
+        .eq('room_id', id)
+        .eq('user_id', target)
+        .select('user_id');
+      if (error) throw toRoomError(error);
+      if (!data.length) throw await memberRefusal(supabase, id, target, 'change roles');
+      const updated = await findMember(supabase, id, target);
+      if (!updated) throw notFound();
+      return updated;
+    },
+
+    /**
+     * Leaves the room (no `userId`, or your own), or as an owner removes someone else. The last
+     * owner can't leave: hand ownership on or delete the room. This is room membership, not the call.
+     */
+    async removeMember(roomId: string, userId?: string): Promise<void> {
+      const id = requireId(roomId, 'Room');
+      const { supabase, selfId } = await signedIn();
+      const target = userId === undefined ? selfId : requireId(userId, 'User');
+      const { data, error } = await supabase
+        .from('room_members')
+        .delete()
+        .eq('room_id', id)
+        .eq('user_id', target)
+        .select('user_id');
+      if (error) throw toRoomError(error);
+      if (!data.length) throw await memberRefusal(supabase, id, target, 'remove members');
+    },
+  };
+
+  /** Why a write to a room matched nothing: you can read it but not change it, or it isn't yours to see. */
+  async function refusalFor(roomId: string): Promise<RoomError> {
+    await getRoom(roomId); // throws not-found
+    return new RoomError('permission-denied', 'Only room owners can do that');
+  }
+
+  async function memberRefusal(supabase: Cloud, roomId: string, userId: string, action: string): Promise<RoomError> {
+    await getRoom(roomId);
+    if (!(await findMember(supabase, roomId, userId))) return new RoomError('not-found', 'Not a member of this room');
+    return new RoomError('permission-denied', `Only room owners can ${action}`);
+  }
+}
+
+async function findMember(supabase: Cloud, roomId: string, userId: string): Promise<RoomMember | undefined> {
+  const { data, error } = await supabase
+    .from('room_members')
+    .select('*, user:users!inner(*)')
+    .eq('room_id', roomId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw toRoomError(error);
+  return data ? member(data) : undefined;
+}
+
+type RoomRow = Omit<RoomSummary, 'role' | 'workspaceId' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
+  workspace_id: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+function summary(row: RoomRow, role: RoomRole): RoomSummary {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    goal: row.goal,
+    repository: row.repository,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    role,
+  };
+}
+
+function member(row: {
+  room_id: string;
+  user_id: string;
+  role: RoomRole;
+  joined_at: string;
+  user: { email: string; name: string | null; avatar_url: string | null };
+}): RoomMember {
+  return {
+    roomId: row.room_id,
+    userId: row.user_id,
+    role: row.role,
+    joinedAt: row.joined_at,
+    email: row.user.email,
+    name: row.user.name,
+    avatarUrl: row.user.avatar_url,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const notFound = () => new RoomError('not-found', 'No such room, or you are not a member of it');
+
+// ─── Input ───────────────────────────────────────────────────────────────────
+
+function requireId(value: unknown, what: string): string {
+  if (typeof value !== 'string' || !UUID.test(value)) throw new RoomError('invalid', `${what} id must be a UUID`);
+  return value.toLowerCase();
+}
+
+function requireName(value: unknown): string {
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (!name) throw new RoomError('invalid', 'Room name must not be empty');
+  if (name.length > MAX_NAME) throw new RoomError('invalid', `Room name must be at most ${MAX_NAME} characters`);
+  return name;
+}
+
+function optionalGoal(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') throw new RoomError('invalid', 'Room goal must be text');
+  const goal = value.trim();
+  if (goal.length > MAX_GOAL) throw new RoomError('invalid', `Room goal must be at most ${MAX_GOAL} characters`);
+  return goal || null;
+}
+
+function optionalRepository(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const identity = typeof value === 'string' ? repositoryIdentity(value) : null;
+  if (!identity) {
+    throw new RoomError('invalid', 'Repository must be a remote such as github.com/owner/repo, not a local path');
+  }
+  return identity;
+}
+
+/**
+ * The shared identity of a repository: host and path of its remote, lowercase host, no scheme, user,
+ * port, or `.git`. `git@github.com:Acme/Payments.git` and `https://github.com/Acme/Payments` both give
+ * `github.com/Acme/Payments`; `acme/payments` (no host) is kept as given. Local paths and file URLs
+ * give null: what's on someone's disk never becomes room data.
+ */
+export function repositoryIdentity(remote: string): string | null {
+  let value = remote.trim();
+  if (!value || /\s/.test(value)) return null;
+  let host: string | undefined;
+  let path: string;
+
+  const url = /^([a-z][a-z0-9+.-]*):\/\/(.*)$/i.exec(value);
+  const scp = /^(?:[^@/:]+@)?([^/:]+):(?!\/)(.+)$/.exec(value); // git@host:owner/repo
+  if (url) {
+    if (!['https', 'http', 'ssh', 'git', 'git+ssh', 'ssh+git'].includes(url[1]!.toLowerCase())) return null;
+    const rest = url[2]!;
+    const slash = rest.indexOf('/');
+    if (slash <= 0) return null;
+    host = rest.slice(0, slash).replace(/^.*@/, '').replace(/:\d*$/, '');
+    path = rest.slice(slash + 1);
+  } else if (scp && !/^[a-z]$/i.test(scp[1]!)) {
+    // A single letter before the colon is a Windows drive (C:\…, C:/…), not a host.
+    host = scp[1];
+    path = scp[2]!;
+  } else {
+    if (/^[/\\~.]/.test(value) || /^[a-z]:/i.test(value) || value.includes('\\') || value.includes(':')) return null;
+    path = value;
+  }
+
+  path = path.replace(/\/+$/, '').replace(/\.git$/i, '').replace(/\/+$/, '');
+  const segments = path.split('/');
+  if (segments.some((s) => !s || s === '.' || s === '..' || /[:@]/.test(s))) return null;
+  if (host !== undefined) {
+    host = host.toLowerCase();
+    if (!host || /[/:@\s]/.test(host)) return null;
+    value = `${host}/${segments.join('/')}`;
+  } else {
+    if (segments.length < 2) return null;
+    value = segments.join('/');
+  }
+  return value.length <= 512 ? value : null;
+}
+
+// ─── Errors ──────────────────────────────────────────────────────────────────
+
+function isRlsRefusal(error: PostgrestError): boolean {
+  return error.code === '42501';
+}
+
+/** Maps a Supabase/Postgres failure to a RoomError. Already-mapped errors pass through. */
+export function toRoomError(error: unknown): RoomError {
+  if (error instanceof RoomError) return error;
+  const e = (error ?? {}) as { code?: unknown; message?: unknown; name?: unknown; status?: unknown };
+  const code = typeof e.code === 'string' ? e.code : '';
+  const message = typeof e.message === 'string' && e.message ? e.message : 'Something went wrong';
+
+  if (isNetworkFailure(e, code, message)) return new RoomError('network', `Could not reach the cloud: ${message}`);
+  switch (code) {
+    case '42501': // RLS or column privileges
+      return new RoomError('permission-denied', 'You don’t have permission to do that');
+    case 'VR001': // keep_room_owner
+      return new RoomError('conflict', message);
+    case '23505':
+      return new RoomError('conflict', 'That already exists');
+    case '23503': // e.g. adding a user id that isn't a user
+    case '23502':
+    case '23514':
+    case '22P02':
+    case '22001':
+      return new RoomError('invalid', message);
+    case 'PGRST301': // JWT expired or invalid
+    case 'PGRST302':
+      return new RoomError('signed-out', 'Your cloud session ended; sign in again');
+  }
+  return new RoomError('unknown', message);
+}
+
+function isNetworkFailure(e: { name?: unknown; status?: unknown }, code: string, message: string): boolean {
+  // postgrest-js reports a failed fetch as { code: '', message: 'TypeError: fetch failed' } (status 0).
+  if (e.name === 'AuthRetryableFetchError') return true;
+  if (e.name === 'TypeError' && /fetch|network/i.test(message)) return true; // undici's "fetch failed"
+  if (code === '' && /^(TypeError|FetchError|AbortError)\b|fetch failed|network|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i.test(message)) return true;
+  return typeof e.status === 'number' && (e.status === 0 || e.status === 502 || e.status === 503 || e.status === 504);
+}

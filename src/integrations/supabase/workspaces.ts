@@ -1,4 +1,5 @@
-import { getCloud, getCloudUserId } from './index.js';
+import { getCloud, isCloudConfigured } from './index.js';
+import { createRoomService, RoomError, toRoomError } from './rooms.js';
 import type { Enums, Tables } from './types.js';
 
 // Typed access to the shared tables. RLS decides what each call can see or change;
@@ -8,8 +9,6 @@ export type CloudUser = Tables<'users'>;
 export type Workspace = Tables<'workspaces'>;
 export type WorkspaceRole = Enums<'workspace_role'>;
 export type WorkspaceMember = Tables<'workspace_members'> & { user: CloudUser };
-export type Room = Tables<'rooms'>;
-export type RoomMember = Tables<'room_members'>;
 
 /** Workspaces the signed-in user belongs to, oldest first. */
 export async function listWorkspaces(): Promise<Workspace[]> {
@@ -63,46 +62,14 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
-export async function listRooms(workspaceId: string): Promise<Room[]> {
-  const { data, error } = await (await getCloud()).from('rooms').select().eq('workspace_id', workspaceId).order('created_at');
-  if (error) throw error;
-  return data;
-}
-
-/** Creates a room and joins it. */
-export async function createRoom(workspaceId: string, name: string): Promise<Room> {
-  const supabase = await getCloud();
-  const { data: room, error } = await supabase.from('rooms').insert({ workspace_id: workspaceId, name }).select().single();
-  if (error) throw error;
-  await joinRoom(room.id);
-  return room;
-}
-
-export async function deleteRoom(id: string): Promise<void> {
-  const { error } = await (await getCloud()).from('rooms').delete().eq('id', id);
-  if (error) throw error;
-}
-
-export async function listRoomMembers(roomId: string): Promise<RoomMember[]> {
-  const { data, error } = await (await getCloud()).from('room_members').select().eq('room_id', roomId).order('joined_at');
-  if (error) throw error;
-  return data;
-}
-
-/** Adds a workspace member to a room; defaults to the signed-in user. Already a member is a no-op. */
-export async function joinRoom(roomId: string, userId?: string): Promise<void> {
-  const { error } = await (await getCloud())
-    .from('room_members')
-    .upsert({ room_id: roomId, user_id: userId ?? (await getCloudUserId()) }, { ignoreDuplicates: true });
-  if (error) throw error;
-}
-
-/** Leaves a room, or (as its creator or a workspace owner) removes someone else. */
-export async function leaveRoom(roomId: string, userId?: string): Promise<void> {
-  const { error } = await (await getCloud())
-    .from('room_members')
-    .delete()
-    .eq('room_id', roomId)
-    .eq('user_id', userId ?? (await getCloudUserId()));
-  if (error) throw error;
-}
+/** Persistent rooms and their membership (./rooms.ts), as the signed-in user. */
+export const rooms = createRoomService(async () => {
+  if (!isCloudConfigured()) throw new RoomError('not-configured', 'Rooms need Supabase: set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in .env');
+  try {
+    return await getCloud();
+  } catch (err) {
+    const failure = toRoomError(err);
+    if (failure.code === 'network') throw failure;
+    throw new RoomError('signed-out', 'Sign in to use rooms');
+  }
+});

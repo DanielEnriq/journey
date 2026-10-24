@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import type { Participant, RoomEvent, RoomEvents, RoomEventType, RoomSession, RoomStatus } from '../../shared/api.js';
 import { onUserChange } from '../google/auth.js';
 import { getCloud, getCloudUserId } from './index.js';
-import { joinRoom as addRoomMember } from './workspaces.js';
+import { rooms } from './workspaces.js';
 
 /**
  * Live rooms over Supabase Realtime. Each connected room is one private channel,
@@ -40,7 +40,7 @@ interface LiveRoom {
 const live = new Map<string, LiveRoom>();
 const joining = new Map<string, Promise<RoomSession>>();
 
-/** Joins a room (as a member, if not already) and connects to it. Joining twice returns the same session. */
+/** Connects to a room you're a member of. Connecting twice returns the same session. */
 export function connectRoom(roomId: string): Promise<RoomSession> {
   const room = live.get(roomId);
   if (room) return Promise.resolve(session(roomId, room));
@@ -53,9 +53,9 @@ export function connectRoom(roomId: string): Promise<RoomSession> {
 }
 
 async function connect(roomId: string): Promise<RoomSession> {
+  await rooms.getRoom(roomId); // not-found unless you're a member; the channel policy checks the same
   const supabase = await getCloud();
   const selfId = await getCloudUserId();
-  await addRoomMember(roomId); // RLS: only workspace members can join; the channel policy checks this row
 
   const { data: profile, error } = await supabase.from('users').select('name, avatar_url').eq('id', selfId).single();
   if (error) throw error;

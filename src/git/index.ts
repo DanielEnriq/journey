@@ -184,3 +184,11 @@ export async function listWorktrees(path: string): Promise<GitWorktree[]> {
   }
   return worktrees;
 }
+
+// ─── Remotes ─────────────────────────────────────────────────────────────────
+
+/** The URL of a remote (default `origin`), or null if the repository has no such remote. */
+export async function getRemoteUrl(path: string, remote = 'origin'): Promise<string | null> {
+  const out = await git(path, ['config', '--get', `remote.${remote}.url`]).catch(() => '');
+  return out.trim() || null;
+}
