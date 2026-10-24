@@ -7,6 +7,7 @@
  */
 
 import type { Tables } from '../integrations/supabase/types.js';
+import type { TurnContext, VoiceEvent, VoiceStatus } from '../voice/index.js';
 
 export interface User {
   id: string;
@@ -684,6 +685,23 @@ export interface CallAccess {
 /** The OS-level microphone permission. `denied`/`restricted` mean the user must change it in system settings. */
 export type MicrophoneAccess = 'granted' | 'denied' | 'restricted';
 
+// ─── Vowe's voice ────────────────────────────────────────────────────────────
+// Vowe as a participant in a room's call (src/voice), hosted by this machine's main process for the
+// person who brought it in. The renderer asks for it by room id and shows its state; audio, speech
+// providers and credentials stay in main and the Vowe API.
+
+export type { TurnContext as VoiceTurnContext, VoiceEvent, VoiceStatus } from '../voice/index.js';
+
+/** A canvas command from the reasoning runtime, for the canvas engine to apply; answer with voice.canvasResult. */
+export interface VoiceCanvasCommand {
+  roomId: string;
+  turnId: string;
+  /** Who asked the question that led to it, by cloud user id. */
+  requester: { identity: string; name: string | null };
+  /** In the canvas engine's own schema; `id` is what canvasResult answers. */
+  command: { id: string; [field: string]: unknown };
+}
+
 /**
  * IPC channel names. `invoke` channels are request/response handled by main
  * (arguments are untrusted at runtime; handlers must validate them). `event`
@@ -760,6 +778,15 @@ export interface Channels {
     'agent:approve': (approvalId: string, approved: boolean) => void;
     /** Forgets the conversation and declines anything it's waiting on. */
     'agent:reset': (conversationId: string) => void;
+    /** Brings Vowe into the room's call; rejects with a reason to show. */
+    'voice:start': (roomId: string) => VoiceStatus;
+    'voice:stop': () => void;
+    'voice:status': () => VoiceStatus;
+    /** You're talking over Vowe (holding the mic button): it stops. */
+    'voice:interrupt': () => void;
+    /** What you have selected and open on the canvas, attached to the questions you ask Vowe. */
+    'voice:setContext': (roomId: string, context: TurnContext) => void;
+    'voice:canvasResult': (commandId: string, outcome: 'applied' | 'rejected') => void;
   };
   event: {
     'auth:changed': User | null;
@@ -769,6 +796,9 @@ export interface Channels {
     'rooms:status': { roomId: string; status: RoomStatus };
     'agent:approval': AgentApprovalRequest;
     'agent:toolCall': { conversationId: string; call: AgentToolCall };
+    'voice:status': VoiceStatus;
+    'voice:event': { roomId: string; event: VoiceEvent };
+    'voice:canvasCommand': VoiceCanvasCommand;
   };
 }
 
@@ -911,5 +941,18 @@ export interface JourneyApi {
     onApproval(listener: (request: AgentApprovalRequest) => void): () => void;
     /** Each tool call as it finishes, while send() is still pending. */
     onToolCall(listener: (update: { conversationId: string; call: AgentToolCall }) => void): () => void;
+  };
+  /** Vowe as a participant in a room's call. Members only (not viewers); one call at a time. */
+  voice: {
+    start(roomId: string): Promise<VoiceStatus>;
+    stop(): Promise<void>;
+    status(): Promise<VoiceStatus>;
+    interrupt(): Promise<void>;
+    setContext(roomId: string, context: TurnContext): Promise<void>;
+    canvasResult(commandId: string, outcome: 'applied' | 'rejected'): Promise<void>;
+    onStatus(listener: (status: VoiceStatus) => void): () => void;
+    /** State changes, captions (partial/heard), what Vowe says, interruptions, errors. Not stored anywhere. */
+    onEvent(listener: (update: { roomId: string; event: VoiceEvent }) => void): () => void;
+    onCanvasCommand(listener: (command: VoiceCanvasCommand) => void): () => void;
   };
 }

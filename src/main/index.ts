@@ -6,7 +6,7 @@ import { restoreSession, signIn, signOut } from '../integrations/google/auth.js'
 import { startCloudSync } from '../integrations/supabase/index.js';
 import { disconnectAllRooms } from '../integrations/supabase/realtime.js';
 import { getVoiceAgentProvider } from '../integrations/voice/index.js';
-import { applySettings, registerIpc } from './ipc.js';
+import { applySettings, registerIpc, voice } from './ipc.js';
 import { createMainWindow, restrictPermissions } from './window.js';
 
 app.on('window-all-closed', () => {
@@ -18,6 +18,7 @@ app.on('activate', () => {
   if (app.isReady() && BrowserWindow.getAllWindows().length === 0) createMainWindow();
 });
 app.on('will-quit', () => {
+  void voice.stop(); // leaves any call Vowe is in; LiveKit drops it anyway when the process exits
   stopClaudeCodeObserver();
   stopTranscriptWatcher();
   closeDb();

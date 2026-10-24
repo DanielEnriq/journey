@@ -103,6 +103,17 @@ const api: JourneyApi = {
     onApproval: (listener) => subscribe('agent:approval', listener),
     onToolCall: (listener) => subscribe('agent:toolCall', listener),
   },
+  voice: {
+    start: (roomId) => invoke('voice:start', roomId),
+    stop: () => invoke('voice:stop'),
+    status: () => invoke('voice:status'),
+    interrupt: () => invoke('voice:interrupt'),
+    setContext: (roomId, context) => invoke('voice:setContext', roomId, context),
+    canvasResult: (commandId, outcome) => invoke('voice:canvasResult', commandId, outcome),
+    onStatus: (listener) => subscribe('voice:status', listener),
+    onEvent: (listener) => subscribe('voice:event', listener),
+    onCanvasCommand: (listener) => subscribe('voice:canvasCommand', listener),
+  },
 };
 
 contextBridge.exposeInMainWorld('journey', api);

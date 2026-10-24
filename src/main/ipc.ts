@@ -25,6 +25,8 @@ import type {
   RoomCheckout,
   RoomResult,
 } from '../shared/api.js';
+import { createVoiceHost } from '../voice/index.js';
+import { CollaboratorReasoning } from '../voice/reasoning/collaborator.js';
 import { isAppPage } from './window.js';
 
 function requireString(value: unknown, what: string): string {
@@ -77,6 +79,22 @@ const collaborator = new Collaborator({
     }),
   onToolCall: (conversationId, call) => broadcast('agent:toolCall', { conversationId, call }),
 });
+
+/**
+ * Vowe's voice in calls. Until the reasoning runtime (feat/mvp-vowe-runtime) lands, spoken questions go
+ * to a Collaborator of their own that declines every approval: nobody can answer a sharing prompt
+ * mid-call, so Claude Code transcripts are never sent on a spoken question.
+ */
+const voiceCollaborator = new Collaborator({ provider: anthropic, work: workContext, tools: workContextTools, approve: async () => false });
+export const voice = createVoiceHost(
+  (roomId, self) => new CollaboratorReasoning({ collaborator: voiceCollaborator, owner: self, checkout: (id) => roomCheckout(id) }),
+);
+const voiceContext = z
+  .object({
+    selection: z.array(z.object({ id, label: z.string().max(200).optional() }).strict()).max(20),
+    view: z.string().max(100).nullable(),
+  })
+  .strict();
 
 /**
  * Registers a handler for a channel from the contract. Rejects calls from any frame
@@ -281,8 +299,23 @@ export function registerIpc() {
   handle('rooms:send', (roomId, type, payload) => sendRoomEvent(requireString(roomId, 'Room id'), type, payload));
   handle('calls:access', (roomId) => getCallAccess(requireString(roomId, 'Room id')));
   handle('calls:requestMicrophone', () => requestMicrophone());
+  // Vowe's voice: the Vowe API checks you may bring it into this room's call (members, not viewers).
+  handle('voice:start', (roomId) => voice.start(parse(z.uuid(), roomId, 'Room id')));
+  handle('voice:stop', () => voice.stop());
+  handle('voice:status', () => voice.status);
+  handle('voice:interrupt', () => voice.interrupt());
+  handle('voice:setContext', (roomId, context) => voice.setContext(parse(z.uuid(), roomId, 'Room id'), parse(voiceContext, context, 'Context')));
+  handle('voice:canvasResult', (commandId, outcome) => voice.canvasResult(parse(id, commandId, 'Command id'), parse(z.enum(['applied', 'rejected']), outcome, 'Outcome')));
 
-  onUserChange((user) => broadcast('auth:changed', user));
+  onUserChange((user) => {
+    broadcast('auth:changed', user);
+    if (!user) void voice.stop(); // signed out: Vowe leaves any call it was brought into
+  });
+  voice.onEvent((e) => {
+    if (e.type === 'status') broadcast('voice:status', e.status);
+    else if (e.type === 'voice') broadcast('voice:event', { roomId: e.roomId, event: e.event });
+    else broadcast('voice:canvasCommand', { roomId: e.roomId, turnId: e.turnId, requester: e.requester, command: e.command });
+  });
   claudeCodeActivity.on('event', (event) => broadcast('claudeCode:event', event));
   roomActivity.on('event', (event) => broadcast('rooms:event', event));
   roomActivity.on('presence', (update) => broadcast('rooms:presence', update));
