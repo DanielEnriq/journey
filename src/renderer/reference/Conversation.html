@@ -1,0 +1,160 @@
+<!doctype html>
+<!-- Lifted verbatim from the Claude Design canvas "Shared Engineering Room" (Conversation.dc.html). Edit the design, not this copy. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Conversation grammar</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+body{margin:0}
+a{color:#2f63c4}a:hover{color:#1f4a99}
+.sheet{
+  --pane:#faf9f7;--menu:#ffffff;
+  --ink-bright:#121417;--ink-2:#2e3238;--ink-3:#3f434a;--ink-4:#52565d;--ink-6:#6b6f77;--ink-7:#62666e;--ink-8:#63676f;--ink-9:#6b6f77;
+  --fill-1:rgba(18,22,30,.035);--fill-2:rgba(18,22,30,.07);--hairline:rgba(18,22,30,.08);--border:rgba(18,22,30,.12);
+  --good:#1c7a54;--attention-ink:#8a5810;--attention-line:rgba(168,112,20,.32);--attention-wash:rgba(207,140,28,.09);
+  --ask:#2f63c4;--studio-field:#f2f0ec;--studio-card-top:#fff;--shadow-menu:0 18px 40px rgba(18,22,30,.16);--studio-shadow:0 1px 2px rgba(18,22,30,.05),0 8px 22px rgba(18,22,30,.06);
+  --peer:#7a4fc4;--peer2:#b0407a;--me:#127a74;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+.tile{position:relative;min-height:150px;border-radius:12px;background-color:var(--studio-field);background-image:radial-gradient(ellipse 80% 70% at 50% 45%,rgba(255,255,255,.75),transparent 74%);box-shadow:inset 0 0 0 1px var(--hairline);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;overflow:hidden}
+.cap{display:flex;flex-direction:column;gap:3px;padding:12px 2px 0}
+.cap b{font-size:13px;font-weight:700;color:var(--ink-bright)}
+.cap span{font-size:12px;line-height:1.5;color:var(--ink-6);text-wrap:pretty}
+.cap code{font-family:var(--mono);font-size:10.5px;color:var(--ink-8)}
+.sec{display:flex;flex-direction:column;gap:16px}
+.sec-h{display:flex;align-items:baseline;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--hairline)}
+.eyebrow{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-8)}
+.orb{width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2f63c4 0,#2f63c4 34%,rgba(47,99,196,.22) 36%,rgba(47,99,196,.22) 60%,transparent 62%);}
+.av{width:18px;height:18px;flex:0 0 18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff}
+.plate{display:flex;align-items:center;gap:6px;padding:6px;border-radius:14px;background:var(--menu);box-shadow:inset 0 1px 0 #fff,0 0 0 1px var(--border),var(--shadow-menu)}
+.state{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px 0 6px;font-size:12px;color:var(--ink-6);white-space:nowrap}
+.meter{display:inline-flex;align-items:flex-end;gap:2px;height:12px;width:10px}
+.meter i{display:block;width:2px;border-radius:1px;background:var(--ink-9)}
+.line{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;line-height:1.5;color:var(--ink-2);max-width:420px}
+.spk{flex:0 0 auto;font-size:11px;font-weight:500;color:var(--ink-7);padding-top:2px}
+.ref{color:var(--ask);text-decoration:underline dotted 1px;text-underline-offset:3px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:0 6px;border-radius:5px;background:rgba(18,122,116,.13);color:var(--me);font-weight:500}
+.chip small{font-family:var(--mono);font-size:10px;font-weight:400}
+.mini{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:6px;background:var(--fill-2);color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.mini.ask{background:rgba(47,99,196,.14);color:var(--ask)}
+.pill{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 11px 0 7px;border-radius:15px;background:var(--fill-1);box-shadow:inset 0 0 0 1px var(--hairline);font-size:12px;color:var(--ink-6);white-space:nowrap}
+.rule{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--hairline);font-size:13px;line-height:1.5;color:var(--ink-3)}
+.rule b{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--ink-8);width:24px;flex:0 0 24px;padding-top:2px}
+</style>
+</head>
+<body>
+<div class="sheet" style="width:1440px;height:1240px;box-sizing:border-box;padding:56px 64px;background:var(--pane);font-family:'Satoshi',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--ink-2);display:flex;flex-direction:column;gap:40px">
+
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <span class="eyebrow">Design pass 3 · conversation</span>
+    <h1 style="margin:0;font-size:34px;font-weight:700;letter-spacing:-.02em;color:var(--ink-bright)">Whose turn it is</h1>
+  </div>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Vowe’s turn states</span><span style="font-size:12.5px;color:var(--ink-6)">Said in words beside the orb. The orb itself never pulses; only the level bars move, and only while it speaks.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile"><div class="plate"><span class="state"><span class="orb"></span><span class="meter"><i style="height:3px"></i><i style="height:3px"></i><i style="height:3px"></i></span>Listening</span></div></div>
+        <div class="cap"><b>Listening</b><span>The resting state. Vowe hears everything but adds nothing unless addressed or it has something worth a pause.</span></div>
+      </div>
+      <div>
+        <div class="tile"><div class="plate"><span class="state" style="color:var(--ink-4)"><span class="orb"></span><span class="meter"><i style="height:3px"></i><i style="height:3px"></i><i style="height:3px"></i></span>Waiting for a pause</span></div></div>
+        <div class="cap"><b>Waiting for a pause</b><span>It has something to say and someone is talking. It waits for the turn to end rather than cutting in.</span></div>
+      </div>
+      <div>
+        <div class="tile"><div class="plate"><span class="state"><span class="orb"></span><span class="meter"><i style="height:3px"></i><i style="height:3px"></i><i style="height:3px"></i></span>Thinking</span></div></div>
+        <div class="cap"><b>Thinking</b><span>A short beat after a question, so the reply doesn’t seem pre-loaded. No spinner, no shimmer.</span></div>
+      </div>
+      <div>
+        <div class="tile"><div class="plate"><span class="state" style="color:var(--ask)"><span class="orb" style="box-shadow:inset 0 0 0 1px var(--hairline),0 0 0 2px #fff,0 0 0 3.5px var(--ask)"></span><span class="meter"><i style="height:9px;background:var(--ask)"></i><i style="height:5px;background:var(--ask)"></i><i style="height:11px;background:var(--ask)"></i></span>Speaking</span><span style="display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:9px;background:var(--fill-2);font-size:12px;font-weight:500;color:var(--ink-2)">Talk over</span></div></div>
+        <div class="cap"><b>Speaking</b><span>Anyone can talk over Vowe at any time. It stops on the word, and what it got through stays on screen, cut.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">The live line</span><span style="font-size:12.5px;color:var(--ink-6)">One line, not a transcript. The current turn, with the previous one faded above it.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile">
+          <div class="line"><span class="orb"></span><span class="spk">Vowe</span><span>We’re on retries in <span class="ref">the payment worker</span>. If it crashes <span class="ref">after the charge</span>, <span class="ref">the queue</span> hands the job out again.</span></div>
+        </div>
+        <div class="cap"><b>Words that point</b><span>When Vowe names a part, the words are underlined and that part lights up on the canvas while the words are spoken.</span><code>ask · dotted underline · halo on the part</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div class="line"><span class="av" style="background:var(--me)">DE</span><span class="spk">You</span><span>What happens to <span class="chip">this <small>→ Payment Worker</small></span> when something fails?</span></div>
+        </div>
+        <div class="cap"><b>“This”, resolved</b><span>When you say “this” with something selected or circled, the line shows what it was taken to mean, so a wrong guess is caught early.</span><code>me · chip with the resolved part</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div style="display:flex;flex-direction:column;gap:6px;max-width:420px">
+            <div style="display:flex;gap:8px;font-size:12px;color:var(--ink-8);padding-left:27px;white-space:nowrap;overflow:hidden">Vowe · Srikar, a quick catch-up. We’re on retries in —</div>
+            <div class="line"><span class="av" style="background:var(--me)">DE</span><span class="spk">You</span><span>Right — and I’m mostly worried about two workers running at once.</span></div>
+          </div>
+        </div>
+        <div class="cap"><b>Interrupted</b><span>The cut line stays faded above the new turn. Vowe answers what was just said rather than finishing its own sentence.</span><code>prev line · ink-8 · ends “—”</code></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Joining mid-conversation</span><span style="font-size:12.5px;color:var(--ink-6)">Asking someone to join needs the room’s go-ahead, and the catch-up is spoken to everyone, not shown in a modal.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile" style="flex-direction:column;gap:12px">
+          <span class="pill"><span class="orb"></span>Vowe is holding a thought for a pause</span>
+          <div style="display:flex;align-items:center;gap:9px;padding:5px 5px 5px 7px;border-radius:10px;background:var(--fill-1);box-shadow:inset 0 0 0 1px var(--hairline);font-size:12.5px;color:var(--ink-3)"><span class="orb"></span>Srikar wrote the queue’s lease handling. Ask him to join?<span class="mini ask">Ask Srikar</span></div>
+        </div>
+        <div class="cap"><b>1 · A held thought</b><span>Vowe keeps one thought at a time as a quiet pill. Opening it is the room’s choice. Nobody is pinged until someone says yes.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="flex-direction:column;gap:14px">
+          <span class="pill"><span class="av" style="background:var(--peer2)">SR</span>Asked Srikar · he’ll see it when he has a moment</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11.5px;color:var(--ink-3);margin-right:8px">Srikar joined</span>
+            <span class="av" style="width:22px;height:22px;flex-basis:22px;font-size:10px;background:var(--me);box-shadow:0 0 0 2px #faf9f7,0 0 0 3.5px var(--good)">DE</span>
+            <span class="av" style="width:22px;height:22px;flex-basis:22px;font-size:10px;background:var(--peer)">JM</span>
+            <span class="av" style="width:22px;height:22px;flex-basis:22px;font-size:10px;background:var(--peer2)">SR</span>
+            <span class="orb" style="width:22px;height:22px;flex-basis:22px"></span>
+          </div>
+        </div>
+        <div class="cap"><b>2 · Arrival</b><span>His avatar arrives in the presence row. Daniel is mid-sentence, so Vowe shows “Waiting for a pause”.</span></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div style="width:290px;box-sizing:border-box;padding:12px 14px;border-radius:12px;background:var(--menu);box-shadow:inset 0 1px 0 #fff,0 0 0 1px var(--border),var(--shadow-menu);display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-4)"><span class="av" style="background:var(--peer2)">SR</span><span><b style="color:var(--ink-bright)">Catching Srikar up</b> · everyone sees this</span></div>
+            <div style="display:grid;grid-template-columns:64px minmax(0,1fr);gap:6px 10px;font-size:12px;line-height:1.45">
+              <span style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-8);padding-top:2px">QUESTION</span><span style="color:var(--ink-3)">Worker crashes after the charge</span>
+              <span style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-8);padding-top:2px">LEANING</span><span style="color:var(--ink-3)">Idempotent processing · v2</span>
+              <span style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-8);padding-top:2px">OPEN</span><span style="color:var(--ink-3)">How a lost ack gets noticed</span>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><b>3 · Catch-up</b><span>At the pause, Vowe speaks four sentences to Srikar, pointing at each part as it names it. A three-line card sits beside the canvas for whoever wants to read along.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Rules Vowe follows</span><span style="font-size:12.5px;color:var(--ink-6)">Set from the orb: “Chime in at pauses” (default) or “Only when asked”.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 48px">
+      <div>
+        <div class="rule"><b>01</b><span>Never starts talking while a person is talking. It waits, and says it is waiting.</span></div>
+        <div class="rule"><b>02</b><span>Holds one thought at a time. A second thought replaces the first rather than queueing.</span></div>
+        <div class="rule"><b>03</b><span>Stops on the word when talked over, and responds to the interruption rather than resuming.</span></div>
+      </div>
+      <div>
+        <div class="rule"><b>04</b><span>Doesn’t narrate small canvas changes. A change it makes gets one receipt with Undo, not a spoken explanation.</span></div>
+        <div class="rule"><b>05</b><span>Asks before acting on an ambiguous reference: “do you mean when it fails, or when it runs twice?”</span></div>
+        <div class="rule"><b>06</b><span>Never treats silence as agreement, and never invites a teammate without the room saying yes.</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

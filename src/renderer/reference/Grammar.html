@@ -1,0 +1,187 @@
+<!doctype html>
+<!-- Lifted verbatim from the Claude Design canvas "Shared Engineering Room" (Grammar.dc.html). Edit the design, not this copy. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Canvas interaction grammar</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+body{margin:0}
+a{color:#2f63c4}a:hover{color:#1f4a99}
+.sheet{
+  --pane:#faf9f7;--menu:#ffffff;--rail:#f0eeea;
+  --ink-bright:#121417;--ink-2:#2e3238;--ink-3:#3f434a;--ink-4:#52565d;--ink-6:#6b6f77;--ink-7:#62666e;--ink-8:#63676f;
+  --fill-1:rgba(18,22,30,.035);--fill-2:rgba(18,22,30,.07);--hairline:rgba(18,22,30,.08);--border:rgba(18,22,30,.12);--border-3:rgba(18,22,30,.18);--border-4:rgba(18,22,30,.24);
+  --attention:#cf8c1c;--attention-ink:#8a5810;--attention-line:rgba(168,112,20,.32);--attention-wash:rgba(207,140,28,.09);
+  --ask:#2f63c4;--studio-field:#f2f0ec;--studio-card:#ffffff;--studio-card-edge:rgba(18,22,30,.085);--studio-card-top:#fff;
+  --studio-shadow:0 1px 2px rgba(18,22,30,.05),0 8px 22px rgba(18,22,30,.06);--studio-lift:0 2px 4px rgba(18,22,30,.07),0 24px 48px rgba(18,22,30,.14);
+  --studio-line:#aaa9a6;--accent:#2f63c4;--shadow-menu:0 18px 40px rgba(18,22,30,.16);
+  --peer:#7a4fc4;--me:#127a74;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+.tile{position:relative;height:184px;border-radius:12px;background-color:var(--studio-field);background-image:radial-gradient(ellipse 80% 70% at 50% 45%,rgba(255,255,255,.75),transparent 74%);box-shadow:inset 0 0 0 1px var(--hairline);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.part{position:relative;width:170px;box-sizing:border-box;display:flex;flex-direction:column;gap:3px;padding:14px 16px 15px;border-radius:13px;background:var(--studio-card);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--studio-card-edge),var(--studio-shadow)}
+.part b{font-size:14.5px;font-weight:700;letter-spacing:-.012em;color:var(--ink-bright)}
+.part .tech{font-family:var(--mono);font-size:10.5px;color:var(--ink-7)}
+.tab{position:absolute;top:-19px;display:inline-flex;align-items:center;gap:5px;height:16px;padding:0 6px;border-radius:4px;font-size:10.5px;font-weight:500;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;font-family:var(--mono);font-size:10px;letter-spacing:.04em;white-space:nowrap;color:var(--ink-4);background:var(--fill-2)}
+.mini{height:24px;padding:0 9px;border:0;border-radius:6px;background:var(--fill-2);color:var(--ink-3);font:inherit;font-size:11.5px;white-space:nowrap}
+.cap{display:flex;flex-direction:column;gap:3px;padding:12px 2px 0}
+.cap b{font-size:13px;font-weight:700;color:var(--ink-bright)}
+.cap span{font-size:12px;line-height:1.5;color:var(--ink-6);text-wrap:pretty}
+.cap code{font-family:var(--mono);font-size:10.5px;color:var(--ink-8)}
+.sec{display:flex;flex-direction:column;gap:16px}
+.sec-h{display:flex;align-items:baseline;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--hairline)}
+.eyebrow{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-8)}
+</style>
+</head>
+<body>
+<div class="sheet" style="width:1440px;height:1180px;box-sizing:border-box;padding:56px 64px;background:var(--pane);font-family:'Satoshi',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--ink-2);display:flex;flex-direction:column;gap:40px">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:40px">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <span class="eyebrow">Design pass 2 · canvas</span>
+      <h1 style="margin:0;font-size:34px;font-weight:700;letter-spacing:-.02em;color:var(--ink-bright)">Who is pointing at what</h1>
+    </div>
+    <div style="display:flex;gap:18px;align-items:center;font-size:12px;color:var(--ink-6)">
+      <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:var(--me)"></span>You</span>
+      <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:var(--peer)"></span>A teammate</span>
+      <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:var(--ask)"></span>Vowe</span>
+      <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:var(--attention)"></span>Workers, concerns</span>
+    </div>
+  </div>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Attention</span><span style="font-size:12.5px;color:var(--ink-6)">One ring per person, in their colour. Rings stack, never replace each other.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile">
+          <div class="part" style="box-shadow:inset 0 1px 0 #fff,0 0 0 1px var(--border-3),var(--studio-shadow)">
+            <b>Payment Worker</b><span class="tech">retry-worker</span>
+            <span style="position:absolute;right:8px;top:8px;width:24px;height:24px;border-radius:6px;background:var(--fill-2);display:inline-flex;align-items:center;justify-content:center;color:var(--ink-4)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6.2a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.3v.5M8 12.2v.1"></path></svg></span>
+          </div>
+        </div>
+        <div class="cap"><b>Hover</b><span>The edge firms up and an ask handle appears. Nothing else moves.</span><code>border-3 · 140ms</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div class="part" style="box-shadow:inset 0 1px 0 #fff,0 0 0 2px var(--me),var(--studio-lift)"><b>Payment Worker</b><span class="tech">retry-worker</span></div>
+        </div>
+        <div class="cap"><b>Your selection</b><span>A solid 2px ring, and the card lifts. Selection is conversational context.</span><code>me · 2px · lift</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div class="part" style="box-shadow:inset 0 1px 0 #fff,0 0 0 1.5px var(--peer),var(--studio-shadow)"><span class="tab" style="left:0;background:var(--peer);color:#fff">John</span><b>Payment Provider</b><span class="tech">external</span></div>
+        </div>
+        <div class="cap"><b>Teammate’s selection</b><span>A thinner ring with their name on a tab, so “that one” is never ambiguous.</span><code>peer · 1.5px · name tab</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div class="part" style="box-shadow:inset 0 1px 0 #fff,0 0 0 2px var(--me),0 0 0 4.5px var(--studio-field),0 0 0 6px var(--peer),var(--studio-lift)"><span class="tab" style="left:0;background:var(--me);color:#fff">You</span><b>Payment Provider</b><span class="tech">external</span></div>
+        </div>
+        <div class="cap"><b>Both of you</b><span>Rings nest with a gap of field between, yours inside.</span><code>me 2px · gap · peer 1.5px</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div class="part" style="box-shadow:inset 0 1px 0 #fff,0 0 0 1px rgba(47,99,196,.55),0 0 0 5px rgba(47,99,196,.12),var(--studio-shadow)"><span class="tab" style="right:0;color:var(--ask)"><span style="width:5px;height:5px;border-radius:50%;background:var(--ask)"></span>Vowe is pointing here</span><b>Payment Provider</b><span class="tech">external</span></div>
+        </div>
+        <div class="cap"><b>Vowe is referring</b><span>A soft halo, never a solid ring. Vowe points; it doesn’t select for you.</span><code>ask · 1px + 5px halo</code></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Gestures</span><span style="font-size:12.5px;color:var(--ink-6)">Ink is yours, stays in the view you drew it in, and can always be cleared.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile">
+          <div style="position:relative;width:270px;height:140px">
+            <div class="part" style="position:absolute;left:6px;top:34px;width:120px;padding:10px 12px"><b style="font-size:13px">Worker</b></div>
+            <svg viewBox="0 0 270 140" width="270" height="140" style="position:absolute;inset:0;overflow:visible" aria-hidden="true"><path d="M70 18 C20 16 -6 50 4 86 C14 120 90 124 128 104 C152 90 150 40 120 26 C108 20 92 18 74 22" fill="rgba(18,122,116,.09)" stroke="#127a74" stroke-width="2" stroke-linecap="round"></path></svg>
+            <div style="position:absolute;left:150px;top:6px;width:120px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:8px 8px 8px 10px;border-radius:10px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu)">
+              <span style="font-size:10.5px;color:var(--ink-7)">You circled</span>
+              <span class="tag" style="align-self:flex-start">the worker</span>
+              <span class="mini" style="display:inline-flex;align-items:center;background:rgba(47,99,196,.14);color:var(--ask);align-self:flex-start">Ask Vowe</span>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><b>Circle</b><span>Draw around what you mean. On release the parts inside are named back to you before anything is asked.</span><code>me · 2px stroke · 9% fill</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div style="position:relative;width:250px;height:130px">
+            <div style="position:absolute;left:30px;top:0;display:flex;align-items:center;gap:2px;padding:3px;border-radius:9px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);font-size:11.5px;color:var(--ink-3);white-space:nowrap"><span style="font-family:var(--mono);font-size:10px;color:var(--ink-7);padding:0 6px 0 4px">2 selected</span><span style="width:1px;height:14px;background:var(--border)"></span><span style="padding:4px 8px">Ask about these</span></div>
+            <div class="part" style="position:absolute;left:0;top:50px;width:110px;padding:10px 12px;box-shadow:inset 0 1px 0 #fff,0 0 0 2px var(--me),var(--studio-lift)"><b style="font-size:13px">Queue</b></div>
+            <div class="part" style="position:absolute;left:130px;top:62px;width:110px;padding:10px 12px;box-shadow:inset 0 1px 0 #fff,0 0 0 2px var(--me),var(--studio-lift)"><b style="font-size:13px">Worker</b></div>
+            <div style="position:absolute;left:-8px;top:40px;width:262px;height:78px;border:1px solid var(--me);background:rgba(18,122,116,.06);border-radius:3px"></div>
+          </div>
+        </div>
+        <div class="cap"><b>Box and shift-select</b><span>Drag on empty canvas, or shift-click. One toolbar sits over the group, not one per card.</span><code>marquee · me · 1px</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div style="position:relative;width:240px;height:120px">
+            <div class="part" style="position:absolute;left:0;top:30px;width:110px;padding:10px 12px"><b style="font-size:13px">Worker</b></div>
+            <svg viewBox="0 0 240 120" width="240" height="120" style="position:absolute;inset:0;overflow:visible" aria-hidden="true"><path d="M116 52 C140 40 160 44 170 60 C178 74 196 76 214 64 M204 58 L214 64 L206 74" fill="none" stroke="#127a74" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path><path d="M150 92 C170 98 196 98 222 90" fill="none" stroke="#127a74" stroke-width="2.4" stroke-linecap="round"></path></svg>
+          </div>
+        </div>
+        <div class="cap"><b>Draw</b><span>Freehand ink over the system, saved with the view. Vowe formalises a sketch only when asked.</span><code>me · 2.4px · round caps</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div style="display:flex;align-items:flex-start;gap:6px">
+            <span style="width:20px;height:20px;border-radius:10px 10px 10px 2px;background:var(--me);color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">DE</span>
+            <span style="width:180px;height:28px;box-sizing:border-box;padding:0 9px;border-radius:7px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);font-size:12px;color:var(--ink-8);display:flex;align-items:center">Add a comment…</span>
+          </div>
+        </div>
+        <div class="cap"><b>Comment</b><span>Click to pin a note in place. Text for what’s too precise to say out loud.</span><code>pin · me</code></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Views and change</span><span style="font-size:12.5px;color:var(--ink-6)">A view is a camera on the same parts. Parts that persist move; nothing is redrawn from scratch.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile">
+          <div style="display:flex;flex-direction:column;gap:14px;align-items:center">
+            <div style="display:flex;align-items:center;gap:2px;padding:2px;border-radius:8px;background:var(--fill-1);box-shadow:inset 0 0 0 1px var(--hairline);font-size:12.5px;font-weight:500">
+              <span style="height:26px;padding:0 11px;display:inline-flex;align-items:center;color:var(--ink-7)">Architecture</span>
+              <span style="height:26px;padding:0 11px;display:inline-flex;align-items:center;border-radius:6px;background:#fff;color:var(--ink-bright);box-shadow:0 1px 2px rgba(0,0,0,.12)">Failure flow</span>
+              <span style="height:26px;padding:0 11px;display:inline-flex;align-items:center;gap:6px;border-radius:6px;color:var(--ask);box-shadow:inset 0 0 0 1px rgba(47,99,196,.45)"><span style="width:5px;height:5px;border-radius:50%;background:var(--ask)"></span>Concurrency</span>
+            </div>
+            <span style="font-size:12px;color:var(--ink-7);display:inline-flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 3.5 5 8l4.5 4.5"></path></svg>Back to Architecture</span>
+          </div>
+        </div>
+        <div class="cap"><b>Saved, proposed, and back</b><span>A view Vowe made stays outlined in blue until someone keeps it. “Back” returns to the view you came from.</span><code>proposed · ask outline + dot</code></div>
+      </div>
+      <div>
+        <div class="tile">
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 6px 6px 10px;border-radius:11px;background:var(--menu);box-shadow:0 0 0 1px rgba(47,99,196,.3),var(--shadow-menu);font-size:12px;color:var(--ink-4);max-width:390px">
+            <span style="width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2f63c4 0,#2f63c4 34%,rgba(47,99,196,.22) 36%,rgba(47,99,196,.22) 60%,transparent 62%)"></span>
+            <span style="text-wrap:pretty">Vowe built <b style="color:var(--ink-bright)">Concurrency</b> from Failure flow: split the worker, traced both charges</span>
+            <span class="mini" style="display:inline-flex;align-items:center;background:transparent;color:var(--ink-7)">Undo</span>
+            <span class="mini" style="display:inline-flex;align-items:center">Keep</span>
+          </div>
+        </div>
+        <div class="cap"><b>Change receipt</b><span>Every change Vowe makes to the canvas says what it did and where it started from, with Undo right there.</span><code>status · rise 360ms</code></div>
+      </div>
+      <div>
+        <div class="tile" style="align-items:stretch;justify-content:stretch;padding:18px 22px;box-sizing:border-box">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 18px;align-content:center;width:100%;font-size:12px;color:var(--ink-3)">
+            <span>Parts move between views</span><code style="font-family:var(--mono);font-size:10.5px;color:var(--ink-7)">560ms · studio-ease</code>
+            <span>Panels open and close</span><code style="font-family:var(--mono);font-size:10.5px;color:var(--ink-7)">280ms · ease</code>
+            <span>Steps arrive in sequence</span><code style="font-family:var(--mono);font-size:10.5px;color:var(--ink-7)">320ms · +70ms each</code>
+            <span>Teammate cursors glide</span><code style="font-family:var(--mono);font-size:10.5px;color:var(--ink-7)">900ms · studio-ease</code>
+            <span>Hover affordances</span><code style="font-family:var(--mono);font-size:10.5px;color:var(--ink-7)">140ms</code>
+            <span>Dragging, panning</span><code style="font-family:var(--mono);font-size:10.5px;color:var(--ink-7)">none · follows pointer</code>
+          </div>
+        </div>
+        <div class="cap"><b>Motion</b><span>Motion explains continuity. Nothing pulses or glows to get attention.</span><code>studio-ease = cubic-bezier(.2,.8,.2,1)</code></div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
