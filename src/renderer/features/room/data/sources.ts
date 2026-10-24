@@ -1,3 +1,4 @@
+import type { Scene } from '../../../../shared/canvas/index.js';
 import type {
   AgentTarget, BoundDef, ChangedFile, Decision, LabelDef, Note, PartDef, Person, PersonId, PersonRef, RoomSummary, StepDef,
   ViewDef, ViewId, WireDef, Workstream,
@@ -39,7 +40,7 @@ export interface RoomPreview {
   /** What waits on a person: a signature, an agent's question. Each is amber. */
   attention: { id: string; text: string; detail: string; streamId?: string }[];
   /** The view last shared on the call, if anything has been drawn here. */
-  lastView: { name: string; question: string; at: string; by: PersonRef | null } | null;
+  lastView: { name: string; question: string; at: string; by: PersonRef | null; /** A real room's view, laid out from its saved canvas. */ scene?: Scene } | null;
 }
 
 /** Rooms and the people in them. Real: Supabase rooms plus Realtime presence. */

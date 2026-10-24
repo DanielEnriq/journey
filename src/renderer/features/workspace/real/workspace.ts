@@ -1,3 +1,4 @@
+import { buildScene } from '../../../../shared/canvas/index.js';
 import type {
   ClaudeCodeBlock, ClaudeCodeMessage, Participant, RoomActivity, RoomAuthor, RoomDecision, RoomDetails, RoomFailure, RoomInvitation,
   RoomMember, RoomRecord, RoomResult, RoomRole, RoomSummary as CloudRoom, WorkContext,
@@ -82,6 +83,8 @@ function learnSelf(members: RoomMember[]) {
   selfId = members.find((m) => m.email.toLowerCase() === email)?.userId ?? null;
 }
 const isMe = (id: string | null | undefined) => !!id && id === selfId;
+/** Your cloud user id, once known; the canvas uses it to tell your marks from others'. */
+export const selfCloudId = () => selfId;
 
 /* ---------- People: you, and everyone else in a lasting tone. ---------- */
 
@@ -182,6 +185,17 @@ async function refresh() {
   notify();
 }
 
+/** The view the room's canvas was last left on, as a still for the preview; null before anything is drawn. */
+async function lastViewOf(roomId: string, who: ReturnType<typeof peopleOf>): Promise<RoomPreview['lastView']> {
+  const r = await api().canvas.load(roomId).catch(() => null);
+  if (!r?.ok || !Object.keys(r.value.doc.components).length) return null;
+  const doc = r.value.doc, last = doc.history.at(-1);
+  try {
+    const scene = buildScene(doc, doc.activeView);
+    return { name: scene.name, question: scene.question, at: last?.at ?? new Date().toISOString(), by: last && last.by.kind === 'human' ? who(last.by.id) : null, scene };
+  } catch { return null; }
+}
+
 /** Re-reads one room after it changed, here or for another member. */
 async function changed(roomId: string) {
   try { await read(roomId); } catch { /* the next full refresh says why */ }
@@ -278,6 +292,7 @@ export function startRealWorkspace() {
   j.rooms.onPresence(({ roomId, participants }) => { presence.set(roomId, participants); newcomers(roomId, participants); notify(); });
   // The server closed the channel: most often because you're no longer a member.
   j.rooms.onStatus(({ roomId, status }) => { if (status === 'left') { presence.delete(roomId); notify(); void checkAccess(roomId, null); } });
+  j.canvas.onChanged(() => notify());
   startVoice();
   // Claude Code's live activity: whatever shows a room's work reads it again, a few seconds at most behind.
   j.claudeCode.onEvent(() => {
@@ -362,8 +377,7 @@ const room: RoomDataSource = {
       since,
       recent: events.filter((e) => !since.includes(e)).slice(0, 5),
       attention,
-      // Canvas views aren't stored yet, so there's never a last view to show.
-      lastView: null,
+      lastView: await lastViewOf(roomId, who),
     };
   },
   visited(roomId) {

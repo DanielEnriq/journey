@@ -31,6 +31,7 @@ import type {
   RoomCheckout,
   RoomResult,
 } from '../shared/api.js';
+import { canvas, executeAsPerson, loadRoomCanvas, sharePresence } from './canvas.js';
 import { isAppPage } from './window.js';
 
 function requireString(value: unknown, what: string): string {
@@ -340,6 +341,10 @@ export function registerIpc() {
   handle('invites:mine', () => roomResult(() => invitations.mine()));
   handle('invites:resolve', (key) => roomResult(() => invitations.resolve(key)));
   handle('invites:accept', (key) => roomResult(() => invitations.accept(key)));
+  // The canvas: every command, a person's or Vowe's, goes through the one hub (main/canvas.ts).
+  handle('canvas:load', (roomId) => roomResult(() => loadRoomCanvas(requireString(roomId, 'Room id'))));
+  handle('canvas:execute', (roomId, command) => executeAsPerson(requireString(roomId, 'Room id'), command));
+  handle('canvas:presence', (roomId, presence) => sharePresence(requireString(roomId, 'Room id'), presence));
   handle('rooms:join', (roomId) => connectRoom(requireString(roomId, 'Room id')));
   handle('rooms:leave', (roomId) => disconnectRoom(requireString(roomId, 'Room id')));
   // sendRoomEvent validates the type and payload against RoomEvents.
@@ -361,4 +366,5 @@ export function registerIpc() {
   roomActivity.on('event', (event) => broadcast('rooms:event', event));
   roomActivity.on('presence', (update) => broadcast('rooms:presence', update));
   roomActivity.on('status', (update) => broadcast('rooms:status', update));
+  canvas.events.on('changed', ({ roomId, canvas: saved, result }) => broadcast('canvas:changed', { roomId, ...saved, ...(result ? { result } : {}) }));
 }

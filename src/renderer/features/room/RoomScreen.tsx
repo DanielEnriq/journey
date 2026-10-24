@@ -1,8 +1,11 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
-import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
+import { useEffect, useMemo, useRef, useState } from '../../vendor/preact-hooks.js';
 import { ClearInk, ToolComment, ToolDraw, ToolSelect } from '../../shared/components/icons.js';
+import { account } from '../../shared/account.js';
 import { useStore } from '../../shared/store.js';
 import { MICROPHONE_DENIED, type CallService } from '../../calls/service.js';
+import { CanvasClient, ipcTransport } from '../canvas/client.js';
+import { LiveSurface } from '../canvas/LiveSurface.js';
 import type { CallSession } from '../call/session.js';
 import { AccessLostScreen, AccessNotice } from '../membership/AccessNotice.js';
 import { PeopleSection, ShareControl, useAccess, useNow, useVoice } from '../membership/hooks.js';
@@ -11,6 +14,7 @@ import { can, type MembershipSource, type RoomAccess } from '../membership/model
 import { PreJoinSheet } from '../membership/PreJoinSheet.js';
 import { Toasts, useToasts } from '../membership/primitives.js';
 import { useLoaded, useRooms } from '../workspace/hooks.js';
+import { selfCloudId } from '../workspace/real/workspace.js';
 import type { CallControls } from './call/CallBar.js';
 import { CallBar } from './call/CallBar.js';
 import { Surface } from './canvas/Surface.js';
@@ -80,6 +84,24 @@ const typing = (e: KeyboardEvent) => {
 };
 
 /** The call dropped: say so on the canvas, and let you rejoin or step back out to the room. */
+/** A real room's canvas with nothing on it yet: the fresh call's empty state, told what works now. */
+function LiveEmpty({ client }: { client: CanvasClient }) {
+  const c = useStore(client.store);
+  if (c.status === 'loading' || Object.keys(c.doc.components).length) return null;
+  return (
+    <div class="fresh-empty">
+      <span class="orb"></span>
+      <b>{c.status === 'failed' ? 'Couldn’t read this room’s canvas' : 'Nothing drawn yet'}</b>
+      {c.status === 'failed' ? <span>{c.error}</span> : (
+        <>
+          <span>When Vowe sketches the system it lands here for everyone in the call, saved with the room. Circle, draw and pin comments on it together.</span>
+          <span class="fine">Ask Vowe about the system and it can sketch it here; structural changes wait for someone to accept them.</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Dropped({ session, onJoin, onLeave }: { session: CallSession; onJoin(): void; onLeave(): void }) {
   const cs = useStore(session.store);
   if (cs.status !== 'dropped') return null;
@@ -230,6 +252,11 @@ function FreshCall(props: InnerProps) {
     roomId,
   );
   const view = rec.value;
+  // A real room's semantic canvas: kept with the room, changed by Canvas Commands, shared with its call.
+  const board = useMemo(() => record && window.journey
+    ? new CanvasClient(roomId, ipcTransport(() => ({ kind: 'human', id: selfCloudId() ?? 'me', name: account.state.user?.name ?? 'You' })))
+    : null, [roomId, !!record]);
+  useEffect(() => () => board?.dispose(), [board]);
 
   // Opening People (from Share's Manage access) opens the column it lives in.
   useEffect(() => { if (ui.people) setDesk(true); }, [ui.people]);
@@ -311,6 +338,68 @@ function FreshCall(props: InnerProps) {
   const callError = live && snap!.error && snap!.error !== dismissed ? snap!.error : null;
   const pins = view?.pins ?? [];
   const empty = !ink.length && !drafts.length && !pins.length;
+  // Comments: saved pins from the room's record, and ones you placed but haven't written yet.
+  const marks = (
+    <>
+      {pins.map((p) => (
+        <div key={p.threadId} class={'pin saved' + (lit === p.threadId ? ' lit' : '')} style={`transform: translate(${p.x}px, ${p.y}px)`}>
+          <span class={'head ' + p.author.tone} title={p.author.name}>{p.author.initials}</span>
+          <span class="pin-note">{p.body}</span>
+        </div>
+      ))}
+      {drafts.map((p, i) => (
+        <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${p.x}px, ${p.y}px)`}>
+          <span class="head">{me.initials}</span>
+          <label style="display:flex"><span class="sr">Comment</span>
+            <input type="text" placeholder={record ? 'Add a comment, then Enter' : 'Add a comment…'}
+              onKeyDown={(e) => { if (e.key === 'Enter') save(i, (e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDrafts(drafts.filter((x) => x !== p)); }} />
+          </label>
+        </div>
+      ))}
+    </>
+  );
+  const overlays = (
+    <>
+      {cc && <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>}
+      {failure && (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>Not saved: {failure}</span>
+          <button class="mini ghost" type="button" onClick={() => setFailure(null)}>Dismiss</button>
+        </div>
+      )}
+      {live && snap!.status === 'reconnecting' && (
+        <div class="receipt dropped" role="status"><span class="spinlet"></span><span>Reconnecting to the call. Audio is paused until it’s back.</span></div>
+      )}
+      {live && snap!.audioBlocked && (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>Your system paused the call’s audio.</span>
+          <button class="mini" type="button" onClick={() => { void voice!.startAudio(); }}>Play audio</button>
+        </div>
+      )}
+      {callError === MICROPHONE_DENIED ? (
+        <div class="vm-micdenied vm-call-notice" role="alert">
+          <b>Microphone is blocked for Vowe</b>
+          <span>Allow it in System Settings › Privacy &amp; Security › Microphone. You’re still on the call, muted.</span>
+          <span class="vm-gate-acts">
+            <button type="button" class="vm-link-btn" onClick={() => setDismissed(callError)}>Not now</button>
+            <button type="button" class="vm-btn vm-btn-small" onClick={() => { void window.journey.calls.openMicrophoneSettings(); }}>Open System Settings</button>
+          </span>
+        </div>
+      ) : callError ? (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>{callError}</span>
+          <button class="mini ghost" type="button" onClick={() => setDismissed(callError)}>Dismiss</button>
+        </div>
+      ) : live && !talks && viewerNote ? (
+        <div class="vm-call-notice">
+          <AccessNotice title="You’re listening as a viewer" body={<>Viewers hear the call and comment, with the mic off. Ask {ui.access?.ownerName ?? 'an owner'} to make you a member to talk.</>}
+            action="OK" onAction={() => setViewerNote(false)} />
+        </div>
+      ) : null}
+      <Dropped session={session} onJoin={() => onJoin()} onLeave={onLeave} />
+      <CallBar c={call} />
+    </>
+  );
 
   return (
     <div class={`win ${light ? 'light ' : ''}${side ? 'side-open ' : ''}${record && desk ? 'desk-open ' : ''}in-call`}>
@@ -325,89 +414,46 @@ function FreshCall(props: InnerProps) {
           <span class="q">{summary?.repo ?? 'No repository'}</span>
           <div class="presence"><Who people={[me, ...others]} vowe={!voiceOff && !agentOff} ring={ring} /></div>
         </div>
-        <section ref={surf} class={'surface fresh tool-' + tool} tabIndex={0} aria-label="Shared canvas · V select, P draw, C comment, [ rooms"
-          onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-          <svg class="ink fresh-ink" aria-hidden="true">
-            {ink.map((d, i) => <path key={i} class="stroke" d={d}></path>)}
-            {stroke && <path class="stroke" d={stroke}></path>}
-          </svg>
-          {pins.map((p) => (
-            <div key={p.threadId} class={'pin saved' + (lit === p.threadId ? ' lit' : '')} style={`transform: translate(${p.x}px, ${p.y}px)`}>
-              <span class={'head ' + p.author.tone} title={p.author.name}>{p.author.initials}</span>
-              <span class="pin-note">{p.body}</span>
+        {board ? (
+          <LiveSurface client={board} onComment={(x, y) => setDrafts(drafts.concat([{ x: x - 10, y: y - 20 }]))}>
+            {marks}
+            {!pins.length && !drafts.length && <LiveEmpty client={board} />}
+            {overlays}
+          </LiveSurface>
+        ) : (
+          <section ref={surf} class={'surface fresh tool-' + tool} tabIndex={0} aria-label="Shared canvas · V select, P draw, C comment, [ rooms"
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+            <svg class="ink fresh-ink" aria-hidden="true">
+              {ink.map((d, i) => <path key={i} class="stroke" d={d}></path>)}
+              {stroke && <path class="stroke" d={stroke}></path>}
+            </svg>
+            {marks}
+            {empty && (
+              <div class="fresh-empty">
+                <span class="orb"></span>
+                <b>Nothing drawn yet</b>
+                {record ? (
+                  <>
+                    <span>Draw and pin comments here. Comments become the room’s threads and stay after the call; ink stays on your screen only.</span>
+                    <span class="fine">{voice ? 'Your mic starts off: unmute below to talk. Vowe’s own voice, and drawing as you talk, aren’t connected in this build.' : 'Voice, and Vowe drawing as you talk, aren’t connected in this build.'}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Say what you’re building. Vowe sketches it here for everyone in the call, and you can point, circle and draw on it together.</span>
+                    <span class="fine">This build has no voice pipeline, so only the Payment Reliability demo draws by itself. Draw and comment work here.</span>
+                  </>
+                )}
+              </div>
+            )}
+            <div class="tools" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
+              {FRESH_TOOLS.map(({ id, label, title, Icon }) => (
+                <button key={id} class={tool === id ? 'on' : ''} type="button" aria-label={label} title={title} aria-pressed={tool === id} onClick={() => setTool(id)}><Icon /></button>
+              ))}
+              {(ink.length > 0 || drafts.length > 0) && <button type="button" aria-label="Clear your ink" title="Clear your ink and unsaved comments" onClick={() => { setInk([]); setDrafts([]); }}><ClearInk /></button>}
             </div>
-          ))}
-          {drafts.map((p, i) => (
-            <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${p.x}px, ${p.y}px)`}>
-              <span class="head">{me.initials}</span>
-              <label style="display:flex"><span class="sr">Comment</span>
-                <input type="text" placeholder={record ? 'Add a comment, then Enter' : 'Add a comment…'}
-                  onKeyDown={(e) => { if (e.key === 'Enter') save(i, (e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDrafts(drafts.filter((x) => x !== p)); }} />
-              </label>
-            </div>
-          ))}
-          {empty && (
-            <div class="fresh-empty">
-              <span class="orb"></span>
-              <b>Nothing drawn yet</b>
-              {record ? (
-                <>
-                  <span>Draw and pin comments here. Comments become the room’s threads and stay after the call; ink stays on your screen only.</span>
-                  <span class="fine">{voice ? 'Your mic starts off: unmute below to talk. Vowe’s own voice, and drawing as you talk, aren’t connected in this build.' : 'Voice, and Vowe drawing as you talk, aren’t connected in this build.'}</span>
-                </>
-              ) : (
-                <>
-                  <span>Say what you’re building. Vowe sketches it here for everyone in the call, and you can point, circle and draw on it together.</span>
-                  <span class="fine">This build has no voice pipeline, so only the Payment Reliability demo draws by itself. Draw and comment work here.</span>
-                </>
-              )}
-            </div>
-          )}
-          <div class="tools" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
-            {FRESH_TOOLS.map(({ id, label, title, Icon }) => (
-              <button key={id} class={tool === id ? 'on' : ''} type="button" aria-label={label} title={title} aria-pressed={tool === id} onClick={() => setTool(id)}><Icon /></button>
-            ))}
-            {(ink.length > 0 || drafts.length > 0) && <button type="button" aria-label="Clear your ink" title="Clear your ink and unsaved comments" onClick={() => { setInk([]); setDrafts([]); }}><ClearInk /></button>}
-          </div>
-          {cc && <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>}
-          {failure && (
-            <div class="receipt dropped" role="alert">
-              <span class="dot needs"></span><span>Not saved: {failure}</span>
-              <button class="mini ghost" type="button" onClick={() => setFailure(null)}>Dismiss</button>
-            </div>
-          )}
-          {live && snap!.status === 'reconnecting' && (
-            <div class="receipt dropped" role="status"><span class="spinlet"></span><span>Reconnecting to the call. Audio is paused until it’s back.</span></div>
-          )}
-          {live && snap!.audioBlocked && (
-            <div class="receipt dropped" role="alert">
-              <span class="dot needs"></span><span>Your system paused the call’s audio.</span>
-              <button class="mini" type="button" onClick={() => { void voice!.startAudio(); }}>Play audio</button>
-            </div>
-          )}
-          {callError === MICROPHONE_DENIED ? (
-            <div class="vm-micdenied vm-call-notice" role="alert">
-              <b>Microphone is blocked for Vowe</b>
-              <span>Allow it in System Settings › Privacy &amp; Security › Microphone. You’re still on the call, muted.</span>
-              <span class="vm-gate-acts">
-                <button type="button" class="vm-link-btn" onClick={() => setDismissed(callError)}>Not now</button>
-                <button type="button" class="vm-btn vm-btn-small" onClick={() => { void window.journey.calls.openMicrophoneSettings(); }}>Open System Settings</button>
-              </span>
-            </div>
-          ) : callError ? (
-            <div class="receipt dropped" role="alert">
-              <span class="dot needs"></span><span>{callError}</span>
-              <button class="mini ghost" type="button" onClick={() => setDismissed(callError)}>Dismiss</button>
-            </div>
-          ) : live && !talks && viewerNote ? (
-            <div class="vm-call-notice">
-              <AccessNotice title="You’re listening as a viewer" body={<>Viewers hear the call and comment, with the mic off. Ask {ui.access?.ownerName ?? 'an owner'} to make you a member to talk.</>}
-                action="OK" onAction={() => setViewerNote(false)} />
-            </div>
-          ) : null}
-          <Dropped session={session} onJoin={() => onJoin()} onLeave={onLeave} />
-          <CallBar c={call} />
-        </section>
+            {overlays}
+          </section>
+        )}
       </main>
       {record && (
         <aside class="desk" aria-label="Where the room is" aria-hidden={!desk}>
