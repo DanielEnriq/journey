@@ -1,8 +1,8 @@
 import { BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type IpcMainInvokeEvent } from 'electron';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { addRepository, listRepositories, removeRepository } from '../database/repositories.js';
+import { addRepository, getRepository, listRepositories, markRepositoryOpened, removeRepository } from '../database/repositories.js';
 import { getAllSettings, updateSettings } from '../database/settings.js';
+import { detectRepositories } from '../git/detect.js';
+import { findWorkingTreeRoot, getStatus, listBranches, listWorktrees } from '../git/index.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
 import { getCallAccess } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
@@ -13,6 +13,16 @@ import { isAppPage } from './window.js';
 function requireString(value: unknown, what: string): string {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${what} must be a non-empty string`);
   return value;
+}
+
+/** Paths the last repos:detect returned: the only paths repos:addDetected accepts from a renderer. */
+let detected = new Set<string>();
+
+/** The stored path of a repository the renderer names by id; renderers never send paths. */
+function repositoryPath(id: unknown): string {
+  const repo = getRepository(requireString(id, 'Repository id'));
+  if (!repo) throw new Error('No such repository');
+  return repo.path;
 }
 
 /**
@@ -80,13 +90,36 @@ export function registerIpc() {
       ? await dialog.showOpenDialog(parent, options)
       : await dialog.showOpenDialog(options);
     if (canceled || !filePaths[0]) return null;
-    if (!existsSync(join(filePaths[0], '.git'))) throw new Error(`Not a Git repository: ${filePaths[0]}`);
-    return addRepository(filePaths[0]);
+    // Picking a subfolder adds the working tree it belongs to.
+    const root = await findWorkingTreeRoot(filePaths[0]);
+    if (!root) throw new Error(`Not a Git repository: ${filePaths[0]}`);
+    return addRepository(root);
   });
   handle('repos:remove', (id) => {
     if (typeof id !== 'string') throw new Error('Repository id must be a string');
     removeRepository(id);
   });
+  handle('repos:detect', async () => {
+    const known = new Set(listRepositories().map((r) => r.path));
+    const found = (await detectRepositories()).filter((r) => !known.has(r.path));
+    detected = new Set(found.map((r) => r.path));
+    return found;
+  });
+  handle('repos:addDetected', async (path) => {
+    if (typeof path !== 'string' || !detected.has(path)) throw new Error('Not a detected repository');
+    const root = await findWorkingTreeRoot(path); // it may have moved or been deleted since
+    if (root !== path) throw new Error(`Not a Git repository: ${path}`);
+    return addRepository(root);
+  });
+  handle('repos:open', (id) => {
+    const repo = markRepositoryOpened(requireString(id, 'Repository id'));
+    if (!repo) throw new Error('No such repository');
+    return repo;
+  });
+
+  handle('git:status', (id) => getStatus(repositoryPath(id)));
+  handle('git:branches', (id) => listBranches(repositoryPath(id)));
+  handle('git:worktrees', (id) => listWorktrees(repositoryPath(id)));
 
   // Cloud: RLS decides what each call may see or change, so these only check argument shapes.
   handle('workspaces:list', () => listWorkspaces());

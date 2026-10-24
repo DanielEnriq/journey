@@ -28,6 +28,8 @@ src/
   preload/       exposes window.journey: named functions only, no raw ipcRenderer
   renderer/      the UI (sandboxed, no Node)
   database/      SQLite via Drizzle: schema, migrations runner, one module per area
+  git/           read-only Git queries (status, branches, worktrees) via the git CLI
+  agents/        the coding-agent adapter interface (Claude Code, Codex…); no adapters yet
   integrations/  external services (Google auth, Supabase, LiveKit, voice agents: ElevenLabs)
   shared/api.ts  the typed main ↔ renderer contract
 drizzle/         generated SQL migrations, applied on startup
@@ -90,6 +92,22 @@ Setup, once per project (after the Supabase setup above):
 ### Voice agents (ElevenLabs)
 
 AI voice agents sit behind `VoiceAgentProvider` (`src/integrations/voice/provider.ts`): start a session, send it call audio and background context, get back transcripts, speech, and interruptions, all as plain PCM so a bridge can later carry them into a LiveKit call as one more participant. ElevenLabs is the only provider (`src/integrations/elevenlabs`), chosen by `getVoiceAgentProvider()` when `ELEVENLABS_*` is set. Nothing starts a conversation yet; startup only verifies the key and agent.
+
+## Repositories and Git
+
+`repos.add()` shows a folder picker in main and stores the top of the working tree the folder belongs to (`git rev-parse --show-toplevel`), so picking a subfolder adds the whole repository. `repos.detect()` ("Find repositories") lists repositories two levels deep in `~/projects`, `~/code`, `~/dev`, `~/Developer`, `~/src`, `~/repos`, `~/workspace`, and `~/GitHub`, skipping ones already added; `~/Documents` and `~/Desktop` are left alone because reading them makes macOS ask for access. `repos.addDetected(path)` only accepts a path from the last detection. The renderer names repositories by id from then on and never sends paths. `repos.open(id)` marks one as most recently opened.
+
+`window.journey.git` reads a repository through `src/git`, which runs the user's `git` binary and parses its porcelain output:
+
+- `status(id)`: current branch (null when detached), HEAD, upstream with ahead/behind, and each changed file, split into staged and unstaged changes, with renames and conflicts. Ignored files are left out.
+- `branches(id)`: local branches, then remote-tracking ones, with upstream tracking and the worktree each is checked out in.
+- `worktrees(id)`: every worktree, main first, flagged detached, locked, or prunable.
+
+These calls are read-only. They take no locks (`GIT_OPTIONAL_LOCKS=0`), never prompt for credentials, and pass `core.fsmonitor=false`, because a repository's own config could otherwise make `git status` run a program.
+
+### Coding agents
+
+`CodingAgentAdapter` (`src/agents/adapter.ts`) is the interface future Claude Code and Codex adapters will implement: `detect()` whether the agent can run here, and `start({ cwd, prompt }, onEvent)` it in a worktree, streaming `message`, `tool`, and `exited` events, with `cancel()` to stop. `getCodingAgentAdapters()` returns none yet, and nothing orchestrates agents.
 
 ## Adding a renderer capability
 

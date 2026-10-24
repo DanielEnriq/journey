@@ -36,12 +36,14 @@ export function removeRepository(id: string) {
   getDb().delete(repositories).where(eq(repositories.id, id)).run(); // cascades to workspace_cache
 }
 
-export function markRepositoryOpened(id: string) {
-  getDb()
+/** Returns the updated row, or undefined if there's no such repository. */
+export function markRepositoryOpened(id: string): Repository | undefined {
+  return getDb()
     .update(repositories)
     .set({ lastOpenedAt: sql`(datetime('now'))` })
     .where(eq(repositories.id, id))
-    .run();
+    .returning()
+    .get();
 }
 
 // ─── Workspace cache ─────────────────────────────────────────────────────────

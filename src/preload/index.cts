@@ -31,6 +31,14 @@ const api: JourneyApi = {
     list: () => invoke('repos:list'),
     add: () => invoke('repos:add'),
     remove: (id) => invoke('repos:remove', id),
+    detect: () => invoke('repos:detect'),
+    addDetected: (path) => invoke('repos:addDetected', path),
+    open: (id) => invoke('repos:open', id),
+  },
+  git: {
+    status: (repositoryId) => invoke('git:status', repositoryId),
+    branches: (repositoryId) => invoke('git:branches', repositoryId),
+    worktrees: (repositoryId) => invoke('git:worktrees', repositoryId),
   },
   workspaces: {
     list: () => invoke('workspaces:list'),

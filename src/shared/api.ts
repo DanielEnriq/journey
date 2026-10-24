@@ -30,6 +30,74 @@ export interface Repository {
   lastOpenedAt: string | null;
 }
 
+/** A repository found on disk by repos.detect(), not yet added. */
+export interface DetectedRepository {
+  path: string;
+  name: string;
+}
+
+// ─── Git ─────────────────────────────────────────────────────────────────────
+// Read from the repository's working tree by main (src/git). Paths are absolute.
+
+export type GitChange = 'modified' | 'type-changed' | 'added' | 'deleted' | 'renamed' | 'copied' | 'untracked';
+
+export interface GitFileChange {
+  /** Relative to the working tree root. */
+  path: string;
+  /** The path before a rename or copy. */
+  originalPath: string | null;
+  /** Change in the index, relative to HEAD. */
+  staged: GitChange | null;
+  /** Change in the working tree, relative to the index. Untracked files only have this. */
+  unstaged: GitChange | null;
+  /** A merge conflict; `staged` and `unstaged` are null. */
+  conflicted: boolean;
+}
+
+export interface GitStatus {
+  /** Null when HEAD is detached. */
+  branch: string | null;
+  /** Commit hash of HEAD; null before the first commit. */
+  head: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  files: GitFileChange[];
+}
+
+export interface GitBranch {
+  /** e.g. "main", or "origin/main" for a remote-tracking branch. */
+  name: string;
+  remote: boolean;
+  /** Checked out in the repository's own working tree. */
+  current: boolean;
+  commit: string;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  /** The upstream was deleted on the remote. */
+  upstreamGone: boolean;
+  /** ISO 8601 date of the tip commit. */
+  committedAt: string | null;
+  /** The worktree that has this branch checked out, if any. */
+  worktreePath: string | null;
+}
+
+export interface GitWorktree {
+  path: string;
+  /** Null for a bare repository. */
+  head: string | null;
+  /** Null when detached or bare. */
+  branch: string | null;
+  /** The repository's own working tree, as opposed to one made with `git worktree add`. */
+  main: boolean;
+  bare: boolean;
+  detached: boolean;
+  locked: boolean;
+  /** Its directory is gone; `git worktree prune` would remove it. */
+  prunable: boolean;
+}
+
 // ─── Cloud ───────────────────────────────────────────────────────────────────
 // Cloud ids (created_by, Participant.userId, RoomEvent.senderId) are Supabase user ids,
 // not the Google `sub` in User.id. RoomSession.selfId is the signed-in user's.
@@ -107,6 +175,15 @@ export interface Channels {
     /** Main shows a folder picker; resolves null if cancelled. The renderer never sends paths. */
     'repos:add': () => Repository | null;
     'repos:remove': (id: string) => void;
+    /** Looks for repositories in the usual code folders, leaving out ones already added. */
+    'repos:detect': () => DetectedRepository[];
+    /** Only accepts a path the last repos:detect returned, so this can't add arbitrary paths. */
+    'repos:addDetected': (path: string) => Repository;
+    /** Records the repository as opened, which moves it to the top of the list. */
+    'repos:open': (id: string) => Repository;
+    'git:status': (repositoryId: string) => GitStatus;
+    'git:branches': (repositoryId: string) => GitBranch[];
+    'git:worktrees': (repositoryId: string) => GitWorktree[];
     'workspaces:list': () => Workspace[];
     'workspaces:create': (name: string) => Workspace;
     'rooms:list': (workspaceId: string) => Room[];
@@ -148,6 +225,20 @@ export interface JourneyApi {
     list(): Promise<Repository[]>;
     add(): Promise<Repository | null>;
     remove(id: string): Promise<void>;
+    /** Repositories found in ~/projects, ~/code, ~/Developer and similar, not yet added. */
+    detect(): Promise<DetectedRepository[]>;
+    /** Adds one of the repositories the last detect() returned. */
+    addDetected(path: string): Promise<Repository>;
+    /** Marks the repository as the one being worked on (most recently opened). */
+    open(id: string): Promise<Repository>;
+  };
+  git: {
+    /** Current branch, upstream, and changed files of the repository's working tree. */
+    status(repositoryId: string): Promise<GitStatus>;
+    /** Local branches, then remote-tracking branches. */
+    branches(repositoryId: string): Promise<GitBranch[]>;
+    /** All worktrees of the repository, main worktree first. */
+    worktrees(repositoryId: string): Promise<GitWorktree[]>;
   };
   workspaces: {
     /** Workspaces the signed-in user belongs to. */
