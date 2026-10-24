@@ -1,0 +1,661 @@
+<!doctype html>
+<!-- Lifted verbatim from the Claude Design canvas "Shared Engineering Room" (Components.dc.html). Edit the design, not this copy. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Canvas building blocks</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+body{margin:0}
+a{color:#8fb0e8}a:hover{color:#b4c9ef}
+
+/* ---- Tokens: Vowe's, verbatim. Dark is canonical; light is the same hierarchy on paper. */
+.win{
+  --app:#08090a;--rail:#0b0c0e;--pane:#0e0f11;--surface:#111214;--field:#131417;--menu:#15161a;--selected:#191b1f;--chip:#22242a;--chip-strong:#24262b;
+  --ink-bright:#f4f4f6;--ink:#e9e9ec;--ink-2:#dfe0e4;--ink-3:#c9cbd1;--ink-4:#a8aab1;--ink-5:#9ea0a6;--ink-6:#7a7d85;--ink-7:#8a8d95;--ink-8:#8b8e95;--ink-9:#7e8189;--ink-10:#55565c;
+  --fill-1:rgba(255,255,255,.028);--fill-2:rgba(255,255,255,.07);--fill-3:rgba(255,255,255,.12);
+  --glass-edge:rgba(255,255,255,.15);
+  --hairline:rgba(255,255,255,.055);--border:rgba(255,255,255,.09);--border-3:rgba(255,255,255,.14);--border-4:rgba(255,255,255,.2);
+  --hover:rgba(255,255,255,.035);--hover-strong:rgba(255,255,255,.055);
+  --good:#55c08a;--attention:#e4a94c;--attention-ink:#e4a94c;--attention-text:#dfd6c4;--attention-line:rgba(228,169,76,.28);--attention-wash:rgba(228,169,76,.045);
+  --ask:#8fb0e8;--bad:#d98a80;--lit:#f3f7ff;
+  --studio-field:#0c0d0f;--studio-glow:rgba(143,176,232,.075);--studio-card:#16171b;--studio-card-edge:rgba(255,255,255,.085);--studio-card-top:rgba(255,255,255,.05);
+  --studio-shadow:0 1px 0 rgba(0,0,0,.5),0 10px 28px rgba(0,0,0,.38);--studio-lift:0 2px 0 rgba(0,0,0,.45),0 26px 56px rgba(0,0,0,.55);
+  --studio-line:#45484e;--studio-accent:#8fb0e8;
+  --fallback-core:rgba(235,242,255,.5);--fallback-body:rgba(120,132,145,.18);
+  --shadow-menu:0 18px 40px rgba(0,0,0,.55);
+  --peer:#c3a6f2;--me:#5cc6c0;--peer2:#e397bd;
+  --font:'Satoshi',-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --ease:cubic-bezier(.2,.7,.2,1);--studio-ease:cubic-bezier(.2,.8,.2,1);
+  --left-column:0px;--right-column:0px;
+}
+.win.light{
+  --app:#e5e2dc;--rail:#f0eeea;--pane:#faf9f7;--surface:#f0ede6;--field:#ffffff;--menu:#ffffff;--selected:#e7e3db;--chip:#e9e5de;--chip-strong:#ffffff;
+  --ink-bright:#121417;--ink:#23262b;--ink-2:#2e3238;--ink-3:#3f434a;--ink-4:#52565d;--ink-5:#5e626a;--ink-6:#6b6f77;--ink-7:#62666e;--ink-8:#63676f;--ink-9:#6b6f77;--ink-10:#9a9ea6;
+  --fill-1:rgba(18,22,30,.035);--fill-2:rgba(18,22,30,.07);--fill-3:rgba(18,22,30,.1);
+  --glass-edge:rgba(255,255,255,.78);
+  --hairline:rgba(18,22,30,.08);--border:rgba(18,22,30,.12);--border-3:rgba(18,22,30,.18);--border-4:rgba(18,22,30,.24);
+  --hover:rgba(18,22,30,.04);--hover-strong:rgba(18,22,30,.06);
+  --good:#1c7a54;--attention:#cf8c1c;--attention-ink:#8a5810;--attention-text:#5c4715;--attention-line:rgba(168,112,20,.32);--attention-wash:rgba(207,140,28,.09);
+  --ask:#2f63c4;--bad:#ad3628;--lit:#3b4552;
+  --studio-field:#f2f0ec;--studio-glow:rgba(255,255,255,.75);--studio-card:#ffffff;--studio-card-edge:rgba(18,22,30,.085);--studio-card-top:rgba(255,255,255,1);
+  --studio-shadow:0 1px 2px rgba(18,22,30,.05),0 8px 22px rgba(18,22,30,.06);--studio-lift:0 2px 4px rgba(18,22,30,.07),0 24px 48px rgba(18,22,30,.14);
+  --studio-line:#aaa9a6;--studio-accent:#2f63c4;
+  --fallback-core:rgba(96,112,136,.45);--fallback-body:rgba(60,70,84,.16);
+  --shadow-menu:0 18px 40px rgba(18,22,30,.16);
+  --peer:#7a4fc4;--me:#127a74;--peer2:#b0407a;
+}
+.win.side-open{--left-column:268px}
+.win.desk-open{--right-column:352px}
+
+/* ---- Shell: one grid, the band drawn over panels that run to the roof. */
+.win{position:relative;width:1440px;height:900px;box-sizing:border-box;display:grid;grid-template-columns:var(--left-column) minmax(0,1fr) var(--right-column);grid-template-rows:40px minmax(0,1fr);overflow:hidden;border-radius:10px;background:var(--pane);color:var(--ink);font-family:var(--font);font-size:13px;-webkit-font-smoothing:antialiased;transition:grid-template-columns 280ms var(--ease);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+:where(.win) button{font:inherit;color:inherit;cursor:pointer}
+.lights{position:absolute;z-index:5;left:18px;top:14px;display:flex;gap:8px}
+.lights span{width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.25)}
+.top-chrome{grid-row:1;grid-column:1/-1;position:relative;z-index:3;display:flex;align-items:center;gap:16px;min-width:0;padding-left:86px;padding-right:14px;pointer-events:none}
+.chrome-controls{display:flex;align-items:center;gap:12px;pointer-events:auto}
+.chrome-actions{margin-left:auto;display:flex;align-items:center;gap:12px;pointer-events:auto}
+.panel-toggle{position:relative;flex:0 0 auto;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:6px;background:transparent;color:var(--ink-7);padding:0;transition:color 180ms ease,background 180ms ease}
+.panel-toggle svg{flex:0 0 auto;width:17.6px;height:17.6px}
+.panel-toggle:hover{background:var(--selected);color:var(--ink)}
+.panel-toggle.open{color:var(--ink-5)}
+.panel-toggle .unseen{position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--attention)}
+
+/* ---- Rooms panel: a zero-width column when closed, never a box slid away. */
+.sidebar{grid-column:1;grid-row:1/-1;padding-top:40px;min-width:0;overflow:hidden;display:flex;flex-direction:column;background:var(--rail);transition:opacity 280ms var(--ease)}
+.win:not(.side-open) .sidebar{opacity:0;pointer-events:none}
+.sidebar > *{min-width:268px;box-sizing:border-box}
+.sidebar-title{display:flex;align-items:center;gap:2px;min-height:30px;padding:14px 8px 6px 16px}
+.eyebrow{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-9)}
+.icon-button{width:24px;height:24px;flex:0 0 24px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:5px;background:transparent;color:var(--ink-7);padding:0}
+.icon-button:hover{background:var(--selected);color:var(--ink)}
+.sidebar-nav{display:flex;flex-direction:column;gap:1px;padding:0 8px 12px}
+.row{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:6px;background:transparent;text-align:left;padding:7px 10px;min-height:44px;box-sizing:border-box}
+.row:hover{background:var(--hover)}
+.row.selected{background:var(--selected)}
+.row .txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.row .name{font-size:13px;font-weight:500;color:var(--ink-3);white-space:nowrap;overflow:hidden}
+.row.selected .name{color:var(--ink)}
+.row .act{font-size:11.5px;color:var(--ink-8);white-space:nowrap;overflow:hidden}
+.dot{width:6px;height:6px;border-radius:50%;flex:0 0 6px;background:var(--ink-10)}
+.dot.live{background:var(--good)}
+.dot.work{background:var(--attention)}
+.dot.ask{background:var(--ask)}
+.side-foot{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px 16px 16px}
+.avatar{width:22px;height:22px;border-radius:50%;flex:0 0 22px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--pane);background:var(--me)}
+.avatar.peer{background:var(--peer)}
+
+/* ---- The room: its identity sits on the band's row, inside the room's own column. */
+.room{grid-column:2;grid-row:1/-1;min-width:0;min-height:0;display:grid;grid-template-rows:40px minmax(0,1fr)}
+.room-identity{grid-row:1;position:relative;z-index:1;min-width:0;display:flex;align-items:center;gap:12px;padding-left:max(40px,calc(234px - var(--left-column)));padding-right:max(40px,calc(56px - var(--right-column)));transition:padding-left 280ms var(--ease),padding-right 280ms var(--ease)}
+.room-identity h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.014em;color:var(--ink-bright);white-space:nowrap}
+.room-identity .meta{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-8);white-space:nowrap}
+.presence{margin-left:auto;display:flex;align-items:center;gap:14px;min-width:0}
+.who{display:flex;align-items:center;gap:6px}
+.who .avatar{box-shadow:0 0 0 2px var(--pane)}
+.who .avatar.speaking{box-shadow:0 0 0 2px var(--pane),0 0 0 3.5px var(--good)}
+.who-label{font-size:11.5px;color:var(--ink-6);white-space:nowrap;overflow:hidden}
+.who-label b{font-weight:500;color:var(--ink-4)}
+.orb{width:22px;height:22px;border-radius:50%;flex:0 0 22px;background:radial-gradient(circle at 50% 50%,var(--fallback-core) 0,var(--fallback-core) 22%,var(--fallback-body) 52%,transparent 70%);box-shadow:inset 0 0 0 1px var(--hairline)}
+.orb.small{width:18px;height:18px;flex-basis:18px}
+
+.win{--paper:#1a1b1f;--studio-external:color-mix(in srgb,var(--studio-card) 55%,var(--studio-field));--studio-group:color-mix(in srgb,var(--studio-card) 42%,transparent)}
+.win.light{--paper:#fffdf8}
+.orb{background:radial-gradient(circle at 50% 50%,var(--ask) 0,var(--ask) 34%,color-mix(in srgb,var(--ask) 22%,transparent) 36%,color-mix(in srgb,var(--ask) 22%,transparent) 60%,transparent 62%);box-shadow:none}
+.who .orb.speaking{box-shadow:0 0 0 2px var(--pane),0 0 0 3.5px var(--ask)}
+.avatar.p2{background:var(--peer2)}
+.avatar.arrive{animation:arrive 420ms var(--studio-ease) both}
+@keyframes arrive{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+@keyframes rise{from{opacity:0;translate:0 -6px}to{opacity:1;translate:0 0}}
+.row .act.ask{color:var(--attention-ink)}
+.mini{height:24px;padding:0 9px;border:0;border-radius:6px;background:var(--fill-2);color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.mini:hover{background:var(--fill-3);color:var(--ink-bright)}
+.mini.ghost{background:transparent;color:var(--ink-7)}
+.mini.ghost:hover{background:var(--hover-strong);color:var(--ink-3)}
+.mini.ask{background:color-mix(in srgb,var(--ask) 14%,transparent);color:var(--ask)}
+.mini.ask:hover{background:color-mix(in srgb,var(--ask) 22%,transparent)}
+.mini.strong{background:var(--ink-bright);color:var(--pane);font-weight:700}
+.mini.strong:hover{background:var(--ink-2)}
+.cta{height:32px;padding:0 14px;border:0;border-radius:8px;background:var(--ink-bright);color:var(--pane);font-size:12.5px;font-weight:700}
+.cta:hover{background:var(--ink-2)}
+.tag{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:5px;font-size:11px;white-space:nowrap;color:var(--ink-5);background:var(--fill-2)}
+.tag.ask{color:var(--ask);background:color-mix(in srgb,var(--ask) 10%,transparent)}
+.tag.good{color:var(--good);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.tag.needs{color:var(--attention-ink);background:var(--attention-wash);box-shadow:inset 0 0 0 1px var(--attention-line)}
+.dot{width:6px;height:6px;border-radius:50%;flex:0 0 6px;background:var(--ink-10);display:inline-block}
+.dot.live{background:var(--good)}.dot.needs{background:var(--attention)}.dot.ask{background:var(--ask)}.dot.run{background:var(--ink-5)}
+.mono{font-family:var(--mono)}
+.win button:focus-visible,.surface:focus-visible{outline:2px solid var(--studio-accent);outline-offset:2px}
+.surface:focus-visible{outline-offset:-2px}
+
+/* ---- The surface. The system being discussed is the room. */
+.surface{grid-row:2;position:relative;overflow:hidden;border-top:1px solid var(--hairline);background-color:var(--studio-field);background-image:radial-gradient(ellipse 72% 64% at 50% 44%,var(--studio-glow),transparent 74%);touch-action:none;user-select:none}
+.surface.tool-pan{cursor:grab}.surface.tool-pan.dragging{cursor:grabbing}
+.surface.tool-circle,.surface.tool-draw{cursor:crosshair}.surface.tool-comment{cursor:copy}
+.surface.tool-pan .node,.surface.tool-circle .node,.surface.tool-draw .node,.surface.tool-comment .node{pointer-events:none}
+.world{position:absolute;inset:0;transform-origin:50% 50%;transition:transform 560ms var(--studio-ease)}
+.surface.dragging .world{transition:none}
+.stage{position:absolute;left:50%;top:50%;width:980px;height:620px;transform:translate(-50%,-50%)}
+.surface-head{position:absolute;z-index:8;top:12px;left:16px;right:16px;display:flex;align-items:center;gap:10px;pointer-events:none}
+.surface-head > *{pointer-events:auto}
+.seg{display:flex;align-items:center;gap:2px;padding:2px;border-radius:8px;background:var(--fill-1);box-shadow:inset 0 0 0 1px var(--hairline)}
+.seg button{height:26px;padding:0 11px;border:0;border-radius:6px;background:transparent;color:var(--ink-7);font-size:12.5px;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.seg button:hover{color:var(--ink-3)}
+.seg button.on{background:var(--chip-strong);color:var(--ink-bright);box-shadow:inset 0 1px 0 var(--studio-card-top),0 1px 2px rgba(0,0,0,.18)}
+.seg button.proposed{box-shadow:inset 0 0 0 1px dashed;outline:1px dashed color-mix(in srgb,var(--ask) 55%,transparent);outline-offset:-1px;color:var(--ask)}
+.seg button.proposed.on{background:color-mix(in srgb,var(--ask) 10%,transparent)}
+.back{height:26px;padding:0 9px;border:0;border-radius:6px;background:transparent;color:var(--ink-7);font-size:12px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.back:hover{background:var(--hover-strong);color:var(--ink-3)}
+.receipt{position:absolute;z-index:8;left:50%;top:52px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:6px 6px 6px 10px;border-radius:11px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px color-mix(in srgb,var(--ask) 30%,var(--border)),var(--shadow-menu);font-size:12.5px;color:var(--ink-4);white-space:nowrap;animation:rise 360ms var(--studio-ease) both}
+.receipt b{font-weight:700;color:var(--ink-bright)}
+.tools{position:absolute;z-index:8;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;padding:4px;border-radius:10px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--studio-shadow)}
+.tools button{width:32px;height:32px;border:0;border-radius:7px;background:transparent;color:var(--ink-7);display:inline-flex;align-items:center;justify-content:center;padding:0}
+.tools button:hover{background:var(--hover-strong);color:var(--ink)}
+.tools button.on{background:var(--selected);color:var(--ink-bright)}
+.tools svg{width:16px;height:16px}
+.tools .rule{height:1px;margin:4px 6px;background:var(--hairline)}
+.tools .zoom{font-family:var(--mono);font-size:9.5px;color:var(--ink-7)}
+
+/* ---- Boundaries and lines, as Studio draws them. */
+.bound{position:absolute;left:0;top:0;box-sizing:border-box;border-radius:20px;background:var(--studio-group);box-shadow:inset 0 0 0 1px var(--studio-card-edge);transition:opacity 320ms ease}
+.bound.gone{opacity:0}
+.bound span{position:absolute;left:14px;bottom:9px;font-size:12px;font-weight:700;letter-spacing:.005em;color:var(--ink-4)}
+.wire{position:absolute;left:0;top:0;background:var(--studio-line);transition:opacity 320ms ease}
+.wire.h{height:1.35px}.wire.v{width:1.35px}
+.wire.arrow::after{content:'';position:absolute;right:.5px;top:-2.4px;width:6px;height:6px;box-sizing:border-box;border-top:1.4px solid var(--studio-line);border-right:1.4px solid var(--studio-line);transform:rotate(45deg)}
+.wire.varrow::after{content:'';position:absolute;bottom:.5px;left:-2.4px;width:6px;height:6px;box-sizing:border-box;border-right:1.4px solid var(--studio-line);border-bottom:1.4px solid var(--studio-line);transform:rotate(45deg)}
+.wire.life{width:0;background:transparent;border-left:1.35px dashed var(--studio-line)}
+.wire.hot{background:var(--bad)}
+.wire.hot.varrow::after,.wire.hot.arrow::after{border-color:var(--bad)}
+.wire.gone,.wlabel.gone{opacity:0;transition-delay:0ms !important}
+.wire.faint{opacity:.3}
+.wlabel{position:absolute;left:0;top:0;padding:1px 5px;border-radius:5px;background:var(--studio-field);font-size:10.5px;font-weight:500;color:var(--ink-6);white-space:nowrap;transition:opacity 320ms ease}
+
+/* ---- Parts. Kind is felt from shape; state is drawn, not labelled. */
+.node{position:absolute;left:0;top:0;transition:transform 560ms var(--studio-ease),opacity 320ms ease}
+.node.gone{opacity:0 !important;pointer-events:none}
+.node.far{opacity:.42}
+.node.raised{z-index:20}
+.part{position:relative;display:flex;flex-direction:column;width:100%;box-sizing:border-box;border:0;padding:0;text-align:left;border-radius:13px;background:var(--studio-card);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--studio-card-edge),var(--studio-shadow);transition:box-shadow 220ms ease,height 560ms var(--studio-ease)}
+.part:hover{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border-3),var(--studio-shadow)}
+.part::before,.part::after{content:none;position:absolute;pointer-events:none}
+.part.kind-store::after{content:'';left:9px;right:9px;bottom:-5px;height:5px;border-radius:0 0 11px 11px;background:var(--studio-card);box-shadow:0 0 0 1px var(--studio-card-edge);z-index:-1}
+.part.kind-queue{border-radius:22px}
+.part.kind-queue::before,.part.kind-queue::after{content:'';top:14px;bottom:14px;width:1px;background:var(--studio-card-edge)}
+.part.kind-queue::before{left:9px}.part.kind-queue::after{right:9px}
+.part.kind-queue .face,.part.kind-queue .sb{padding-left:22px;padding-right:22px}
+.part.kind-external{background:var(--studio-external);box-shadow:0 0 0 1px var(--studio-card-edge)}
+.part.kind-external .pname{color:var(--ink-2);font-weight:500}
+.part.kind-client{border-radius:17px;background:linear-gradient(to bottom,color-mix(in srgb,var(--ink-bright) 3%,var(--studio-card)) 0 6px,transparent 6px),var(--studio-card)}
+.part.peer{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1.5px var(--peer),var(--studio-shadow)}
+.part.agent{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px color-mix(in srgb,var(--studio-accent) 60%,transparent),0 0 0 6px color-mix(in srgb,var(--studio-accent) 13%,transparent),var(--studio-shadow)}
+.part.sel{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 2px var(--me),var(--studio-lift)}
+.part.sel.peer{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 2px var(--me),0 0 0 4.5px var(--studio-field),0 0 0 6px var(--peer),var(--studio-lift)}
+.face{display:flex;flex-direction:column;gap:2px;padding:13px 15px 10px}
+.pname{font-size:14.5px;font-weight:700;line-height:1.25;letter-spacing:-.012em;color:var(--ink-bright)}
+.ptech{font-family:var(--mono);font-size:10.5px;color:var(--ink-7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb{display:flex;flex-direction:column;gap:6px;padding:0 15px 13px}
+.cap{font-size:11px;line-height:1.35;color:var(--ink-6)}
+.cap.bad{color:var(--bad)}
+/* A queue: its jobs, in order, with the lease drawn on the one being worked. */
+.slots{display:flex;gap:4px}
+.slot{position:relative;flex:1;min-width:0;height:34px;box-sizing:border-box;border-radius:7px;display:flex;flex-direction:column;justify-content:center;padding:0 6px;font-family:var(--mono);font-size:10px;line-height:1.3;color:var(--ink-6);background:var(--studio-card);box-shadow:inset 0 0 0 1px var(--border);overflow:hidden}
+.slot small{font-family:var(--font);font-size:9.5px;color:var(--ink-8)}
+.slot.acked{background:var(--fill-1);box-shadow:none;color:var(--ink-10)}
+.slot.acked small{color:var(--ink-10)}
+.slot.leased{background:var(--selected);color:var(--ink-bright);box-shadow:inset 0 0 0 1px var(--border-3)}
+.slot.leased::after{content:'';position:absolute;left:6px;right:6px;bottom:4px;height:2px;border-radius:1px;background:linear-gradient(90deg,var(--ink-4) var(--lease,60%),var(--fill-2) var(--lease,60%))}
+.slot.twice{box-shadow:inset 0 0 0 1.5px var(--bad);color:var(--bad)}
+.slot.again{box-shadow:inset 0 0 0 1px var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 6%,var(--studio-card))}
+/* A worker: its running copies, each on a job. */
+.inst{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;height:26px;padding:0 8px;border-radius:7px;background:var(--fill-1);font-size:11.5px;color:var(--ink-3)}
+.inst .g{width:8px;height:8px;border-radius:50%;background:var(--ink-5)}
+.inst .g.crashed{background:transparent;border-radius:0;width:9px;height:9px;background-image:linear-gradient(45deg,transparent 42%,var(--bad) 42% 58%,transparent 58%),linear-gradient(-45deg,transparent 42%,var(--bad) 42% 58%,transparent 58%)}
+.inst .g.ok{background:var(--good)}
+.inst .j{font-family:var(--mono);font-size:10.5px;color:var(--ink-6)}
+.inst.crashed{color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,transparent)}
+/* What you don't run: the calls you made to it, as it saw them. */
+.calls{display:flex;flex-direction:column;gap:3px}
+.callr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;height:24px;padding:0 8px;border-radius:6px;background:color-mix(in srgb,var(--studio-card) 70%,transparent);box-shadow:inset 0 0 0 1px var(--hairline);font-size:11px;color:var(--ink-4)}
+.callr .amt{font-family:var(--mono);font-size:10.5px;color:var(--ink-2)}
+.callr .ok{color:var(--good);font-size:11px}
+.callr.dup{background:color-mix(in srgb,var(--bad) 8%,var(--studio-card));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--bad) 35%,transparent);color:var(--bad)}
+.callr.dup .amt{color:var(--bad)}
+.callr.keyed .amt{color:var(--ink-2)}
+/* What you keep: the rows themselves. */
+.tbl{display:grid;border-radius:7px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--hairline);font-size:10.5px}
+.tr{display:grid;grid-template-columns:var(--cols);align-items:center;height:22px;padding:0 8px;gap:8px;border-top:1px solid var(--hairline);color:var(--ink-3);font-family:var(--mono)}
+.tr:first-child{border-top:0;background:var(--fill-1);color:var(--ink-8);font-family:var(--font);font-size:10px;font-weight:500}
+.tr .new{color:var(--good)}
+.tr.newrow{background:color-mix(in srgb,var(--good) 7%,transparent)}
+.endpoint{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-5)}
+.endpoint b{font-family:var(--mono);font-weight:500;font-size:10.5px;color:var(--ink-3)}
+.evrow{display:flex;padding:9px 12px 11px;border-top:1px solid var(--hairline)}
+.evt{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:11px;white-space:nowrap;background:var(--fill-2);color:var(--ink-5)}
+.evt i{width:6px;height:6px;border-radius:50%;flex:0 0 6px;background:var(--ink-10)}
+.evt.verified{background:color-mix(in srgb,var(--good) 12%,transparent);color:var(--good)}.evt.verified i{background:var(--good)}
+.evt.changed{color:var(--ink-3)}.evt.changed i{box-shadow:inset 0 0 0 1.5px var(--ink-4);background-image:linear-gradient(90deg,var(--ink-4) 50%,transparent 50%)}
+.evt.assumed{background:transparent;box-shadow:inset 0 0 0 1px var(--border-4)}.evt.assumed i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink-8)}
+.evt.needs{background:var(--attention-wash);color:var(--attention-ink);box-shadow:inset 0 0 0 1px var(--attention-line)}.evt.needs i{background:var(--attention)}
+.evt.quiet{background:transparent;color:var(--ink-8)}
+.part-ask{position:absolute;right:8px;top:8px;width:24px;height:24px;border:0;border-radius:6px;padding:0;display:inline-flex;align-items:center;justify-content:center;background:var(--fill-2);color:var(--ink-4);opacity:0;transition:opacity 140ms ease;z-index:2}
+.part-ask:hover{background:var(--fill-3);color:var(--ink-bright)}
+.surface.tool-select .node:hover .part-ask,.part-ask:focus-visible{opacity:1}
+.tab{position:absolute;top:-19px;display:inline-flex;align-items:center;gap:5px;height:16px;padding:0 6px;border-radius:4px;font-size:10.5px;font-weight:500;white-space:nowrap}
+.tab.peer{left:0;background:var(--peer);color:#fff}
+.tab.me{left:0;background:var(--me);color:var(--pane)}
+.tab.agent{right:0;color:var(--ask);padding:0}
+.tab.agent i{width:5px;height:5px;border-radius:50%;background:var(--ask)}
+
+/* ---- Notes: what people meant, pinned to what it is about. Type is a word, never a colour. */
+.notes-chip{position:absolute;left:12px;bottom:-11px;z-index:2;display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px 0 6px;border:0;border-radius:6px;background:var(--paper);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);font-size:11px;font-weight:500;color:var(--ink-5)}
+.notes-chip:hover{color:var(--ink-bright)}
+.npop{position:absolute;top:-4px;left:calc(100% + 14px);width:244px;display:flex;flex-direction:column;gap:8px;animation:rise 260ms var(--studio-ease) both}
+.npop.flip{left:auto;right:calc(100% + 14px)}
+.note{display:flex;flex-direction:column;gap:6px;padding:10px 12px 10px;border-radius:3px 12px 12px 12px;background:var(--paper);box-shadow:0 0 0 1px var(--border),var(--studio-shadow)}
+.note .nt{font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--ink-6)}
+.note p{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-2);text-wrap:pretty}
+.note .by{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--ink-7)}
+.mav{width:14px;height:14px;flex:0 0 14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;background:var(--me)}
+.mav.peer{background:var(--peer)}.mav.p2{background:var(--peer2)}.mav.vowe{background:var(--ask)}
+.note .link{border:0;background:transparent;padding:0;font-size:11px;color:var(--good);text-decoration:underline;text-underline-offset:2px}
+.note.suggested{background:transparent;box-shadow:none;border:1px dashed var(--border-4)}
+.note.fresh{box-shadow:0 0 0 1.5px var(--me),var(--studio-shadow)}
+.note .acts{display:flex;gap:6px}
+.capbox{display:flex;flex-direction:column;gap:7px;padding:10px 12px;border-radius:12px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow)}
+.capbox .q{font-size:11.5px;line-height:1.45;color:var(--ink-5)}
+.capbox .kinds{display:flex;flex-wrap:wrap;gap:4px}
+.addnote{align-self:flex-start;height:26px;padding:0 10px;border:0;border-radius:7px;background:var(--paper);box-shadow:0 0 0 1px var(--border);font-size:11.5px;color:var(--ink-5)}
+.addnote:hover{color:var(--ink-bright)}
+
+/* ---- Vowe’s pins: something to say about this part. Amber only when it needs you. */
+.vpin{position:absolute;left:-10px;top:-10px;z-index:3;width:22px;height:22px;border:0;padding:0;border-radius:50%;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);display:inline-flex;align-items:center;justify-content:center}
+.vpin .orb{width:15px;height:15px;flex-basis:15px}
+.vpin i{width:8px;height:8px;border-radius:50%;background:var(--attention);box-shadow:0 0 0 3px var(--attention-wash)}
+.vpin:hover{box-shadow:0 0 0 1px var(--border-4),var(--studio-shadow)}
+.aside{position:absolute;top:-8px;left:calc(100% + 14px);z-index:4;width:252px;box-sizing:border-box;padding:11px 12px 12px;border-radius:12px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px color-mix(in srgb,var(--ask) 30%,var(--border)),var(--shadow-menu);display:flex;flex-direction:column;gap:9px;animation:rise 260ms var(--studio-ease) both}
+.aside.flip{left:auto;right:calc(100% + 14px)}
+.aside.needs{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--attention-line),var(--shadow-menu)}
+.aside .ah{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:500;color:var(--ink-7)}
+.aside .ah .orb{width:14px;height:14px;flex-basis:14px}
+.aside p{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-2);text-wrap:pretty}
+.aside .acts{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ---- Sequence steps and comparisons. */
+.step{position:absolute;left:0;top:0;width:220px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:var(--studio-card);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--studio-card-edge),var(--studio-shadow);transition:opacity 320ms ease,translate 420ms var(--studio-ease);translate:0 0}
+.step.gone{opacity:0;translate:0 8px;pointer-events:none;transition-delay:0ms !important}
+.step .n{font-family:var(--mono);font-size:10.5px;color:var(--ink-8);width:14px;flex:0 0 14px}
+.step .t{display:flex;flex-direction:column;gap:1px;min-width:0}
+.step .t b{font-size:12.5px;font-weight:700;color:var(--ink-bright)}
+.step .t span{font-size:11.5px;color:var(--ink-6)}
+.step.crash{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1.5px var(--ink-4),var(--studio-shadow)}
+.step.crash .n{color:var(--ink-bright)}
+.step.bad .n,.step.bad .t span{color:var(--bad)}
+.step.focus{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px color-mix(in srgb,var(--studio-accent) 60%,transparent),0 0 0 6px color-mix(in srgb,var(--studio-accent) 13%,transparent),var(--studio-shadow)}
+.alt{position:absolute;left:0;top:0;box-sizing:border-box;width:450px;height:300px;padding:18px 20px;border-radius:20px;background:var(--studio-group);box-shadow:inset 0 0 0 1px var(--studio-card-edge);display:flex;flex-direction:column;gap:12px;transition:opacity 320ms ease,translate 420ms var(--studio-ease);translate:0 0}
+.alt.gone{opacity:0;translate:0 10px;pointer-events:none}
+.alt h3{margin:0;font-size:14.5px;font-weight:700;letter-spacing:-.012em;color:var(--ink-bright)}
+.alt p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-4)}
+.alt ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.alt li{display:flex;gap:9px;font-size:12px;line-height:1.45;color:var(--ink-3)}
+.alt li .mark{font-family:var(--mono);font-size:11px;color:var(--ink-8);width:10px;flex:0 0 10px}
+.alt .foot{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap}
+.alt.aside-off h3{text-decoration:line-through;text-decoration-color:var(--ink-8);color:var(--ink-4)}
+.verify{position:absolute;left:0;top:0;width:360px;box-sizing:border-box;padding:14px 16px;border-radius:16px;background:var(--paper);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);display:flex;flex-direction:column;gap:8px;transition:opacity 320ms ease,translate 420ms var(--studio-ease);translate:0 0}
+.verify.gone{opacity:0;translate:0 10px;pointer-events:none}
+.verify .vh{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.verify .vh b{font-size:13px;font-weight:700;color:var(--ink-bright)}
+.verify .vh span{font-size:11px;color:var(--ink-7)}
+.vc{display:grid;grid-template-columns:14px minmax(0,1fr);gap:2px 8px;font-size:12px;line-height:1.45;color:var(--ink-3)}
+.vc .vi{width:9px;height:9px;margin-top:4px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink-8)}
+.vc.pass .vi{background:var(--good);box-shadow:none}
+.vc.running .vi{box-shadow:inset 0 0 0 1.5px var(--ink-4);background-image:linear-gradient(90deg,var(--ink-4) 50%,transparent 50%)}
+.vc .vs{grid-column:2;font-size:11px;color:var(--ink-8)}
+.vc.pass .vs{color:var(--good)}
+
+/* ---- Gestures. */
+.ink{position:absolute;left:0;top:0;width:980px;height:620px;overflow:visible;pointer-events:none;z-index:3}
+.ink .stroke{fill:none;stroke:var(--me);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.ink .lasso{fill:color-mix(in srgb,var(--me) 9%,transparent);stroke:var(--me);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ink .lasso.live{fill:none;stroke-dasharray:1 5;stroke-width:2.4}
+.ink .lasso.read{stroke:var(--studio-accent);fill:color-mix(in srgb,var(--studio-accent) 8%,transparent)}
+.marquee{position:absolute;left:0;top:0;z-index:4;pointer-events:none;border:1px solid var(--me);background:color-mix(in srgb,var(--me) 8%,transparent);border-radius:3px}
+.lasso-ask{position:absolute;left:0;top:0;z-index:9;display:flex;flex-direction:column;gap:8px;width:236px;padding:10px 10px 10px 12px;box-sizing:border-box;border-radius:11px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--shadow-menu);animation:rise 260ms var(--studio-ease) both}
+.lasso-ask .lbl{font-size:11px;color:var(--ink-7)}
+.lasso-ask .items{display:flex;flex-wrap:wrap;gap:4px}
+.lasso-ask .row2{display:flex;gap:6px}
+.pin{position:absolute;left:0;top:0;z-index:9;display:flex;align-items:flex-start;gap:6px}
+.pin .head{width:20px;height:20px;border-radius:10px 10px 10px 2px;background:var(--me);color:var(--pane);font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.pin input{width:180px;height:28px;box-sizing:border-box;padding:0 9px;border:0;border-radius:7px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);color:var(--ink);font:inherit;font-size:12px;outline:none}
+.cursor{position:absolute;left:0;top:0;z-index:7;pointer-events:none;transition:transform 900ms var(--studio-ease)}
+.cursor .label{position:absolute;left:14px;top:16px;padding:1px 6px;border-radius:5px;background:var(--peer);color:#fff;font-size:10.5px;font-weight:500;white-space:nowrap}
+.cursor.p2 .label{background:var(--peer2)}
+.ctx{position:absolute;left:0;top:0;z-index:9;display:flex;align-items:center;gap:2px;padding:3px;border-radius:9px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--shadow-menu);transition:transform 560ms var(--studio-ease)}
+.ctx button{height:26px;padding:0 9px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);font-size:12px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.ctx button:hover{background:var(--hover-strong);color:var(--ink-bright)}
+.ctx .sep{width:1px;height:14px;background:var(--border)}
+.ctx .n{font-family:var(--mono);font-size:10.5px;color:var(--ink-7);padding:0 6px 0 4px}
+
+/* ---- The decision, when it is opened: a card of record, over the canvas. */
+.decov{box-sizing:border-box;padding:16px;border-radius:14px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border-3),var(--studio-shadow);display:flex;flex-direction:column;gap:12px;animation:rise 300ms var(--studio-ease) both}
+.decov.proposed{box-shadow:none;border:1px dashed var(--border-4)}
+.rdec.pointed,.decov.pointed{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--studio-accent) 55%,transparent),0 0 0 5px color-mix(in srgb,var(--studio-accent) 12%,transparent)}
+.decov .dh{display:flex;align-items:center;gap:8px}
+.decov .ver{font-family:var(--mono);font-size:10.5px;color:var(--ink-8)}
+.decov .what{font-size:15.5px;font-weight:700;line-height:1.35;letter-spacing:-.012em;color:var(--ink-bright);text-wrap:pretty}
+.fields{display:grid;grid-template-columns:58px minmax(0,1fr);gap:7px 10px;margin:0;font-size:12px;line-height:1.45}
+.fields dt{font-size:11px;font-weight:500;color:var(--ink-8);padding-top:1px}
+.fields dd{margin:0;color:var(--ink-3)}
+ins.add{text-decoration:none;background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--ink-bright);border-radius:3px;padding:0 2px;box-shadow:inset 0 -1.5px 0 var(--good)}
+.field-edit{width:100%;height:30px;box-sizing:border-box;padding:0 9px;border:0;border-radius:7px;background:var(--field);box-shadow:inset 0 0 0 1px var(--border-4);color:var(--ink);font:inherit;font-size:12px;outline:none}
+.field-edit:focus{box-shadow:inset 0 0 0 1.5px var(--studio-accent)}
+.sugg{display:flex;align-items:center;gap:7px;padding:6px 8px;border:0;border-radius:7px;background:color-mix(in srgb,var(--ask) 9%,transparent);color:var(--ask);font-size:11.5px;line-height:1.4;text-align:left}
+.sugg .orb{width:14px;height:14px;flex-basis:14px}
+.stamps{display:flex;flex-wrap:wrap;gap:6px;padding-top:12px;border-top:1px solid var(--hairline)}
+.stamp{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px 0 4px;border-radius:13px;font-size:11.5px;color:var(--ink-6);box-shadow:inset 0 0 0 1px var(--border)}
+.stamp.ok{color:var(--good);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--good) 40%,transparent)}
+.stamp.stale{color:var(--ink-7);box-shadow:inset 0 0 0 1px var(--border);text-decoration:line-through;text-decoration-color:var(--ink-9)}
+.stamp.wait{border:1px dashed var(--border-4);box-shadow:none}
+.stamp .avatar{width:18px;height:18px;flex-basis:18px;font-size:8px}
+.dacts{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.answered{font-size:12px;line-height:1.5;color:var(--ink-5);padding:8px 10px;border-radius:8px;background:var(--fill-1)}
+.answered b{font-weight:500;color:var(--ink-3)}
+.hist{display:grid;grid-template-columns:26px minmax(0,1fr);gap:2px 8px;font-size:11.5px;line-height:1.45;color:var(--ink-6)}
+.hist .old{font-family:var(--mono);font-size:10.5px;color:var(--ink-8);text-decoration:line-through}
+.pkg{display:flex;flex-direction:column;border-radius:10px;box-shadow:inset 0 0 0 1px var(--border);overflow:hidden}
+.pk{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;padding:9px 12px;font-size:12px;line-height:1.45;color:var(--ink-3);border-top:1px solid var(--hairline)}
+.pk:first-child{border-top:0;background:var(--fill-1)}
+.pk .lbl{font-size:11px;font-weight:500;color:var(--ink-8);padding-top:1px}
+.pk .chips-l{display:flex;flex-wrap:wrap;gap:5px}
+.stays{margin:0;font-size:11.5px;line-height:1.5;color:var(--ink-7)}
+
+/* ---- The call: the only thing at the bottom. */
+.call{position:absolute;z-index:8;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:4px;padding:5px;border-radius:14px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--shadow-menu)}
+.vowe-btn{position:relative;display:flex;align-items:center;gap:8px;height:36px;padding:0 12px 0 8px;border:0;border-radius:10px;background:transparent;font-size:12px;color:var(--ink-6);white-space:nowrap}
+.vowe-btn:hover{background:var(--hover-strong);color:var(--ink-3)}
+.vowe-btn.speaking{color:var(--ask)}
+.vowe-btn .orb{width:20px;height:20px;flex-basis:20px}
+.vowe-btn.speaking .orb{box-shadow:0 0 0 2px var(--menu),0 0 0 3.5px var(--ask)}
+.call .sep{width:1px;height:20px;background:var(--hairline);margin:0 4px}
+.cbtn{position:relative;width:36px;height:36px;border:0;border-radius:10px;background:var(--fill-2);color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center;padding:0;transition:background 140ms ease,box-shadow 140ms ease}
+.cbtn:hover{background:var(--fill-3)}
+.cbtn svg{width:17px;height:17px}
+.cbtn.muted{background:var(--ink-bright);color:var(--pane)}
+.cbtn.talking{box-shadow:0 0 0 2px var(--menu),0 0 0 3.5px var(--me)}
+.cbtn.on{background:var(--selected);color:var(--ink-bright);box-shadow:inset 0 0 0 1px var(--border-3)}
+.cbtn.leave{background:transparent;color:var(--bad)}
+.cbtn.leave:hover{background:color-mix(in srgb,var(--bad) 12%,transparent)}
+.signal{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border:0;border-radius:10px;background:var(--attention-wash);color:var(--attention-ink);font-size:12px;font-weight:500;white-space:nowrap;box-shadow:inset 0 0 0 1px var(--attention-line);animation:rise 300ms var(--studio-ease) both}
+.signal i{width:6px;height:6px;border-radius:50%;background:var(--attention)}
+.part-pop{position:absolute;left:0;bottom:54px;width:260px;box-sizing:border-box;padding:10px;border-radius:12px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--shadow-menu);display:flex;flex-direction:column;gap:4px;animation:rise 220ms var(--studio-ease) both}
+.part-pop .opt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border:0;border-radius:8px;background:transparent;text-align:left}
+.part-pop .opt:hover{background:var(--hover-strong)}
+.part-pop .opt.on{background:var(--selected)}
+.part-pop .opt b{font-size:12.5px;font-weight:500;color:var(--ink-2)}
+.part-pop .opt span{font-size:11.5px;line-height:1.4;color:var(--ink-7)}
+.captions{position:absolute;z-index:8;left:50%;bottom:72px;transform:translateX(-50%);width:560px;max-width:calc(100% - 140px);box-sizing:border-box;display:flex;flex-direction:column;gap:3px;padding:9px 12px;border-radius:11px;background:color-mix(in srgb,var(--menu) 92%,transparent);box-shadow:0 0 0 1px var(--hairline),var(--studio-shadow);animation:rise 220ms var(--studio-ease) both}
+.prevline{font-size:11.5px;color:var(--ink-8);white-space:nowrap;overflow:hidden;-webkit-mask-image:linear-gradient(to right,#000 80%,transparent);mask-image:linear-gradient(to right,#000 80%,transparent)}
+.curline{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.spk{flex:0 0 auto;font-size:11px;font-weight:600;color:var(--ink-7);padding-top:2px}
+.words{display:flex;flex-wrap:wrap;column-gap:.27em;min-width:0}
+.wd{animation:wordin 200ms ease both}
+@keyframes wordin{from{opacity:0}to{opacity:1}}
+.wd.ref{color:var(--ask);text-decoration:underline dotted 1px;text-underline-offset:3px}
+.wd.chipref{display:inline-flex;align-items:center;gap:5px;padding:0 6px;border-radius:5px;background:color-mix(in srgb,var(--me) 13%,transparent);color:var(--me);font-weight:500}
+.wd.chipref small{font-family:var(--mono);font-size:10px;font-weight:400}
+.cut{font-size:11px;color:var(--ink-8)}
+
+/* ---- The record: where the room is, for whoever arrives. */
+.desk{grid-column:3;grid-row:1/-1;padding-top:40px;min-width:0;overflow:hidden;background:var(--rail);transition:opacity 280ms var(--ease)}
+.win:not(.desk-open) .desk{opacity:0;pointer-events:none}
+.desk-inner{width:352px;box-sizing:border-box;height:100%;display:flex;flex-direction:column;padding:14px 16px 24px;overflow-y:auto}
+.rhead{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 12px}
+.rsec{display:flex;flex-direction:column;gap:6px;padding:14px 0;border-top:1px solid var(--hairline)}
+.rsec .rk{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 2px;font-size:11px;font-weight:600;color:var(--ink-7)}
+.rsec .rk span{font-weight:400;color:var(--ink-8)}
+.goal-line{margin:0;padding:0 2px;font-size:16px;font-weight:700;line-height:1.35;letter-spacing:-.014em;color:var(--ink-bright);text-wrap:pretty}
+.goal-by{padding:0 2px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-7)}
+.rdec{display:flex;flex-direction:column;gap:6px;padding:12px;border:0;border-radius:11px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--border);text-align:left}
+.rdec:hover{box-shadow:inset 0 0 0 1px var(--border-4)}
+.rdec.proposed{background:transparent;box-shadow:none;border:1px dashed var(--border-4)}
+.rdec .t{font-size:13px;font-weight:700;line-height:1.4;color:var(--ink-bright)}
+.rdec .m{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-6)}
+.rdec .m.needs{color:var(--attention-ink)}
+.rrow{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:8px 8px;border:0;border-radius:8px;background:transparent;text-align:left}
+.rrow:hover{background:var(--hover)}
+.rrow .rt{font-size:12.5px;line-height:1.45;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rrow .rm{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-8)}
+.rrow .rm b{font-weight:600;color:var(--ink-6)}
+.rrow.suggested .rt{color:var(--ink-5)}
+.stream{display:flex;flex-direction:column;gap:5px;padding:9px 8px;border-radius:8px}
+.stream.needs{background:var(--attention-wash);box-shadow:inset 0 0 0 1px var(--attention-line)}
+.stream .top{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;color:var(--ink-2)}
+.stream .top .who{margin-left:auto;font-size:11px;font-weight:400;color:var(--ink-8)}
+.stream .line{font-size:11.5px;line-height:1.45;color:var(--ink-6)}
+.stream .mono{font-size:10.5px;color:var(--ink-8)}
+.stream .acts{display:flex;gap:6px;flex-wrap:wrap}
+.files{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:7px;background:var(--fill-1)}
+.file{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;font-family:var(--mono);font-size:10.5px;line-height:1.6}
+.file .fn{color:var(--ink-4);white-space:nowrap;overflow:hidden}
+.file .fa{color:var(--good)}.file .fd{color:var(--bad);min-width:22px;text-align:right}
+.overlap{display:flex;align-items:flex-start;gap:8px;padding:8px 9px;border-radius:8px;background:var(--fill-1);font-size:11.5px;line-height:1.45;color:var(--ink-5)}
+.overlap code{font-family:var(--mono);font-size:10.5px;color:var(--ink-2)}
+.since{display:flex;flex-direction:column;gap:7px;padding:12px;margin-bottom:12px;border-radius:11px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);animation:rise 360ms var(--studio-ease) both}
+.since b{font-size:13px;color:var(--ink-bright)}
+.since ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px}
+.since li{display:flex;gap:8px;align-items:baseline;font-size:12px;line-height:1.45;color:var(--ink-3)}
+.setaside{padding:4px 8px;font-size:12px;line-height:1.5;color:var(--ink-5)}
+.setaside s{color:var(--ink-3);text-decoration-color:var(--ink-8)}
+
+.win.sheet{display:block;width:1440px;height:auto;min-height:0;border-radius:0;box-shadow:none;padding:56px 64px 72px;box-sizing:border-box;background:var(--pane)}
+.dir-head{display:flex;flex-direction:column;gap:10px;max-width:760px;margin-bottom:44px}
+.dir-head h1{margin:0;font-size:34px;font-weight:700;letter-spacing:-.02em;color:var(--ink-bright)}
+.dir-head p{margin:0;font-size:14px;line-height:1.6;color:var(--ink-5);text-wrap:pretty}
+.dsec{display:flex;flex-direction:column;gap:18px;margin-bottom:44px}
+.dsec-h{display:flex;gap:14px;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid var(--hairline)}
+.dsec-h .num{font-family:var(--mono);font-size:11px;color:var(--ink-8);padding-top:4px;width:16px}
+.dsec-h h2{margin:0 0 3px;font-size:16px;font-weight:700;color:var(--ink-bright)}
+.dsec-h p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-6)}
+.grid6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+.grid5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.cell{display:flex;flex-direction:column;gap:4px}
+.cell > b{font-size:13px;font-weight:700;color:var(--ink-bright);margin-top:10px}
+.cell > span{font-size:12px;line-height:1.5;color:var(--ink-6);text-wrap:pretty}
+.cell > code{font-family:var(--mono);font-size:10.5px;line-height:1.5;color:var(--ink-8);margin-top:2px}
+.well{height:150px;border-radius:12px;background-color:var(--studio-field);background-image:radial-gradient(ellipse 80% 70% at 50% 45%,var(--studio-glow),transparent 74%);box-shadow:inset 0 0 0 1px var(--hairline);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box}
+.well.tall{height:220px}
+.well{isolation:isolate}
+.well .part{cursor:default}
+.arr svg{overflow:visible}
+.sv{fill:var(--studio-card);stroke:var(--studio-card-edge);stroke-width:1}
+.sv.ext{fill:var(--studio-external)}
+.sv.crash{stroke:var(--ink-4);stroke-width:1.4}
+.sv.bad{stroke:var(--bad)}
+.sv.dash2{stroke:var(--border-4);stroke-dasharray:3 3}
+.sb2{fill:var(--studio-group);stroke:var(--studio-card-edge);stroke-width:1}
+.sl{fill:none;stroke:var(--studio-line);stroke-width:1.3}
+.sl.dash{stroke-dasharray:3 3}
+.sl.bad{stroke:var(--bad)}
+.sl.soft{stroke:var(--border-4)}
+.sl.strike{stroke:var(--ink-6)}
+.good{fill:color-mix(in srgb,var(--good) 35%,transparent)}
+.quiet{fill:var(--fill-3)}
+.paper{fill:var(--paper);stroke:var(--border);stroke-width:1}
+.recipes{display:flex;flex-direction:column}
+.rec{display:grid;grid-template-columns:150px 280px minmax(0,1fr);gap:20px;padding:13px 0;border-top:1px solid var(--hairline);font-size:13px;line-height:1.5;color:var(--ink-3)}
+.rec:first-child{border-top:0}
+.rec b{font-weight:700;color:var(--ink-bright)}
+.rec .q{color:var(--ink-6)}
+/* ---- Beyond services: interface and code parts. */
+.part.kind-code{border-radius:9px;background:var(--paper)}
+.part.kind-code .pname{font-family:var(--mono);font-size:13px;font-weight:500}
+.part.proposed{box-shadow:var(--studio-shadow);outline:1.5px dashed color-mix(in srgb,var(--ask) 60%,transparent);outline-offset:-1.5px}
+.part.proposed.sel{outline-color:var(--me);outline-style:solid;outline-width:2px}
+.scr{display:flex;flex-direction:column;border-radius:9px;overflow:hidden;box-shadow:0 0 0 1px var(--border);background:var(--field)}
+.scr-bar{display:flex;align-items:center;gap:4px;height:16px;padding:0 7px;background:var(--fill-1);border-bottom:1px solid var(--hairline)}
+.scr-bar i{width:5px;height:5px;border-radius:50%;background:var(--border-4)}
+.scr-bar span{margin-left:auto;margin-right:auto;font-family:var(--mono);font-size:8.5px;color:var(--ink-8);transform:translateX(-10px)}
+.scr-body{display:flex;flex-direction:column;gap:5px;padding:8px 9px 9px}
+.scr-h{font-size:11.5px;font-weight:700;color:var(--ink-bright)}
+.scr-amt{font-size:10px;color:var(--ink-6)}
+.sbn{font-size:10px;line-height:1.3;padding:4px 6px;border-radius:5px;background:var(--fill-2);color:var(--ink-3)}
+.sbn.info{background:color-mix(in srgb,var(--ask) 12%,transparent);color:var(--ask)}
+.sbn.good{background:color-mix(in srgb,var(--good) 12%,transparent);color:var(--good)}
+.sbn.bad{background:color-mix(in srgb,var(--bad) 10%,transparent);color:var(--bad)}
+.sbtn{display:flex;align-items:center;justify-content:center;height:22px;border-radius:6px;background:var(--ink-bright);color:var(--pane);font-size:10px;font-weight:700}
+.sbtn.busy{background:var(--fill-3);color:var(--ink-5)}
+.sbtn.quiet{background:var(--fill-2);color:var(--ink-3)}
+.diffb{display:flex;flex-direction:column;border-radius:7px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--hairline);font-family:var(--mono);font-size:10px;line-height:1.75}
+.dl{padding:0 8px;color:var(--ink-4);white-space:pre;overflow:hidden;text-overflow:ellipsis}
+.dl.del{background:var(--diff-remove,rgba(198,48,58,.12));color:var(--bad)}
+.dl.add{background:var(--diff-add,rgba(15,133,93,.14));color:var(--good)}
+</style>
+</head>
+<body>
+<div class="win light sheet">
+  <div class="dir-head">
+    <span class="eyebrow">Vowe · canvas building blocks</span>
+    <h1>The parts Vowe draws a change with</h1>
+    <p>Vowe never draws a generic box. For each view it picks blocks from this directory, binds them to what the system is actually doing, and arranges them for the question in front of the room. Shape says what a part is. What’s drawn inside says what is happening to it right now.</p>
+  </div>
+
+  <section class="dsec">
+    <div class="dsec-h"><span class="num">1</span><div><h2>Kinds</h2><p>Felt from shape, never from colour or a label. Ported from Vowe Studio.</p></div></div>
+    <div class="grid6">
+      <div class="cell"><div class="well"><div class="part kind-service" style="width:170px"><span class="face"><span class="pname">Payment Worker</span><span class="ptech">retry-worker</span></span></div></div><b>Service</b><span>Something you run. The plain card every other kind is measured against.</span></div>
+      <div class="cell"><div class="well"><div class="part kind-queue" style="width:170px"><span class="face"><span class="pname">Retry Queue</span><span class="ptech">jobs · lease</span></span></div></div><b>Queue</b><span>A hand-off, open at both ends: round ends and two quiet rails inside them.</span></div>
+      <div class="cell"><div class="well"><div class="part kind-store" style="width:170px"><span class="face"><span class="pname">Ledger</span><span class="ptech">payments db</span></span></div></div><b>Store</b><span>What you keep: a second plate beneath it, like the next one in a stack.</span></div>
+      <div class="cell"><div class="well"><div class="part kind-external" style="width:170px"><span class="face"><span class="pname">Payment Provider</span><span class="ptech">external</span></span></div></div><b>External</b><span>Used but not run: drawn lighter and lower, outside your boundaries.</span></div>
+      <div class="cell"><div class="well"><div class="part kind-client" style="width:170px"><span class="face"><span class="pname">Checkout</span><span class="ptech">web</span></span></div></div><b>Client</b><span>Where people are: softer corners, a faint glass band along the top.</span></div>
+      <div class="cell"><div class="well"><div style="position:relative;width:190px;height:96px;border-radius:20px;background:var(--studio-group);box-shadow:inset 0 0 0 1px var(--studio-card-edge)"><span style="position:absolute;left:14px;bottom:9px;font-size:12px;font-weight:700;color:var(--ink-4)">payments service</span></div></div><b>Boundary</b><span>The region parts share, a shade apart from the field. Not a card.</span></div>
+    </div>
+  </section>
+
+  <section class="dsec">
+    <div class="dsec-h"><span class="num">2</span><div><h2>Live insides</h2><p>Each kind has a body that draws its state. Vowe binds it to real things: job IDs, instances, calls, rows. It changes per view and as the work moves.</p></div></div>
+    <div class="grid3">
+      <div class="cell">
+        <div class="well tall">
+          <div class="part kind-queue" style="width:230px"><span class="face"><span class="pname">Retry Queue</span><span class="ptech">jobs · 30s lease</span></span><span class="sb"><span class="slots"><span class="slot acked">#4181<small>done</small></span><span class="slot leased">#4182<small>worker-1</small><i style="position:absolute;left:6px;bottom:4px;height:2px;border-radius:1px;background:var(--ink-4);width:62%"></i></span><span class="slot visible">#4183<small>waiting</small></span></span><span class="cap">#4182 leased to worker-1.</span></span></div>
+        </div>
+        <b>Jobs in a queue</b><span>Jobs in order. Done ones fade, the one being worked carries its lease as a bar, and a job handed out again or held twice goes red.</span><code>needs · jobs[ ] with state: done · leased(owner, lease) · waiting · again · twice</code>
+      </div>
+      <div class="cell">
+        <div class="well tall">
+          <div class="part kind-service" style="width:220px"><span class="face"><span class="pname">Payment Worker</span><span class="ptech">retry-worker</span></span><span class="sb"><span class="inst crashed"><span class="g crashed"></span><span>worker-1</span><span class="j">#4182</span></span><span class="cap bad">Charge went through; the ack never did.</span></span></div>
+        </div>
+        <b>Copies of a service</b><span>Each running copy as a row: what it’s holding, whether it’s alive. Split into two cards when copies matter to the question.</span><code>needs · instances[ ] with job and state: running · crashed · tested</code>
+      </div>
+      <div class="cell">
+        <div class="well tall">
+          <div class="part kind-external" style="width:230px"><span class="face"><span class="pname">Payment Provider</span><span class="ptech">external · you don’t run it</span></span><span class="sb"><span class="calls"><span class="callr"><span>charge #4182</span><span class="amt">$48.00</span><span class="ok">✓</span></span><span class="callr dup"><span>charge #4182</span><span class="amt">$48.00</span><span class="ok">✓</span></span></span><span class="cap bad">The same payment, charged twice.</span></span></div>
+        </div>
+        <b>Calls to something you don’t run</b><span>What you asked of it, as it saw it. The second charge shows up as a row, not a sentence about one.</span><code>needs · calls[ ] with amount, key and result · duplicate when key repeats</code>
+      </div>
+      <div class="cell">
+        <div class="well tall">
+          <div class="part kind-store" style="width:230px"><span class="face"><span class="pname">Ledger</span><span class="ptech">payments db</span></span><span class="sb"><span class="tbl"><span class="tr" style="grid-template-columns:52px 1fr 1fr"><span>payment</span><span>status</span><span>attempt_key</span></span><span class="tr" style="grid-template-columns:52px 1fr 1fr"><span>#4181</span><span>settled</span><span class="new">att_4181</span></span><span class="tr newrow" style="grid-template-columns:52px 1fr 1fr"><span>#4182</span><span>settled</span><span class="new">att_4182</span></span></span></span></div>
+        </div>
+        <b>Rows in a store</b><span>A few real rows, never a schema diagram. A column the work just added is marked in green.</span><code>needs · columns, 2–3 rows · which columns changed</code>
+      </div>
+      <div class="cell">
+        <div class="well tall">
+          <div class="part kind-service" style="width:210px"><span class="face"><span class="pname">Webhook API</span><span class="ptech">receives provider events</span></span><span class="sb"><span class="endpoint"><b>POST /webhooks/payment</b></span><span class="cap">payment.failed → enqueue a retry</span></span></div>
+        </div>
+        <b>An endpoint</b><span>The route and what it does with what arrives. One line each.</span><code>needs · route · the one thing it triggers</code>
+      </div>
+      <div class="cell">
+        <div class="well tall">
+          <div class="part kind-service" style="width:220px"><span class="face"><span class="pname">Payment Worker</span><span class="ptech">retry-worker</span></span><span class="sb"><span class="inst"><span class="g ok"></span><span>worker-1</span><span class="j">key att_4182</span></span><span class="cap">Reuses the attempt key on every retry.</span></span><span class="evrow" style="margin-top:auto"><span class="evt verified"><i></i>changed · tested</span></span></div>
+        </div>
+        <b>Evidence footer</b><span>In the Implementation view, every part says what the work shows about it: tested, changed, assumed, unchanged, or a question.</span><code>needs · the coding agent’s changes and test results for that part</code>
+      </div>
+    </div>
+  </section>
+
+  <section class="dsec">
+    <div class="dsec-h"><span class="num">2b</span><div><h2>Beyond services: interface, code, state</h2><p>Most changes aren’t architecture. The same grammar draws a screen change, a diff, or a set of states. The kind still comes from shape, the inside still shows what’s happening, and anything proposed is dashed.</p></div></div>
+    <div class="grid3">
+      <div class="cell">
+        <div class="well tall"><div class="part kind-client" style="width:210px"><span class="face"><span class="pname">Failed</span><span class="ptech">checkout · failed</span></span><span class="sb"><span class="scr"><span class="scr-bar"><i></i><i></i><i></i><span>checkout</span></span><span class="scr-body"><span class="scr-h">Checkout</span><span class="scr-amt">$48.00 · Visa ··4242</span><span class="sbn bad">Payment failed</span><span class="sbtn">Try again</span></span></span></span></div></div>
+        <b>Screen</b><span>A sketch of what a person sees in one state: the words, the button, the banner. Not a pixel-perfect mock; enough to argue about.</span><code>needs · route or component · the state · its copy</code>
+      </div>
+      <div class="cell">
+        <div class="well tall"><div class="part kind-client proposed" style="width:210px"><span class="face"><span class="pname">Confirming</span><span class="ptech">checkout · new state</span></span><span class="sb"><span class="scr"><span class="scr-bar"><i></i><i></i><i></i><span>checkout</span></span><span class="scr-body"><span class="scr-h">Checkout</span><span class="scr-amt">$48.00 · Visa ··4242</span><span class="sbn info">Confirming your payment…</span><span class="sbtn busy">Please wait</span></span></span></span></div></div>
+        <b>Proposed screen</b><span>A state that doesn’t exist yet. Dashed in Vowe’s blue until someone keeps it, like every other proposal.</span><code>needs · the state it would add · why</code>
+      </div>
+      <div class="cell">
+        <div class="well tall"><div class="part kind-code" style="width:300px"><span class="face"><span class="pname">PaymentStatus.tsx</span><span class="ptech">web/checkout · proposed change</span></span><span class="sb"><span class="diffb"><span class="dl">switch (payment.status) {</span><span class="dl del">  case 'pending': return &lt;Failed /&gt;</span><span class="dl add">  case 'pending':</span><span class="dl add">  case 'unknown': return &lt;Confirming /&gt;</span><span class="dl">  case 'paid': return &lt;Paid /&gt;</span></span></span></div></div>
+        <b>Code change</b><span>The few lines that matter, as a diff, on a paper card. Never a whole file; the coding agent holds the rest.</span><code>needs · file · the hunk that carries the change</code>
+      </div>
+    </div>
+    <div class="grid5" style="margin-top:4px">
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="2" y="38" width="38" height="34" rx="8" class="sv"></rect><rect x="62" y="38" width="38" height="34" rx="8" class="sv dash2"></rect><rect x="138" y="4" width="38" height="34" rx="8" class="sv"></rect><rect x="138" y="72" width="38" height="34" rx="8" class="sv bad"></rect><path d="M40 55h22M100 55h18M118 21v68M118 21h20M118 89h20" class="sl"></path></svg>
+      </div><b>States</b><span>Where something can be and what moves it. Screens, a job, a flag, an order. Laid out by depth from where it starts.</span></div>
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="10" y="20" width="80" height="70" rx="8" class="sv"></rect><rect x="110" y="20" width="80" height="70" rx="8" class="sv dash2"></rect><path d="M20 70h50" class="sl bad"></path><path d="M120 70h50" class="sl" style="stroke:var(--ask)"></path></svg>
+      </div><b>Before / after</b><span>The same screen or component, today and proposed, side by side. For “what changes for the user?”</span></div>
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="70" y="4" width="60" height="22" rx="6" class="sv"></rect><path d="M100 26v10M40 36h120M40 36v10M100 36v10M160 36v10" class="sl"></path><rect x="12" y="46" width="56" height="22" rx="6" class="sv"></rect><rect x="72" y="46" width="56" height="22" rx="6" class="sv dash2"></rect><rect x="132" y="46" width="56" height="22" rx="6" class="sv"></rect><rect x="72" y="80" width="56" height="22" rx="6" class="sv"></rect><path d="M100 68v12" class="sl"></path></svg>
+      </div><b>Component tree</b><span>Which component owns which piece of state. For “where does this change go?”</span></div>
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="6" y="40" width="44" height="30" rx="6" class="sv"></rect><rect x="78" y="40" width="44" height="30" rx="6" class="sv"></rect><rect x="150" y="40" width="44" height="30" rx="6" class="sv"></rect><path d="M50 55h28M122 55h28" class="sl"></path><path d="M28 78v14M100 78v14M172 78v14" class="sl dash"></path><circle cx="28" cy="96" r="3" class="good"></circle><circle cx="100" cy="96" r="3" class="good"></circle><circle cx="172" cy="96" r="3" style="fill:var(--bad)"></circle></svg>
+      </div><b>Pipeline</b><span>Stages data passes through, with what each stage checked. Builds, ETL, training and evals.</span></div>
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="10" y="14" width="80" height="84" rx="6" class="paper"></rect><path d="M20 30h50M20 44h40M20 58h56M20 72h36" class="sl soft"></path><rect x="20" y="52" width="56" height="10" rx="2" style="fill:rgba(15,133,93,.14)"></rect><rect x="110" y="40" width="80" height="30" rx="8" class="sv"></rect><path d="M90 55h20" class="sl"></path></svg>
+      </div><b>Code beside a part</b><span>A diff pinned next to the part it changes, so “this line” and “this screen” are one gesture apart.</span></div>
+    </div>
+  </section>
+
+  <section class="dsec">
+    <div class="dsec-h"><span class="num">3</span><div><h2>Arrangements</h2><p>How Vowe lays parts out depends on the question being asked, not on a house diagram style.</p></div></div>
+    <div class="grid5">
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="2" y="40" width="40" height="28" rx="6" class="sv"></rect><rect x="58" y="40" width="40" height="28" rx="12" class="sv"></rect><rect x="114" y="40" width="40" height="28" rx="6" class="sv"></rect><rect x="170" y="40" width="28" height="28" rx="6" class="sv ext"></rect><rect x="114" y="82" width="40" height="22" rx="6" class="sv"></rect><path d="M42 54h16M98 54h16M154 54h16M134 68v14" class="sl"></path><rect x="50" y="30" width="112" height="78" rx="12" class="sb2"></rect></svg>
+      </div><b>Topology</b><span>Who talks to whom, and what you run versus what you don’t. Used for “what is this?”</span></div>
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="10" y="4" width="40" height="20" rx="8" class="sv"></rect><rect x="80" y="4" width="40" height="20" rx="6" class="sv"></rect><rect x="150" y="4" width="40" height="20" rx="6" class="sv ext"></rect><path d="M30 24v84M100 24v84M170 24v84" class="sl dash"></path><rect x="82" y="34" width="36" height="12" rx="3" class="sv"></rect><rect x="152" y="52" width="36" height="12" rx="3" class="sv"></rect><rect x="82" y="70" width="36" height="12" rx="3" class="sv crash"></rect><rect x="152" y="90" width="36" height="12" rx="3" class="sv bad"></rect></svg>
+      </div><b>Sequence</b><span>One job followed through time. Used for “what happens if…?”</span></div>
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="80" y="2" width="40" height="20" rx="8" class="sv"></rect><path d="M100 22v8M40 30h120M40 30v12M160 30v12" class="sl"></path><rect x="20" y="42" width="40" height="22" rx="6" class="sv"></rect><rect x="140" y="42" width="40" height="22" rx="6" class="sv"></rect><path d="M40 64v14M160 64v14M40 78h120M100 78v10" class="sl bad"></path><rect x="80" y="88" width="40" height="20" rx="6" class="sv ext"></rect></svg>
+      </div><b>Fork and converge</b><span>One input, two copies, a shared outcome. Used for concurrency and races.</span></div>
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="80" y="2" width="40" height="20" rx="6" class="sv"></rect><path d="M100 22v8M45 30h110M45 30v10M155 30v10" class="sl"></path><rect x="4" y="40" width="88" height="66" rx="12" class="sb2"></rect><rect x="108" y="40" width="88" height="66" rx="12" class="sb2"></rect><path d="M14 58h50M14 70h60M14 82h40" class="sl soft"></path><path d="M118 58h50M118 70h60M118 82h40" class="sl soft"></path><path d="M14 50h40" class="sl strike"></path></svg>
+      </div><b>Comparison</b><span>Options side by side under the part they would change. A set-aside option stays, struck through.</span></div>
+      <div class="cell"><div class="well arr">
+        <svg viewBox="0 0 200 110" width="200" height="110" aria-hidden="true"><rect x="2" y="30" width="40" height="34" rx="6" class="sv"></rect><rect x="58" y="30" width="40" height="34" rx="12" class="sv"></rect><rect x="114" y="30" width="40" height="34" rx="6" class="sv"></rect><rect x="170" y="30" width="28" height="34" rx="6" class="sv ext dash2"></rect><path d="M42 47h16M98 47h16M154 47h16" class="sl"></path><rect x="118" y="54" width="30" height="6" rx="3" class="good"></rect><rect x="62" y="54" width="22" height="6" rx="3" class="quiet"></rect><rect x="2" y="76" width="90" height="30" rx="8" class="paper"></rect></svg>
+      </div><b>Evidence overlay</b><span>The topology the room already knows, with what was built laid on it and the checks beside it.</span></div>
+    </div>
+  </section>
+
+  <section class="dsec">
+    <div class="dsec-h"><span class="num">4</span><div><h2>Marks on top</h2><p>Things people and agents put on parts. Colour belongs to people. Amber means only one thing: someone needs you.</p></div></div>
+    <div class="grid5">
+      <div class="cell"><div class="well"><div class="note" style="width:210px"><span class="nt">Concern</span><p>Crash after the charge means it’s charged again.</p><span class="by"><span class="mav">DE</span>Daniel</span></div></div><b>Note</b><span>What someone meant, in their words, pinned to a part. The type is a word.</span></div>
+      <div class="cell"><div class="well"><div class="note suggested" style="width:210px"><span class="nt">Suggested open question</span><p>How do we notice an ack that never arrived?</p><span class="by"><span class="mav vowe">V</span>Vowe suggests</span></div></div><b>Suggested note</b><span>Dashed until a person keeps it. Vowe can suggest; only people commit.</span></div>
+      <div class="cell"><div class="well"><div style="position:relative"><div class="part kind-service" style="width:150px"><span class="face"><span class="pname">Retry Queue</span></span></div><span class="vpin" style="position:absolute"><span class="orb"></span></span></div></div><b>Vowe pin</b><span>Vowe has something about this part. It opens next to the part, not in a chat.</span></div>
+      <div class="cell"><div class="well"><div style="position:relative"><div class="part kind-external" style="width:150px"><span class="face"><span class="pname">Payment Provider</span></span></div><span class="vpin" style="position:absolute"><i></i></span></div></div><b>Needs-you pin</b><span>A coding agent or teammate is waiting on the room. The only amber on the canvas.</span></div>
+      <div class="cell"><div class="well"><div class="stamps" style="border-top:0;padding-top:0;flex-direction:column;align-items:flex-start"><span class="stamp ok"><span class="avatar peer">JM</span>John · signed v3</span><span class="stamp stale"><span class="avatar">DE</span>You · signed v2</span><span class="stamp wait"><span class="avatar">DE</span>You · not yet</span></div></div><b>Signature</b><span>Belongs to one version. A new version strikes the old signature through.</span></div>
+    </div>
+  </section>
+
+  <section class="dsec">
+    <div class="dsec-h"><span class="num">5</span><div><h2>How the room’s views were composed</h2><p>What Vowe picked for each question. A different system gets different blocks, the same rules.</p></div></div>
+    <div class="recipes">
+      <div class="rec"><b>Architecture</b><span class="q">“What is this?”</span><span>Topology · Endpoint, Queue (jobs), Service (copies), External (calls), Store (rows) · Boundary around what you run</span></div>
+      <div class="rec"><b>Failure flow</b><span class="q">“What if it crashes after the charge?”</span><span>Sequence over job #4182 · Queue shows #4182 again · Worker crashed · Provider charged twice · Vowe points at step 3</span></div>
+      <div class="rec"><b>Concurrency</b><span class="q">“What if two workers take the same job?”</span><span>Fork and converge · Worker split into two copies · Queue shows #4182 held twice · both paths red into the provider</span></div>
+      <div class="rec"><b>Alternatives</b><span class="q">“Lock, or idempotency?”</span><span>Comparison under the worker · the lock struck through with its reopen condition · idempotency marked as in the decision</span></div>
+      <div class="rec"><b>Provider timeout</b><span class="q">“What if the provider times out mid-charge?”</span><span>Composed live by Vowe when Daniel asked about the provider · Sequence over job #4185 · Queue leased, Worker waiting, External with a charge whose answer was lost · steps placed by the composer, not by hand</span></div>
+      <div class="rec"><b>Checkout states</b><span class="q">“What does the customer see while we retry?”</span><span>Composed live · States from Pay, with Confirming proposed (dashed) · the PaymentStatus.tsx diff placed beside the states by the same composer</span></div>
+      <div class="rec"><b>Implementation</b><span class="q">“Does what’s built match what we agreed?”</span><span>Evidence overlay on the topology · new attempt_key column in the ledger · provider assumed until checked · checks from the signed decision</span></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

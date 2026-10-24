@@ -3,11 +3,12 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const RENDERER_DIR = join(import.meta.dirname, '..', 'renderer');
-const RENDERER_URL = pathToFileURL(join(RENDERER_DIR, 'index.html')).href;
+/** vowe.html is the app; index.html is the earlier setup screen, reachable from its developer menu. */
+const RENDERER_URLS = new Set(['vowe.html', 'index.html'].map((page) => pathToFileURL(join(RENDERER_DIR, page)).href));
 
-/** True only for our own bundled page; IPC handlers use this to reject other senders. */
+/** True only for our own bundled pages; IPC handlers use this to reject other senders. */
 export function isAppPage(url: string): boolean {
-  return url.split(/[?#]/)[0] === RENDERER_URL;
+  return RENDERER_URLS.has(url.split(/[?#]/)[0]);
 }
 
 /**
@@ -31,14 +32,26 @@ export function restrictPermissions() {
   });
 }
 
-export function createMainWindow(): BrowserWindow {
+export interface WindowOptions {
+  /**
+   * The development preview: no preload, so the page has no bridge to the main process, auth or any
+   * service, and runs on its mock data alone.
+   */
+  preview?: boolean;
+}
+
+export function createMainWindow({ preview = false }: WindowOptions = {}): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    title: 'Journey',
+    width: 1440,
+    height: 900,
+    minWidth: 1100,
+    minHeight: 680,
+    title: 'Vowe',
+    // The room draws its own 40px band; on macOS the real traffic lights sit where the design puts them.
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 18, y: 14 } } : {}),
     webPreferences: {
       // CommonJS: sandboxed preloads can't be ES modules.
-      preload: join(import.meta.dirname, '..', 'preload', 'index.cjs'),
+      ...(preview ? {} : { preload: join(import.meta.dirname, '..', 'preload', 'index.cjs') }),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -54,6 +67,6 @@ export function createMainWindow(): BrowserWindow {
     if (!isAppPage(url)) event.preventDefault();
   });
 
-  win.loadFile(join(RENDERER_DIR, 'index.html'));
+  win.loadFile(join(RENDERER_DIR, 'vowe.html'));
   return win;
 }

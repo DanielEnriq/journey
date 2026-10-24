@@ -1,0 +1,130 @@
+<!doctype html>
+<!-- Lifted verbatim from the Claude Design canvas "Shared Engineering Room" (Work.dc.html). Edit the design, not this copy. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Work and evidence grammar</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<style>
+body{margin:0}
+a{color:#2f63c4}a:hover{color:#1f4a99}
+.sheet{
+  --pane:#faf9f7;--rail:#f0eeea;--menu:#ffffff;
+  --ink-bright:#121417;--ink-2:#2e3238;--ink-3:#3f434a;--ink-4:#52565d;--ink-5:#5e626a;--ink-6:#6b6f77;--ink-7:#62666e;--ink-8:#63676f;--ink-10:#9a9ea6;
+  --fill-1:rgba(18,22,30,.035);--fill-2:rgba(18,22,30,.07);--hairline:rgba(18,22,30,.08);--border:rgba(18,22,30,.12);--border-4:rgba(18,22,30,.24);
+  --good:#1c7a54;--attention:#cf8c1c;--attention-ink:#8a5810;--attention-line:rgba(168,112,20,.32);--attention-wash:rgba(207,140,28,.09);
+  --ask:#2f63c4;--bad:#ad3628;--studio-field:#f2f0ec;--shadow-menu:0 18px 40px rgba(18,22,30,.16);--studio-shadow:0 1px 2px rgba(18,22,30,.05),0 8px 22px rgba(18,22,30,.06);
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+.sec{display:flex;flex-direction:column;gap:16px}
+.sec-h{display:flex;align-items:baseline;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--hairline)}
+.eyebrow{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-8)}
+.tile{border-radius:12px;background-color:var(--studio-field);background-image:radial-gradient(ellipse 80% 70% at 50% 45%,rgba(255,255,255,.75),transparent 74%);box-shadow:inset 0 0 0 1px var(--hairline);padding:18px;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
+.cap{display:flex;flex-direction:column;gap:3px;padding:12px 2px 0}
+.cap b{font-size:13px;font-weight:700;color:var(--ink-bright)}
+.cap span{font-size:12px;line-height:1.5;color:var(--ink-6);text-wrap:pretty}
+.part{width:160px;box-sizing:border-box;display:flex;flex-direction:column;gap:3px;padding:13px 15px;border-radius:13px;background:#fff;box-shadow:inset 0 1px 0 #fff,0 0 0 1px rgba(18,22,30,.085),var(--studio-shadow)}
+.part b{font-size:14px;font-weight:700;color:var(--ink-bright)}
+.part span{font-family:var(--mono);font-size:10.5px;color:var(--ink-7)}
+.evt{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:11px;white-space:nowrap;align-self:flex-start}
+.evt i{width:6px;height:6px;border-radius:50%;flex:0 0 6px}
+.dot{width:6px;height:6px;border-radius:50%;flex:0 0 6px;display:inline-block}
+.mini{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:6px;background:var(--fill-2);color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:9px;height:30px;padding:0 11px 0 10px;border-radius:8px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);font-size:12px;color:var(--ink-3);white-space:nowrap}
+.chip .m{font-family:var(--mono);font-size:10.5px;color:var(--ink-8)}
+.rule{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--hairline);font-size:13px;line-height:1.5;color:var(--ink-3)}
+.rule b{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--ink-8);width:24px;flex:0 0 24px;padding-top:2px}
+</style>
+</head>
+<body>
+<div class="sheet" style="width:1440px;height:1220px;box-sizing:border-box;padding:56px 64px;background:var(--pane);font-family:'Satoshi',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--ink-2);display:flex;flex-direction:column;gap:40px">
+
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <span class="eyebrow">Design pass 5 · execution</span>
+    <h1 style="margin:0;font-size:34px;font-weight:700;letter-spacing:-.02em;color:var(--ink-bright)">What was built, against what was agreed</h1>
+  </div>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Evidence on a part</span><span style="font-size:12.5px;color:var(--ink-6)">In the Implementation view every part carries one plain label. A nice-looking diagram is never treated as proof.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile" style="height:170px;flex-direction:column;gap:10px"><div class="part"><b>Payment Worker</b><span>retry-worker</span></div><span class="evt" style="background:rgba(28,122,84,.12);color:var(--good);align-self:center"><i style="background:var(--good)"></i>changed · tested</span></div>
+        <div class="cap"><b>Tested</b><span>Changed, and a test from the decision passes against it. The only green state.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px;flex-direction:column;gap:10px"><div class="part"><b>Ledger</b><span>payments db</span></div><span class="evt" style="background:var(--fill-2);color:var(--ink-3);align-self:center"><i style="box-shadow:inset 0 0 0 1.5px var(--ink-4);background-image:linear-gradient(90deg,var(--ink-4) 50%,transparent 50%)"></i>changed · migration 0042</span></div>
+        <div class="cap"><b>Changed</b><span>Code moved, nothing has checked it yet. Neutral, not green.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px;flex-direction:column;gap:10px"><div class="part" style="background:transparent;box-shadow:none;outline:1.5px dashed var(--border-4);outline-offset:-1.5px"><b>Payment Provider</b><span>external</span></div><span class="evt" style="color:var(--ink-5);box-shadow:inset 0 0 0 1px var(--border-4);align-self:center"><i style="box-shadow:inset 0 0 0 1.5px var(--ink-8)"></i>assumed · accepts keys</span></div>
+        <div class="cap"><b>Assumed</b><span>Something the plan relies on that nobody has shown. The card itself goes dashed.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px;flex-direction:column;gap:10px"><div class="part"><b>Payment Provider</b><span>external</span></div><span class="evt" style="background:var(--attention-wash);color:var(--attention-ink);box-shadow:inset 0 0 0 1px var(--attention-line);align-self:center"><i style="background:var(--attention)"></i>question · refunds</span></div>
+        <div class="cap"><b>Question</b><span>The coding agent found something the decision doesn’t cover. Amber, because it waits on a person.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:170px;flex-direction:column;gap:10px"><div class="part"><b>Retry Queue</b><span>job queue · lease</span></div><span class="evt" style="color:var(--ink-8);align-self:center"><i style="background:var(--ink-10)"></i>unchanged</span></div>
+        <div class="cap"><b>Unchanged</b><span>Untouched by this work. Said quietly so the rest stands out.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">How much attention it asks for</span><span style="font-size:12.5px;color:var(--ink-6)">Work runs on its own clock. Its presence grows with what it needs from you, and never past that.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px">
+      <div>
+        <div class="tile" style="height:150px"><span class="chip"><span class="dot" style="background:var(--attention)"></span>2 streams<span class="m">testing</span></span></div>
+        <div class="cap"><b>1 · Ambient</b><span>Progress is a word on one chip. No toasts for files changed or tests started.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:150px;flex-direction:column;gap:8px;align-items:stretch">
+          <div style="display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ink-7)"><span>● Started —</span><span>● Reading —</span><span>● Changing —</span><span style="color:var(--ink-bright);font-weight:500">● Testing —</span><span style="color:var(--ink-10)">● Ready</span></div>
+          <div style="display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:7px;background:var(--fill-1);font-family:var(--mono);font-size:10.5px;line-height:1.6"><span style="display:flex;justify-content:space-between"><span style="color:var(--ink-4)">payments/retry/worker.ts</span><span><span style="color:var(--good)">+48</span> <span style="color:var(--bad)">−12</span></span></span><span style="display:flex;justify-content:space-between"><span style="color:var(--ink-4)">db/migrations/0042_attempt_key.sql</span><span style="color:var(--good)">+14</span></span></div>
+        </div>
+        <div class="cap"><b>2 · On request</b><span>Open the chip for stages, worktree, and files changed. Detail is there when you look, never pushed.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:150px"><span class="chip" style="color:var(--attention-ink);box-shadow:0 0 0 1px var(--attention-line),var(--studio-shadow)"><span class="dot" style="background:var(--attention)"></span>2 streams<span class="m">needs the room</span></span></div>
+        <div class="cap"><b>3 · Needs the room</b><span>A question turns the chip amber. Vowe mentions it once, at a pause, and points at where it waits.</span></div>
+      </div>
+      <div>
+        <div class="tile" style="height:150px">
+          <div style="width:280px;display:flex;flex-direction:column;gap:8px;padding:10px 11px;border-radius:9px;background:var(--attention-wash);box-shadow:inset 0 0 0 1px var(--attention-line)">
+            <span style="font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--attention-ink)">● CLAUDE CODE IS ASKING</span>
+            <span style="font-size:12px;line-height:1.45;color:var(--ink-2)">The provider won’t take a key on refunds. Leave refunds out, or check the ledger?</span>
+            <span style="display:flex;gap:6px"><span class="mini">Leave refunds out</span><span class="mini" style="background:rgba(47,99,196,.14);color:var(--ask)">Talk it through</span></span>
+          </div>
+        </div>
+        <div class="cap"><b>4 · On the decision</b><span>Questions land on the card they’re about. Answering one is recorded there and doesn’t silently amend the decision.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h"><span class="eyebrow">Coming back</span><span style="font-size:12.5px;color:var(--ink-6)">Try it with the room’s Tweaks → scenario: returning.</span></div>
+    <div style="display:grid;grid-template-columns:480px minmax(0,1fr);gap:40px;align-items:start">
+      <div class="tile" style="height:260px">
+        <div style="width:420px;box-sizing:border-box;padding:14px 16px;border-radius:14px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2f63c4 0,#2f63c4 34%,rgba(47,99,196,.22) 36%,rgba(47,99,196,.22) 60%,transparent 62%)"></span><b style="font-size:14px;color:var(--ink-bright)">Since you were last here</b></div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;line-height:1.45;color:var(--ink-3)">
+            <span style="display:flex;gap:9px;align-items:baseline"><span class="dot" style="background:var(--ask)"></span>John signed v3; it went to Claude Code with all three checks.</span>
+            <span style="display:flex;gap:9px;align-items:baseline"><span class="dot" style="background:var(--ink-10)"></span>Claude Code changed 4 files.</span>
+            <span style="display:flex;gap:9px;align-items:baseline"><span class="dot" style="background:var(--good)"></span>2 of 3 checks pass.</span>
+            <span style="display:flex;gap:9px;align-items:baseline"><span class="dot" style="background:var(--attention)"></span>1 question is waiting for the room.</span>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px"><span class="mini" style="background:transparent;color:var(--ink-7)">Dismiss</span><span class="mini">Show what changed</span></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <div class="rule" style="border-top:0;padding-top:0"><b>01</b><span>The return brief is four lines at most, one dot colour each, ordered by what happened, with the question last.</span></div>
+        <div class="rule"><b>02</b><span>“Show what changed” opens the Implementation view, the architecture you already know with evidence laid on it, rather than a log.</span></div>
+        <div class="rule"><b>03</b><span>Two streams touching one file are flagged as overlapping. Git being able to merge them is never presented as them being compatible.</span></div>
+        <div class="rule"><b>04</b><span>Checks come from the signed decision’s Verify line, so “2 of 3” always means two of the things you agreed to check.</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
