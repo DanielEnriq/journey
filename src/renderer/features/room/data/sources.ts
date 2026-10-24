@@ -53,6 +53,10 @@ export interface RoomDataSource {
   preview(roomId: string): Promise<RoomPreview>;
   /** You were here: "since you were last here" counts from now. */
   visited(roomId: string): void;
+  /** You opened the room: its members can see you're here. Never joins its call. */
+  enter?(roomId: string): Promise<void>;
+  /** You closed the room. */
+  exit?(roomId: string): Promise<void>;
   people(): Record<PersonId, Person>;
   /** Asks a teammate to join; resolves once they have. Only ever called after the room said yes. */
   invite(person: PersonId): Promise<void>;

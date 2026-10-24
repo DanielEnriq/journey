@@ -68,7 +68,7 @@ async function doSignIn(): Promise<User> {
     const { codeVerifier, codeChallenge } = await oauth.generateCodeVerifierAsync();
     const authUrl = oauth.generateAuthUrl({
       access_type: 'offline',
-      prompt: 'consent', // ensures a refresh token is issued
+      prompt: 'select_account consent', // lets you pick (or switch) the account; consent ensures a refresh token
       scope: config.google.scopes,
       state,
       code_challenge: codeChallenge,

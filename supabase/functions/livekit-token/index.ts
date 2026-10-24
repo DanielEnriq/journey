@@ -4,12 +4,17 @@
 // POST { roomId } with the caller's Supabase session as `Authorization: Bearer <jwt>`
 //   → 200 { url, token }   token is valid for 10 minutes to join; an open call isn't cut off when it expires
 //   → 401 not signed in, 403 not a member of the room (or no longer in its workspace), 400 bad request
+// POST { roomId, userId, action: 'sync' }   owners only, after changing someone's role or removing them
+//   → 200 { applied: 'removed' | 'updated' | 'none' }   takes a removed person off the call, and makes a
+//     connected person's permissions follow their new role (a new viewer stops being heard at once)
+//
+// Owners and members publish their microphone; viewers only listen. Roles are read under RLS as the caller.
 //
 // Secrets (once per project): supabase secrets set LIVEKIT_URL=wss://… LIVEKIT_API_KEY=… LIVEKIT_API_SECRET=…
 // Deploy: pnpm cloud:functions
 
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { AccessToken, TrackSource } from 'npm:livekit-server-sdk@2.19.1';
+import { AccessToken, RoomServiceClient, TrackSource } from 'npm:livekit-server-sdk@2.19.1';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -27,6 +32,14 @@ function publishableKey(): string {
 }
 
 const reply = (status: number, body: object) => Response.json(body, { status });
+
+type RoomRole = 'owner' | 'member' | 'viewer';
+
+/** What a role may do on the call: everyone hears it; viewers publish nothing. Audio rooms: no camera or screen. */
+function callPermissions(role: RoomRole) {
+  const talks = role !== 'viewer';
+  return { canSubscribe: true, canPublish: talks, canPublishSources: talks ? [TrackSource.MICROPHONE] : [], canPublishData: false };
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
@@ -48,14 +61,40 @@ Deno.serve(async (req) => {
 
   // Same rule as the room's Realtime channel (private.can_use_room): RLS shows a room's room_members rows only
   // to its members who are still in its workspace, so this finds a row only if the caller is in both.
-  const { data: membership, error: memberError } = await supabase
-    .from('room_members')
-    .select('room_id')
-    .eq('room_id', roomId)
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (memberError) return reply(500, { error: memberError.message });
-  if (!membership) return reply(403, { error: 'Join the room before its call' });
+  async function roleOf(user: string): Promise<RoomRole | null> {
+    const { data, error } = await supabase.from('room_members').select('role').eq('room_id', roomId).eq('user_id', user).maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data?.role as RoomRole | undefined) ?? null;
+  }
+
+  let role: RoomRole | null;
+  try {
+    role = await roleOf(userId);
+  } catch (err) {
+    return reply(500, { error: (err as Error).message });
+  }
+
+  if ((body as { action?: unknown }).action === 'sync') {
+    const target = (body as { userId?: unknown }).userId;
+    if (typeof target !== 'string' || !UUID.test(target)) return reply(400, { error: 'userId must be a user id' });
+    if (role !== 'owner') return reply(403, { error: 'Only the room’s owners can do that' });
+    const rooms = new RoomServiceClient(env('LIVEKIT_URL').replace(/^ws/, 'http'), env('LIVEKIT_API_KEY'), env('LIVEKIT_API_SECRET'));
+    try {
+      const theirs = await roleOf(target);
+      if (!theirs) {
+        await rooms.removeParticipant(`room:${roomId}`, target);
+        return reply(200, { applied: 'removed' });
+      }
+      await rooms.updateParticipant(`room:${roomId}`, target, { permission: { ...callPermissions(theirs), canUpdateMetadata: false } });
+      return reply(200, { applied: 'updated' });
+    } catch (err) {
+      // They aren't on the call, or no call is running: there's nothing to bring in line.
+      if (/not.?found|does not exist|404/i.test((err as Error).message)) return reply(200, { applied: 'none' });
+      return reply(500, { error: (err as Error).message });
+    }
+  }
+
+  if (!role) return reply(403, { error: 'Join the room before its call' });
 
   const { data: profile } = await supabase.from('users').select('name, avatar_url').eq('id', userId).maybeSingle();
 
@@ -68,10 +107,7 @@ Deno.serve(async (req) => {
   token.addGrant({
     room: `room:${roomId}`,
     roomJoin: true,
-    canSubscribe: true,
-    canPublish: true,
-    canPublishSources: [TrackSource.MICROPHONE], // audio rooms: no camera or screen share
-    canPublishData: false,
+    ...callPermissions(role),
     canUpdateOwnMetadata: false,
   });
 

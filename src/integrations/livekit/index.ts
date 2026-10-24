@@ -42,3 +42,24 @@ async function readError(res: Response): Promise<string | undefined> {
     return undefined;
   }
 }
+
+/**
+ * Owners only, after changing someone's role or removing them: brings their connection to the room's call in
+ * line, so a removed person is taken off it and a new viewer stops being heard without reconnecting. Best
+ * effort: the database has already decided, and their next token follows it either way.
+ */
+export async function syncCallParticipant(roomId: string, userId: string): Promise<void> {
+  try {
+    if (isApiConfigured()) {
+      await postApi('/livekit/sync', { roomId, userId });
+      return;
+    }
+    const { error } = await (await getCloud()).functions.invoke('livekit-token', { body: { roomId, userId, action: 'sync' } });
+    if (error) {
+      const reason = error instanceof FunctionsHttpError ? await readError(error.context as Response) : undefined;
+      throw new Error(reason ?? error.message);
+    }
+  } catch (err) {
+    console.warn('[calls] could not update the call after a membership change:', (err as Error).message);
+  }
+}

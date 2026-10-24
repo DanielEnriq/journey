@@ -410,8 +410,12 @@ export type Workspace = Tables<'workspaces'>;
 // local files. Joining the call (rooms.join, calls.access) is a separate step, for members only.
 // Implementation: integrations/supabase/rooms.ts; rules: supabase/migrations/*_room_membership.sql.
 
-/** `owner`s rename, delete, and manage members; `member`s use the room and can leave it. */
-export type RoomRole = 'owner' | 'member';
+/**
+ * `owner`s rename, delete, and manage members and invitations; `member`s use the room, sign its
+ * decisions and talk on its call; `viewer`s read, comment and listen. The database and the LiveKit
+ * token services enforce the difference (supabase/migrations/*_room_invitations.sql).
+ */
+export type RoomRole = 'owner' | 'member' | 'viewer';
 
 /** A room you're a member of. Ids are stable UUIDs; times are ISO 8601. */
 export interface RoomSummary {
@@ -486,6 +490,8 @@ export type RoomErrorCode =
 export interface RoomFailure {
   code: RoomErrorCode;
   message: string;
+  /** For membership and invitations: which designed state explains it (MembershipErrorCode). */
+  reason?: MembershipErrorCode;
 }
 
 /** What room channels resolve with: failures are values, so the code survives IPC. */
@@ -548,6 +554,11 @@ export interface Participant {
   avatarUrl: string | null;
   /** When they connected, ISO 8601. */
   joinedAt: string;
+  /**
+   * Whether they're connected to the room's LiveKit call, as their own client reports it; null while
+   * they only have the room open. Being in the room never puts anyone in the call.
+   */
+  call: { muted: boolean } | null;
 }
 
 /**
@@ -558,6 +569,12 @@ export interface RoomEvents {
   'chat:message': { text: string };
   /** The room's record changed (a thread, reply, decision or signature); members re-read it. */
   'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' };
+  /**
+   * Who's in the room changed: someone joined, left, was removed or got another role, or an invitation
+   * changed. Members re-read the room's access; `userId` (when it's about a person) lets the person it's
+   * about tear down at once rather than on their next read.
+   */
+  'members:changed': { what: 'joined' | 'left' | 'removed' | 'role' | 'invitation'; userId: string | null };
 }
 
 export type RoomEventType = keyof RoomEvents;
@@ -648,7 +665,9 @@ export interface RoomDecision {
   history: { version: number; title: string; verify: string; proposedBy: RoomAuthor; createdAt: string }[];
 }
 
-export type RoomActivityKind = 'thread' | 'reply' | 'decision' | 'amended' | 'signed' | 'repository' | 'call-started' | 'call-left';
+export type RoomActivityKind =
+  | 'thread' | 'reply' | 'decision' | 'amended' | 'signed' | 'repository' | 'call-started' | 'call-left'
+  | 'joined' | 'left' | 'removed' | 'role';
 
 export interface RoomActivity {
   id: string;
@@ -680,6 +699,84 @@ export interface CallAccess {
   url: string;
   token: string;
 }
+
+// ─── Invitations ─────────────────────────────────────────────────────────────
+// Getting people into a room (supabase/migrations/*_room_invitations.sql, integrations/supabase/invitations.ts).
+// Email invitations are bound to one address and redeemed in the app by whoever signs in with it; the
+// room's invite link carries a token, shown once to the owner who made it. Accepting makes you a member
+// with the invitation's role. It never joins the call.
+
+export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
+export type LinkExpiry = '24h' | '7d' | '30d';
+
+/** An invitation as the room's members see it. Tokens are never part of it. */
+export interface RoomInvitation {
+  id: string;
+  roomId: string;
+  kind: 'email' | 'link';
+  /** Email invitations: who it's for. */
+  email: string | null;
+  /** Links: the email domain it's limited to, if any. */
+  domain: string | null;
+  role: RoomRole;
+  /** `pending` past its expiry reads as `expired`. A link is live while `pending`. */
+  status: InvitationStatus;
+  invitedBy: string;
+  sentAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  resends: number;
+  uses: number;
+}
+
+/** A newly made invite link. `url` holds its token: this is the only time it's available. */
+export interface RoomLink {
+  invitation: RoomInvitation;
+  url: string;
+}
+
+/** Why an invitation can't be used, or a membership action was refused; each has a designed state. */
+export type MembershipErrorCode =
+  | 'invalid_email' | 'not_permitted' | 'last_owner' | 'rate_limited'
+  | 'invite_expired' | 'invite_revoked' | 'invite_used' | 'invite_not_found'
+  | 'wrong_account' | 'domain_not_allowed' | 'link_revoked' | 'room_gone' | 'network';
+
+export interface InvitePerson { id: string; name: string; avatarUrl: string | null }
+
+/** What an invitation is, as its holder may see it before joining. */
+export interface InviteContext {
+  /** The invitation's id. */
+  id: string;
+  via: 'email' | 'link';
+  inviter: InvitePerson;
+  roomName: string;
+  role: RoomRole;
+  /** Masked address an email invitation is bound to, e.g. `j•••@acme.com`. */
+  boundEmail: string | null;
+  domain: string | null;
+}
+
+/** What an invitation would do for the signed-in person: resolveInvite's answer. */
+export type InviteResolution =
+  | { kind: 'preview'; invite: InviteContext; room: { id: string; name: string; goal: string | null; members: InvitePerson[] } }
+  | { kind: 'already-member'; roomId: string; roomName: string }
+  | { kind: 'wrong-account'; invite: InviteContext; signedInAs: string }
+  | { kind: 'error'; error: MembershipErrorCode; invite?: InviteContext; signedInAs?: string };
+
+/** An invitation waiting for you: an email invitation sent to the address you signed in with. */
+export interface IncomingInvitation {
+  id: string;
+  roomId: string;
+  roomName: string;
+  role: RoomRole;
+  inviterName: string;
+  sentAt: string;
+  expiresAt: string;
+}
+
+/** Names one invitation to resolve or accept: a link's token, or one of your email invitations. */
+export type InviteKey = { token: string } | { invitationId: string };
 
 /** The OS-level microphone permission. `denied`/`restricted` mean the user must change it in system settings. */
 export type MicrophoneAccess = 'granted' | 'denied' | 'restricted';
@@ -747,12 +844,23 @@ export interface Channels {
     'record:sign': (roomId: string, decisionId: string, version: number) => RoomResult<RoomDecision>;
     'record:seen': (roomId: string) => RoomResult<void>;
     'record:call': (roomId: string, what: 'call-started' | 'call-left') => RoomResult<void>;
+    'invites:list': (roomId: string) => RoomResult<RoomInvitation[]>;
+    'invites:send': (roomId: string, emails: string[], role: RoomRole) => RoomResult<RoomInvitation[]>;
+    'invites:createLink': (roomId: string, settings: { role: RoomRole; expiry: LinkExpiry; domain: string | null }) => RoomResult<RoomLink>;
+    'invites:revoke': (invitationId: string) => RoomResult<void>;
+    'invites:mine': () => RoomResult<IncomingInvitation[]>;
+    'invites:resolve': (key: InviteKey) => RoomResult<InviteResolution>;
+    /** Resolves with the room's id. */
+    'invites:accept': (key: InviteKey) => RoomResult<string>;
     'rooms:join': (roomId: string) => RoomSession;
     'rooms:leave': (roomId: string) => void;
     'rooms:send': <K extends RoomEventType>(roomId: string, type: K, payload: RoomEvents[K]) => RoomEvent<K>;
+    /** Tells the room whether you're in its call (and muted); null when you're only in the room. */
+    'rooms:setCall': (roomId: string, call: { muted: boolean } | null) => void;
     'calls:access': (roomId: string) => CallAccess;
     /** Asks the OS for the microphone if it hasn't been asked yet; otherwise reports the current answer. */
     'calls:requestMicrophone': () => MicrophoneAccess;
+    'calls:openMicrophoneSettings': () => void;
     'agent:status': () => AgentStatus;
     /** Starts a conversation when `conversationId` is null; resolves with the agent's answer. */
     'agent:send': (conversationId: string | null, context: AgentContext, text: string) => AgentReply;
@@ -881,6 +989,27 @@ export interface JourneyApi {
     onEvent(listener: (event: RoomEvent) => void): () => void;
     onPresence(listener: (update: { roomId: string; participants: Participant[] }) => void): () => void;
     onStatus(listener: (update: { roomId: string; status: RoomStatus }) => void): () => void;
+    /** Tells everyone in the room whether you're in its call, and muted; null once you leave the call. */
+    setCall(roomId: string, call: { muted: boolean } | null): Promise<void>;
+  };
+  /**
+   * Getting people into rooms. Owners invite by email and make the room's link; anyone signed in can
+   * look up and accept an invitation meant for them. Accepting never joins the call.
+   */
+  invites: {
+    /** The room's invitations (members). */
+    list(roomId: string): Promise<RoomResult<RoomInvitation[]>>;
+    /** Owners. Existing members are skipped; a pending invitation is sent again. */
+    send(roomId: string, emails: string[], role: RoomRole): Promise<RoomResult<RoomInvitation[]>>;
+    /** Owners. Replaces the room's live link; the result's `url` is the only copy of its token. */
+    createLink(roomId: string, settings: { role: RoomRole; expiry: LinkExpiry; domain: string | null }): Promise<RoomResult<RoomLink>>;
+    /** Owners: withdraw an email invitation or turn the link off. */
+    revoke(invitationId: string): Promise<RoomResult<void>>;
+    /** Email invitations waiting for the address you signed in with. */
+    mine(): Promise<RoomResult<IncomingInvitation[]>>;
+    resolve(key: InviteKey): Promise<RoomResult<InviteResolution>>;
+    /** Makes you a member; resolves with the room's id. */
+    accept(key: InviteKey): Promise<RoomResult<string>>;
   };
   /** A room's record: threads, replies, decisions and signatures, activity. Members only. */
   record: {
@@ -900,6 +1029,8 @@ export interface JourneyApi {
     /** Returns a token for the room's call. Members only. */
     access(roomId: string): Promise<CallAccess>;
     requestMicrophone(): Promise<MicrophoneAccess>;
+    /** Opens the system's microphone privacy settings (macOS); does nothing elsewhere. */
+    openMicrophoneSettings(): Promise<void>;
   };
   /** Vowe's collaborator agent: text conversations about the work, through read-only tools. */
   agent: {

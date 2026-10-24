@@ -27,7 +27,7 @@ function tokenFor(userId, roomId = ROOM) {
         eq: (column, value) => ((filters[column] = value), query),
         maybeSingle: async () =>
           table === 'room_members'
-            ? { data: MEMBERS.has(filters.user_id) && filters.room_id === ROOM ? { room_id: ROOM } : null, error: null }
+            ? { data: MEMBERS.has(filters.user_id) && filters.room_id === ROOM ? { room_id: ROOM, role: 'member' } : null, error: null }
             : { data: { name: userId === ANA ? 'Ana' : 'Ben', avatar_url: null }, error: null },
       };
       return query;

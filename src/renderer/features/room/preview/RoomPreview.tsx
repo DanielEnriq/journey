@@ -1,4 +1,4 @@
-import { Fragment, h } from '../../../vendor/preact.js';
+import { Fragment, h, type ComponentChildren } from '../../../vendor/preact.js';
 import { useEffect, useState } from '../../../vendor/preact-hooks.js';
 import { Store, useStore } from '../../../shared/store.js';
 import { ago } from '../../../shared/time.js';
@@ -27,7 +27,7 @@ function EventRow({ e }: { e: RoomEvent }) {
   );
 }
 
-function CallCard({ p, session, onJoin }: { p: Preview; session: CallSession; onJoin(): void }) {
+function CallCard({ p, session, onJoin, sheet }: { p: Preview; session: CallSession; onJoin(): void; sheet?: ComponentChildren }) {
   const cs = useStore(session.store);
   const mine = cs.roomId === p.room.id;
   const connecting = mine && cs.status === 'connecting', failed = mine && cs.status === 'failed';
@@ -42,8 +42,9 @@ function CallCard({ p, session, onJoin }: { p: Preview; session: CallSession; on
           <span>{live ? 'Vowe is with them. Join to see the canvas and talk it through.' : 'Start one to open the canvas. Vowe joins every call.'}</span>
         </div>
       </div>
-      <div class="cc-act">
-        <button class="cta" type="button" disabled={connecting} onClick={onJoin}>
+      <div class="cc-act vm-prejoin-anchor">
+        {sheet && <div class="vm-prejoin-pop">{sheet}</div>}
+        <button class="cta" type="button" disabled={connecting} aria-expanded={sheet ? true : undefined} onClick={onJoin}>
           {connecting ? <><span class="spinlet"></span>Connecting…</> : live ? 'Join call' : 'Start call'}
         </button>
         <span class="cc-fine">{failed ? <span class="err">{cs.error}</span> : 'Your microphone stays off until you turn it on.'}</span>
@@ -52,7 +53,7 @@ function CallCard({ p, session, onJoin }: { p: Preview; session: CallSession; on
   );
 }
 
-export function RoomPreview({ sources, roomId, session, canvas, attachError, onJoin }: {
+export function RoomPreview({ sources, roomId, session, canvas, attachError, onJoin: join, joinSheet, people }: {
   sources: Sources;
   roomId: string;
   session: CallSession;
@@ -61,7 +62,13 @@ export function RoomPreview({ sources, roomId, session, canvas, attachError, onJ
   /** Why the room's repository couldn't be attached when it was made. */
   attachError?: string;
   onJoin(): void;
+  /** How to join, chosen before joining (muted or talking); without it, joining is immediate. */
+  joinSheet?(close: () => void): ComponentChildren;
+  /** The room's people, at the top of the side column. */
+  people?: ComponentChildren;
 }) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const onJoin = joinSheet ? () => setSheetOpen(true) : join;
   const { room, work } = sources;
   const preview = useLoaded(() => room.preview(roomId), (fn) => room.subscribe(fn), roomId);
   const ctx = useLoaded(() => work.context(roomId), (fn) => room.subscribe(fn), roomId);
@@ -97,7 +104,7 @@ export function RoomPreview({ sources, roomId, session, canvas, attachError, onJ
             )}
           </div>
 
-          <CallCard p={p} session={session} onJoin={onJoin} />
+          <CallCard p={p} session={session} onJoin={sheetOpen ? () => setSheetOpen(false) : onJoin} sheet={sheetOpen && joinSheet ? joinSheet(() => setSheetOpen(false)) : undefined} />
 
           {sinceShown && p.since.length > 0 && (
             <div class="since" role="status">
@@ -133,6 +140,7 @@ export function RoomPreview({ sources, roomId, session, canvas, attachError, onJ
         </div>
 
         <div class="lobby-side" id="work">
+          {people}
           {p.attention.length > 0 && (
             <div class="rsec">
               <span class="rk">Needs you<span>{p.attention.length}</span></span>

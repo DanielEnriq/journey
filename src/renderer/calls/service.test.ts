@@ -90,6 +90,7 @@ function setup({ microphone = 'granted' as MicrophoneAccess, access }: { microph
       log.push('requestMicrophone');
       return microphone;
     },
+    async openMicrophoneSettings() {},
   };
   const played = new Set<string>();
   const audio: AudioSink = {
