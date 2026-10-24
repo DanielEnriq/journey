@@ -133,7 +133,8 @@ export interface TurnHandle {
   cancel(reason?: 'interrupted' | 'cancelled'): void;
 }
 
-const roomTurnSchema = z
+/** What agent:ask accepts; anything else fails the turn with `invalid-turn`. */
+export const roomTurnSchema = z
   .object({
     roomId: z.string().trim().min(1).max(100),
     participant: z.object({ userId: z.string().trim().min(1).max(100), name: z.string().max(200).nullable() }).strict(),

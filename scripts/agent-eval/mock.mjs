@@ -29,7 +29,7 @@ export function mockProvider() {
   return {
     id: 'mock',
     name: 'Mock model',
-    billing: 'api-key',
+    billing: 'none (mock)',
     model: 'mock',
     isConfigured: () => true,
     async complete({ items, onTextDelta }) {

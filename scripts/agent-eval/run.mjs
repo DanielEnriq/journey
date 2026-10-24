@@ -5,6 +5,8 @@
 //   --provider auto|chatgpt|openai|anthropic|mock    (default auto: the first one that's configured)
 //   --question "…"                                   (default: the crash-after-charge question)
 //   --voice                                          (as a spoken turn)
+//   --require-real                                   (fail instead of falling back to the mock)
+//   --json <file>                                    (also write the report as JSON)
 //
 // chatgpt signs in with Sign in with ChatGPT in your browser (VOWE_CHATGPT_PLAN=on), into this
 // harness's own credential file under ~/.vowe-eval, never the app's or another tool's. openai and
@@ -30,6 +32,8 @@ const { values: args } = parseArgs({
     provider: { type: 'string', default: 'auto' },
     question: { type: 'string', default: 'What happens if this worker crashes after charging but before acknowledging the job?' },
     voice: { type: 'boolean', default: false },
+    'require-real': { type: 'boolean', default: false },
+    json: { type: 'string' },
   },
 });
 
@@ -69,9 +73,12 @@ async function pickProvider(choice) {
     if (chatgpt.isConfigured()) return chatgpt;
     if (choice === 'chatgpt') throw new Error('Signed in, but ChatGPT plan usage was not granted.');
   }
+  if (choice === 'openai' && !openai.isConfigured()) throw new Error('--provider openai needs OPENAI_API_KEY (in .env or the environment).');
+  if (choice === 'anthropic' && !anthropic.isConfigured()) throw new Error('--provider anthropic needs ANTHROPIC_API_KEY (in .env or the environment), or `ant auth login`.');
   if (choice === 'openai' || (choice === 'auto' && openai.isConfigured())) return openai;
   if (choice === 'anthropic' || (choice === 'auto' && anthropic.isConfigured())) return anthropic;
   if (choice !== 'auto') throw new Error(`Unknown provider ${choice}`);
+  if (args['require-real']) throw new Error('--require-real: no real provider is configured (see INTEGRATION.md → Environment).');
   return mockProvider();
 }
 
@@ -101,7 +108,13 @@ const work = {
   readCode: (_repo, _ws, path, from, to) => readTrackedFile(repo, path, from, to),
 };
 
-const provider = await pickProvider(args.provider);
+let provider;
+try {
+  provider = await pickProvider(args.provider);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(2);
+}
 const agent = new Collaborator({
   provider: () => provider,
   work,
@@ -184,4 +197,17 @@ console.log('\n── Checks ──');
 for (const [name, ok] of checks) console.log(`  ${ok === null ? '–' : ok ? '✔' : '✖'} ${name}${ok === null ? ' (skipped: needs a real model)' : ''}`);
 const failed = checks.filter(([, ok]) => ok === false).length;
 console.log(mock ? '\nMOCK ONLY: these checks exercised the runtime with a scripted model, not a real one.' : `\n${failed ? `${failed} check(s) failed` : 'All checks passed'} with ${provider.name}.`);
+if (args.json) {
+  const { writeFileSync } = await import('node:fs');
+  const report = {
+    kind: mock ? 'mock' : 'real-model',
+    provider: { id: provider.id, name: provider.name, billing: provider.billing, model: reply.model },
+    question: args.question,
+    source: args.voice ? 'voice' : 'text',
+    checks: Object.fromEntries(checks.map(([name, ok]) => [name, ok === null ? 'skipped' : ok ? 'pass' : 'fail'])),
+    reply: { ...reply, grounding: reply.roomGrounding }, // the room's copy: no local excerpts in a file that may be shared
+  };
+  writeFileSync(args.json, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`Report written to ${args.json}`);
+}
 process.exitCode = failed ? 1 : 0;

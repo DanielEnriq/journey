@@ -1,239 +1,438 @@
-# Vowe's runtime: how to integrate it
+# Vowe's runtime: integration contracts
 
-There is one brain: `Collaborator` (`index.ts`). It runs a tool-calling loop over a model provider, a
-typed tool registry, the local work context, and, in a room, the room's record and the asker's canvas.
-Typed questions, the developer screen and (later) the call's voice participant all use it. It explains
-and questions the work. It never edits code and never steers coding agents. It produces three things:
-words, a checked account of what those words rest on, and validated canvas requests.
+There is one brain: `Collaborator` (`src/assistant/index.ts`), running in each person's Electron main
+process. Typed room questions, the developer screen and voice all use it. It explains and questions the
+work. It never edits code and never steers coding agents. It produces three things: streamed words, a
+checked account of what those words rest on, and validated canvas commands.
+
+This document is the contract. The types below are copied from the source (`src/shared/api.ts`,
+`src/assistant/canvas.ts`, `src/renderer/shared/vowe-voice.ts`). The JSON Schemas in
+`src/assistant/contracts/` are generated from the zod schemas the runtime enforces. A test fails if
+they drift from the source; `pnpm contracts:write` regenerates them.
+
+| Contract | Source of truth | JSON Schema |
+|---|---|---|
+| Starting a turn: `RoomAgentTurn` | `roomTurnSchema` in `index.ts` | `contracts/room-agent-turn.schema.json` |
+| The canvas the turn sees: `CanvasSnapshot` | `canvasSnapshotSchema` in `canvas.ts` | `contracts/canvas-snapshot.schema.json` |
+| What Vowe asks the canvas to do: `CanvasCommand` | `canvasCommandSchema` in `canvas.ts` | `contracts/canvas-command.schema.json` |
+| Events, replies, errors | `src/shared/api.ts` | TypeScript only (they originate in the runtime) |
 
 ```
-renderer (room UI, canvas, call)          main process (this runtime)                    providers
-──────────────────────────────           ───────────────────────────                    ─────────
-journey.agent.ask(turn) ───IPC───▶ Collaborator.ask ─┬─ selectProvider ──▶ ChatGPT plan (SIWC)  ← default
-journey.agent.onEvent   ◀──IPC──── AgentEvent stream │                 └─▶ OpenAI API key / Anthropic (fallbacks)
-journey.agent.cancel    ───IPC───▶ abort             ├─ tools: WorkContextService (sessions, Git, code)
-journey.agent.approve   ───IPC───▶ approval prompts  │         room record (Supabase), canvas snapshot
-                                                     └─ EvidenceLedger, validateCanvasCommand
+asker's machine                                                     everyone in the room
+───────────────────────────────────────────────────────────         ─────────────────────
+renderer                         main (this runtime)
+ room UI ── journey.agent.ask ──▶ Collaborator.ask
+ VoiceAdapter ─ agentOverIpc ──▶   ├─ per-user check: asker == the person signed in here
+                                   ├─ selectProvider: THIS person's ChatGPT plan, or this machine's key
+                                   ├─ tools: WorkContextService (local), room record (Supabase, RLS)
+          ◀── agent:event ───────  └─ AgentEvent stream: text, tools, approvals, canvas, end
+ canvas engine ◀ canvas.command ─────────────────────────────── (relay to room: unresolved, §5)
+ VoiceOutput (TTS) ─ audio as "vowe:<userId>" ─ LiveKit ─────────▶ hears "Vowe (for Daniel)"
 ```
 
-## Files
+## 1. Room turns: start, stream, cancel
 
-| File | What it is |
-|---|---|
-| `index.ts` | `Collaborator`: `ask()` for room turns, `send()` for the developer screen, the loop, authorization, prompts |
-| `provider.ts` | The neutral `ModelProvider` contract, `ModelItem`s, and `ModelProviderError` codes |
-| `select.ts` | Which provider answers a turn: the ChatGPT plan first, then configured fallbacks |
-| `tools.ts` | Work-context tools: `list_coding_sessions`, `read_coding_session`, `get_repository_status`, `get_worktree_changes`, `search_code`, `read_code` |
-| `room-tools.ts` | `get_room_context`, `describe_canvas`, the five canvas tools, `report_reasoning` |
-| `canvas.ts` | The canvas contract, version 1: the snapshot coming in, the commands going out, and validation |
-| `evidence.ts` | Evidence ids, claim checking, and `groundingForRoom` |
-| `voice.ts` | `VoiceAdapter`, the seam for the LiveKit voice participant, and `streamTurn` |
-| `../integrations/openai/` | Sign in with ChatGPT (`chatgpt.ts`, `jwt.ts`) and the Responses provider (`responses.ts`) |
-| `../integrations/anthropic/` | The Anthropic fallback |
-
-## Providers and billing
-
-`selectProvider(VOWE_AGENT_PROVIDER, chatgptPlan, [openaiApiKey, anthropic])` runs once per turn, before
-any request is made.
-
-- **auto** (the default) uses the person's ChatGPT plan when they have signed in with plan usage granted.
-  Otherwise it uses the first fallback with a key in `.env`.
-- **A pinned provider** is used even when it isn't configured. The person then sees why it can't answer,
-  instead of being billed somewhere else.
-- **A plan error stops the turn.** Nothing switches billing mid-turn. OpenAI's rule is "Don't silently
-  switch to another billing path". For example, `usage-limit` comes back as a turn error with
-  `manageUrl` pointing to ChatGPT settings → Usage.
-- **The billing in use is always visible:** `AgentStatus.billing` and `AgentEvent turn.started.provider.billing`.
-  The UI shows "Using ChatGPT plan" or "API key".
-
-### Sign in with ChatGPT
-
-This follows https://developers.openai.com/siwc/token-sharing-open-source:
-
-- The first sign-in registers dynamically (`dynamic_agent_client` plus `agent_name_hint`). The issued
-  `oaiapp_…` client id is saved and reused.
-- One `ext_agent_host_id` (`urn:uuid:`) is kept per installation.
-- The redirect goes to `http://127.0.0.1:<port>/auth/callback` and uses state, nonce and PKCE S256.
-- The ID token is checked against OpenAI's JWKS (RS256, issuer, audience, expiry, nonce).
-- Sign-in fails unless `chatgpt.tokens.use.direct` was granted.
-- Refreshes are serialized because refresh tokens rotate. Terminal refresh errors clear the tokens.
-- Sign-out revokes the refresh token.
-- Inference is `POST https://api.openai.com/v1/responses` with `store:false`, `stream:true`, function
-  tools only, and none of the omitted fields. Only `response.completed` counts as success.
-
-Tokens live only in the main process, in `userData/chatgpt-accounts.json`. The file is written
-atomically with mode 0600, and its token fields are sealed with the OS keychain (`safeStorage`). The
-renderer only ever sees `ChatGptStatus`. Vowe never reads ChatGPT cookies or session tokens, and never
-reads another app's credential store, such as Codex's `~/.codex`.
-
-Google sign-in through Supabase stays separate and unchanged. It is who you are in rooms. ChatGPT is
-only who pays for your own model requests. The account panel shows both sign-ins (`Account.tsx →
-ChatGptSection`).
-
-### Eligibility (read before turning it on)
-
-OpenAI offers plan usage to **open-source and locally hosted apps**. A paid or remotely hosted app must
-first complete OpenAI's interest form (https://openai.com/form/sign-in-with-chatgpt-interest/).
-
-Vowe's runtime is locally hosted: it runs in each person's Electron main process. But the repository is
-currently **private with no license**, so it is not an open-source app. For that reason the flow sits
-behind `VOWE_CHATGPT_PLAN=on` and is **off by default**. Turn it on only after Vowe is published under
-an open-source license, or after OpenAI approves it through the form.
-
-## Per-user, local runtime (multiplayer rules)
-
-A room has many members. Every member's Vowe runs on their own laptop.
-
-- **A turn runs on the asker's machine.** `ask()` refuses any turn whose `participant.userId` is not the
-  cloud user signed in there (`not-authorized`). One member's ChatGPT plan, transcripts and code therefore
-  never answer another member's question. A conversation is also bound to its room and its asker.
-- **Membership:** the room's record is read through the signed-in person's Supabase session, which row-level
-  security limits to rooms they belong to. A room they can't read fails the turn before any model call.
-- **Local context stays local.**
-  - Code and transcript excerpts reach the model only after the person approves, once per repository
-    for code and once per session for transcripts.
-  - Nothing is ever shown to the room by default.
-  - `reply.grounding` is for the asker's own screen. **Post `reply.roomGrounding` to the room**: it drops
-    local excerpts and session ids.
-  - The runtime refuses any canvas request that quotes a local transcript.
-- **Recent activity is not a running process.** Session state is reported as what was last observed and
-  when. The prompts forbid treating it as proof that Claude Code is running now.
-- **A server-side LiveKit agent can't use plan tokens.** Plan tokens belong to one person, on their own
-  machine. A shared cloud "Vowe" participant would be a remotely hosted app billing someone's plan for the
-  whole room, which needs OpenAI's approval. It would also need everyone's local context, which it must
-  not have. Voice therefore goes through each asker's local runtime (below). A cloud participant could
-  only use an API key that Vowe pays for, and could only see room-visible data.
-
-## Room UI: asking a question
+### API (renderer, through the preload bridge)
 
 ```ts
-const { turnId } = await window.journey.agent.ask({
-  roomId, participant: { userId: me.id, name: me.name },
-  question, recentTurns,            // the last few things said, for context
-  canvas: snapshotOf(roomState),    // CanvasSnapshot v1: see below
-  conversationId,                   // from the previous turn.started, to continue; null to start fresh
-  source: 'text',
-});
-const off = window.journey.agent.onEvent((e) => { if (e.turnId === turnId) handle(e); });
+window.journey.agent.ask(turn: RoomAgentTurn): Promise<{ turnId: string }>
+window.journey.agent.onEvent(listener: (event: AgentEvent) => void): () => void   // returns unsubscribe
+window.journey.agent.cancel(turnId: string): Promise<void>
+window.journey.agent.approve(approvalId: string, approved: boolean): Promise<void>
+window.journey.agent.status(): Promise<AgentStatus>   // provider, billing, configured, chatgpt status
 ```
 
-The events arrive in order:
+The IPC channels are `agent:ask`, `agent:cancel`, `agent:approve` and `agent:status` (invoke), and
+`agent:event` (broadcast to every window). In main, `Collaborator.ask(turn, onEvent)` returns a
+`TurnHandle { turnId, conversationId, done: Promise<RoomAgentReply>, cancel(reason?) }`.
 
-| Event | What to do with it |
+### Input
+
+```ts
+export interface RoomAgentTurn {
+  roomId: string;
+  /** The cloud user asking. Must be the person signed in on this machine. */
+  participant: { userId: string; name: string | null };
+  question: string;                                                  // 1–8000 chars, trimmed
+  /** What was said before, oldest first, for context (a few turns). */
+  recentTurns: { speaker: string; text: string; at?: string }[];     // ≤ 20, text ≤ 4000
+  /** What the asker's canvas shows, including what they selected or circled. */
+  canvas: CanvasSnapshot;                                            // §2
+  /** Continues an earlier turn's conversation; null or absent starts one. */
+  conversationId?: string | null;
+  source: 'text' | 'voice';
+}
+```
+
+Validation is strict: unknown fields are rejected. The question is resolved against
+`canvas.selection`. Circled components come first, then selected ones. This is how "this worker"
+becomes `payment-worker`.
+
+### Authorization, checked in this order before any model call
+
+| Check | On failure (`turn.failed` with `error.code`) |
 |---|---|
-| `turn.started` | Keep `conversationId` and show the provider and billing |
-| `text.delta` | Stream the answer. Text before a tool call is Vowe thinking aloud, keyed by `step` |
-| `tool.started` / `tool.finished` | Optionally show progress |
-| `approval.requested` | Ask the person, then call `journey.agent.approve(request.id, yes)` |
-| `canvas.command` | Hand it to the canvas engine |
-| `canvas.rejected` | Development diagnostics only |
-| `text.final` | The full answer text |
-| `turn.completed` / `turn.cancelled` / `turn.failed` | Exactly one of these ends the turn |
+| The turn matches `roomTurnSchema` | `invalid-turn`, naming the first 3 bad fields |
+| `conversationId`, if given, is known here | `invalid-turn` ("That conversation has ended") |
+| The conversation belongs to this room and this asker | `not-authorized` |
+| No other turn is running in this conversation | `busy` |
+| Someone is signed in to Vowe (cloud user) on this machine | `not-authorized` |
+| `participant.userId` equals that signed-in user | `not-authorized`: **never answered on this machine's sign-in** |
+| The room is readable through the person's Supabase session (RLS: members only) | `not-authorized` |
 
-Every ending event carries `reply`, a `RoomAgentReply` with `text`, `grounding`, `roomGrounding`,
-`commands`, `focus` and `error`. `journey.agent.cancel(turnId)` stops a turn: its requests abort, pending
-approvals settle as "no", and its history is rolled back.
+During the turn, code and transcript excerpts reach the model only after the person approves. Code
+is approved once per repository and conversation, transcripts once per session and conversation, via
+`approval.requested`. If the person declines, the tool returns `{ declined: true }`, and the answer has
+to say what couldn't be checked.
 
-On `turn.failed`, `error.code` tells the UI what to do:
+### Events, in order
 
-| Code | Show |
-|---|---|
-| `usage-limit` | "Usage limit reached.", with a "Manage usage" link to `error.manageUrl` |
-| `not-signed-in` | "Continue with ChatGPT" |
-| `not-eligible` | The plan can't be used: suggest an API key |
-| `unavailable` / `rate-limit` | Retryable: offer "Try again" |
-| `not-authorized` | Not your question to answer here |
-| `busy` | One turn per conversation at a time |
+```ts
+export type AgentEvent =
+  | { type: 'turn.started'; turnId: string; conversationId: string; roomId: string; provider: AgentProviderInfo }
+  /** Partial answer text. `step` counts model calls; text before a tool call is Vowe thinking aloud. */
+  | { type: 'text.delta'; turnId: string; step: number; delta: string }
+  /** The answer's full text, once known. */
+  | { type: 'text.final'; turnId: string; text: string }
+  | { type: 'tool.started'; turnId: string; call: { id: string; name: string; input: unknown } }
+  | { type: 'tool.finished'; turnId: string; call: AgentToolCall; evidence: string[] }
+  | { type: 'approval.requested'; turnId: string; request: AgentApprovalRequest }
+  | { type: 'canvas.command'; turnId: string; command: CanvasCommand }
+  /** A canvas request the runtime refused to emit, and why (the model is told too). */
+  | { type: 'canvas.rejected'; turnId: string; tool: string; errors: string[] }
+  | { type: 'turn.completed'; turnId: string; reply: RoomAgentReply }
+  | { type: 'turn.cancelled'; turnId: string; reason: 'interrupted' | 'cancelled'; reply: RoomAgentReply }
+  | { type: 'turn.failed'; turnId: string; error: AgentError; reply: RoomAgentReply };
 
-## Canvas engine: the contract (`canvas.ts`, version 1)
+export interface AgentProviderInfo { id: string; name: string; billing: 'chatgpt-plan' | 'api-key'; model: string }
+export interface AgentToolCall { id: string; name: string; input: unknown; error: string | null }
+export interface AgentApprovalRequest { id: string; conversationId: string; title: string; detail: string }
+```
 
-**In:** a `CanvasSnapshot`, built from the room's canvas state as the asker sees it. It contains:
+These guarantees hold for every turn:
 
-- the current `view` and the available `views`;
-- `components`: id, name, kind, `short` (how it's named mid-sentence), `tech` label, `proposed`, and
-  `paths`, the repository paths bound to it when known (these help Vowe find the code);
-- `relationships`;
-- `selection: { selected, circled }`. The question is about the circled components first, else the
-  selected ones. This is how "this worker" is resolved.
+- **Exactly one ending event:** each turn ends with exactly one of `turn.completed`, `turn.cancelled`
+  or `turn.failed`, and it is always the last event.
+- **Failed authorization emits nothing else:** a turn that fails the checks above produces only
+  `turn.failed`, with no `turn.started`.
+- **Events can arrive before `ask()` resolves:** they are broadcast to every window. Buffer them and
+  filter by `turnId`. `agentOverIpc()` in `vowe-voice.ts` does this and is the reference client.
+- **Approvals:** `approval.requested` is also sent on the legacy `agent:approval` channel. Answer it
+  with `approve(request.id, yes)`. If the turn is cancelled, the approval settles as `false`.
+
+### Result
+
+```ts
+export interface RoomAgentReply {
+  turnId: string;
+  conversationId: string;
+  roomId: string;
+  text: string;
+  stop: 'answered' | 'step-limit' | 'truncated' | 'refused' | 'cancelled' | 'failed';
+  /** The claims behind the answer, checked against what the tools returned. */
+  grounding: Grounding;
+  /** The same, as it may be shown to the room: local excerpts and session ids removed (groundingForRoom). Post this one. */
+  roomGrounding: Grounding;
+  /** Validated canvas requests, in the order they were made. */
+  commands: CanvasCommand[];
+  toolCalls: AgentToolCall[];
+  /** What the question was resolved against. */
+  focus: { how: 'circled' | 'selected' | 'none'; componentIds: string[] };
+  provider: AgentProviderInfo;
+  model: string | null;
+  error?: AgentError;
+}
+
+interface Grounding {
+  status: 'grounded' | 'partial' | 'unreported';   // partial: some claims were downgraded
+  claims: { text: string; basis: 'observed' | 'inferred' | 'hypothetical' | 'decided'; evidence: string[]; issues?: string[] }[];
+  gaps: string[];                                  // what Vowe could not check
+  sources: { id: string; kind: 'code' | 'git' | 'session' | 'activity' | 'decision' | 'thread' | 'goal' | 'canvas';
+             ref: string; excerpt?: string; visibility: 'local' | 'room'; approved?: boolean; toolCallId: string }[];
+}
+```
+
+`grounding` belongs on the asker's own screen. **Only `roomGrounding` may be shown to or stored for the
+room.**
+
+### Errors
+
+```ts
+export interface AgentError {
+  code: 'not-signed-in' | 'not-eligible' | 'usage-limit' | 'unavailable' | 'unsupported' | 'auth' | 'rate-limit'
+      | 'cancelled' | 'incomplete' | 'other' | 'not-authorized' | 'busy' | 'invalid-turn';
+  message: string;          // written for a person
+  retryable: boolean;
+  manageUrl?: string;       // usage-limit: https://chatgpt.com/settings/usage
+  providerCode?: string;    // OpenAI's or Anthropic's own code, e.g. subscription_sharing_usage_limit_exceeded
+  requestId?: string;
+}
+```
+
+| Code | Meaning | UI |
+|---|---|---|
+| `usage-limit` | The ChatGPT plan's limit was hit | "Usage limit reached." with a "Manage usage" link to `manageUrl`. Do not retry on a key. |
+| `not-signed-in` | No ChatGPT sign-in, or it ended | "Continue with ChatGPT" (`journey.chatgpt.signIn()`) |
+| `not-eligible` | Plan usage is off for this build, or this account isn't eligible | Offer an API key instead |
+| `unavailable`, `rate-limit`, `incomplete` | Temporary | "Try again" when `retryable` |
+| `auth`, `unsupported`, `other` | Provider refused | Show `message` |
+| `not-authorized`, `busy`, `invalid-turn` | Runtime checks above | Show `message` |
+
+A provider error ends the turn. **The runtime never switches provider or billing mid-turn.**
+
+### Cancel
+
+`journey.agent.cancel(turnId)`, or `handle.cancel('interrupted' | 'cancelled')` in main, aborts the
+in-flight model request and settles pending approvals as `false`. A read-only tool that is already
+running finishes, but no further tool or model call starts. It then emits
+`turn.cancelled` with the reason and rolls the conversation back to before the question, so the next
+question starts from a clean history. Cancelling an unknown or finished turn does nothing.
+
+### Example
+
+```ts
+const { turnId } = await journey.agent.ask({ roomId, participant: { userId: me.id, name: me.name }, question,
+  recentTurns: [], canvas: snapshot, conversationId, source: 'text' });
+```
+
+In practice, use `agentOverIpc(journey.agent).ask(turn, onEvent)`. It handles the buffering and
+filtering and returns `{ turnId, done, cancel }`.
+
+## 2. Canvas commands (contract version 1)
+
+### In: `CanvasSnapshot`
+
+The renderer builds this from what the asker sees. The full schema is in
+`contracts/canvas-snapshot.schema.json`.
+
+```ts
+{
+  version: 1,
+  view: 'arch' | 'failure' | 'alternatives' | 'concurrency' | 'impl' | 'timeout' | 'ui',
+  views: { id: ViewId, name: string /*≤60*/, question?: string /*≤200*/ }[],                 // ≤ 20
+  components: { id: ComponentId, name: string /*≤80*/, kind: 'service' | 'queue' | 'external' | 'store' | 'client' | 'code',
+                short?: string, tech?: string, proposed?: boolean, paths?: string[] /*repo paths, ≤20*/ }[],  // ≤ 200
+  relationships: { from: ComponentId, to: ComponentId, label?: string /*≤60*/ }[],         // ≤ 400
+  selection: { selected: ComponentId[], circled: ComponentId[] },                          // ≤ 50 each
+}
+// ComponentId: /^[A-Za-z][\w-]{0,63}$/
+```
 
 View ids and component kinds are checked at compile time against the renderer's `ViewId` and `PartKind`.
 
-**Out:** `CanvasCommand`s. Each has an envelope `{ v:1, id, roomId, turnId, requestedBy, reason, evidence[],
-visibility:'room' }` plus one of these payloads:
+### Out: `CanvasCommand`
 
-| type | payload |
-|---|---|
-| `highlight_component` | `componentIds[]`, `tone`: focus, risk or verified |
-| `annotate_component` | `componentId`, `kind`: note, concern, question or constraint, `text` |
-| `show_view` | `view`, `focus[]?`, `sequence?`: `actors[]` and `steps[{actor, title, detail?, tone: normal\|crash\|bad\|good}]`, for failure, timeout and concurrency views |
-| `propose_component` | `component {id, name, kind, tech?}`, `near?` |
-| `connect_components` | `from`, `to`, `label` |
-
-`validateCanvasCommand` checks the shape, that every referenced component exists (or was proposed
-earlier in the same turn), and that the sequence and view rules hold. Only commands that pass are
-emitted. The engine can still decline any command.
-
-Suggested integration:
-- Draw proposals and annotations as outlined suggestions until a person keeps them. Keeping one is an
-  ordinary room-record action by that person.
-- Broadcast commands to the room over the existing room channel, so everyone's canvas follows.
-- The canvas renderer was not changed in this branch. Applying commands is the integration step.
-
-To check a command by hand: `pnpm canvas:validate cmd.json [snapshot.json]`, or pipe it in with `-`.
-
-## LiveKit voice participant (`voice.ts`)
-
-Vowe has no separate voice brain. `VoiceAdapter` sits between the call's speech-to-text and the same
-`ask()`:
+The envelope is the same on every command. The runtime fills it in; the model only supplies `reason`,
+`evidence` and the payload.
 
 ```ts
-const voice = new VoiceAdapter(collaborator /* or an IPC-backed { ask } */, {
-  roomId, localUserId: me.id, canvas: () => snapshotOf(roomState), onEvent: speakAndDraw,
-});
-stt.on('transcript', (t) => voice.hear({ participant: t.speaker, text: t.text, final: t.isFinal }));
+{
+  v: 1,
+  id: string,            // UUID, unique per command
+  roomId: string,        // the turn's room
+  turnId: string,
+  requestedBy: string,   // the asker's cloud user id: verified as the person signed in, never model-chosen
+  reason: string,        // 1–240 chars, read by people on the canvas; must not quote local code or transcripts
+  evidence: string[],    // ≤ 20 evidence ids ("E3"); ids no tool returned are dropped
+  visibility: 'room',
+  type, payload          // one of these:
+}
 ```
 
-- Any interim speech while Vowe is answering cancels the turn with reason `interrupted`. This is barge-in.
-- A final utterance from the local person that starts with "Vowe…", or that is marked `addressed`
-  (push-to-ask), starts a voice turn. Voice turns get shorter, citation-free answers; the evidence report
-  still carries the citations.
-- Everyone else's speech is kept as `recentTurns` context. Their own machines answer their questions.
-- Speak `text.delta` through TTS, and send `canvas.command` to the canvas.
-- `streamTurn()` gives the same turn as an async iterator.
+| `type` | `payload` (strict: no other fields) | Extra rules |
+|---|---|---|
+| `highlight_component` | `{ componentIds: ComponentId[1..8], tone: 'focus' \| 'risk' \| 'verified' }` | Every id is on the canvas |
+| `annotate_component` | `{ componentId, kind: 'note' \| 'concern' \| 'question' \| 'constraint', text: string(1..280) }` | The id is on the canvas. A suggestion until a person keeps it. |
+| `show_view` | `{ view: ViewId, focus?: ComponentId[≤8], sequence?: { actors: ComponentId[1..6], steps: { actor, title: string(1..60), detail?: string(≤140), tone?: 'normal' \| 'crash' \| 'bad' \| 'good' /*default normal*/ }[1..12] } }` | `sequence` only on the `failure`, `timeout` and `concurrency` views. Each step's actor is one of `actors`, and every id is on the canvas. |
+| `propose_component` | `{ component: { id, name: string(1..80), kind, tech?: string(≤120) }, near?: ComponentId }` | The id is new. `near` is on the canvas. Later commands in the same turn may use the new id. |
+| `connect_components` | `{ from, to, label: string(1..40) }` | Both ends exist (or were proposed this turn), and `from ≠ to` |
 
-The LiveKit service itself is unchanged. Wiring STT and TTS to `hear()` is the remaining voice work.
+`validateCanvasCommand(value, snapshot, proposedEarlier?)` returns
+`{ ok: true, command } | { ok: false, errors: string[] }`. Each error is `"<path>: <message>"`, for
+example `payload.componentIds.0: no component "ledger" on this canvas`.
 
-## Evidence
+### Authorization
 
-Every tool registers the sources it returns: code ranges, Git facts, transcript messages, decisions,
-threads and the canvas. The model receives ids such as `E3` to cite. Before it answers, it calls
-`report_reasoning` with claims labelled `observed`, `inferred`, `hypothetical` or `decided`, plus `gaps`.
-The runtime checks every claim against the ledger:
+- Only the runtime creates commands, inside a turn that passed §1's checks. The model can't set `v`,
+  `id`, `roomId`, `turnId`, `requestedBy` or `visibility`.
+- Before a command is emitted, the runtime validates it against the asker's snapshot. It also refuses
+  any command that quotes a local Claude Code transcript (32+ matching characters).
+- Commands are room-visible, so they carry evidence ids, never excerpts.
+- **Receiving clients must check** (relay unresolved, §5): the room channel's `senderId === command.requestedBy`,
+  `command.roomId` is the current room, `v === 1`, and that the command validates against their own
+  snapshot. A command that fails is dropped. These are suggestions, so an engine may also decline any command.
 
-- An `observed` claim needs code, Git or transcript evidence. The canvas is a drawing, not evidence.
-- A `decided` claim needs a decision that every member signed on its current version.
-- Ids that no tool returned are flagged.
+### Responses
 
-Claims that fail these checks are downgraded to `inferred`, with the reason attached. The result is in
-`reply.grounding.status`: `grounded`, `partial` or `unreported`. A missing report is asked for once, and
-the original answer is kept.
+| To whom | Success | Failure |
+|---|---|---|
+| The model (tool result) | `{"sent":true,"commandId":"<uuid>"}` | `isError` result `Not sent to the canvas: <errors joined by "; ">`, or `Invalid input: <path>: <message>` for a malformed payload |
+| The UI (event) | `canvas.command { turnId, command }` | `canvas.rejected { turnId, tool, errors }` (diagnostics, not for the room) |
+| The reply | `reply.commands[]`, in order | not included |
+| A person, by hand | `pnpm canvas:validate cmd.json [snapshot.json]` prints `✔ 0: <type>`, exit 0 | prints `✖ 0: <type>` and the errors, exit 1. `-` reads stdin. Without a snapshot, the eval canvas is used. |
 
-## Testing
+## 3. Voice (`src/renderer/shared/vowe-voice.ts`)
 
-- `pnpm test` runs these suites:
-  - `assistant/runtime.test.ts`: a scripted model through the real loop and tools, covering the payment
-    scenario, tool failures, authorization, cancellation, evidence downgrades and transcript privacy.
-  - `assistant/contract.test.ts`: the canvas contract, the room grounding, the voice adapter and
-    `readTrackedFile`.
-  - `integrations/openai/openai.test.ts`: SIWC against a fake OpenAI, with a real loopback and a signed
-    ID token, plus Responses streaming, errors and retries, and provider selection.
-- `pnpm eval:agent [--provider auto|chatgpt|openai|anthropic|mock] [--question …] [--voice]` runs the
-  real runtime, in text, against a synthetic payments repository and the Payment Reliability canvas. It
-  prints the trace, the answer, the grounding and the commands, then checks behaviour: it grounded on the
-  selection, read the worker code, cited it, explained the second charge, and emitted a failure view
-  marking the crash and the bad outcome. With no provider configured, it runs the mock and says
-  **MOCK ONLY**.
-  - `--provider chatgpt` (with `VOWE_CHATGPT_PLAN=on`) signs in through your browser into the harness's
-    own `~/.vowe-eval`.
-- The payment scenario is an evaluation case. Nothing in the runtime or prompts mentions payments,
-  charges or acknowledgements.
+### The rule
+
+**A spoken question is answered by the speaker's own runtime, on their own sign-in, or not at all.**
+Nobody's question uses another person's ChatGPT allowance, and no shared cloud agent holds plan
+tokens. A server-side LiveKit agent can't use plan tokens at all: plan usage is for locally hosted apps,
+one person per sign-in. A cloud participant could only use a key Vowe pays for, and could only see
+room-visible data.
+
+### How a spoken turn flows
+
+1. **Hearing.** Each client transcribes **only its own microphone**. The speaker's identity is therefore
+   the local signed-in user, which matches their LiveKit identity (the cloud user id). It is never
+   inferred by diarizing someone else's audio. The call layer turns other people's activity into
+   `hear({ participant, text: '…', final: false })` from LiveKit's active-speaker changes. This is
+   used for barge-in only.
+2. **Deciding.** `VoiceAdapter.hear()` starts a turn only for a final utterance from `localUser` that
+   starts with "Vowe…" or is marked `addressed` (push-to-ask). Anything else is context. Identities
+   starting with `vowe:` (any member's Vowe voice) are ignored entirely.
+3. **Reasoning.** `agentOverIpc(journey.agent).ask()` sends the turn to `Collaborator.ask` in main. Main
+   re-checks that `participant.userId` is the signed-in user (§1) and answers on that person's provider:
+   their ChatGPT plan, or this machine's API key. The billing is in `turn.started.provider.billing`.
+4. **Speaking.** The adapter calls `VoiceOutput`:
+   - `begin` on `turn.started`;
+   - `say` for each `text.delta`;
+   - `end` on `turn.completed`;
+   - `stop` on `turn.cancelled` or `turn.failed`.
+
+   Errors are shown to the asker only and never spoken into the call.
+5. **Publishing.** The asker's client publishes the TTS audio to the room's LiveKit call as its own
+   participant, `VOWE_VOICE.identity(userId)` = `vowe:<userId>`, named `Vowe (for <name>)` with
+   attributes `{ kind: 'vowe', speaksFor: userId }`. Everyone hears it and can see whose Vowe is
+   speaking. The person's own microphone track never carries Vowe's audio.
+6. **Interruptions.** Any human speech while Vowe is answering cancels the turn
+   (`cancel('interrupted')`). The runtime aborts the model request, `VoiceOutput.stop()` drops the
+   unspoken audio, and the conversation rolls back.
+
+### API
+
+```ts
+export interface HumanSpeech {
+  /** The LiveKit participant identity (the cloud user id) whose audio this is, never something a model said. */
+  participant: { userId: string; name: string | null };
+  text: string;
+  final: boolean;           // false: interim (still talking)
+  addressed?: boolean;      // push-to-ask; otherwise the text must start with "Vowe" / "Hey Vowe"
+  at?: string;
+}
+
+export interface VoiceOutput {   // implemented by the call layer: TTS → LiveKit as VOWE_VOICE
+  begin(turn: { turnId: string; speaksFor: { userId: string; name: string | null } }): void;
+  say(turnId: string, text: string): void;
+  end(turnId: string): void;
+  stop(turnId: string): void;
+}
+
+new VoiceAdapter(agentOverIpc(window.journey.agent), {
+  roomId,
+  localUser: { userId: me.id, name: me.name },   // the cloud user signed in here
+  canvas: () => snapshotOf(roomState),           // CanvasSnapshot v1
+  output,                                        // VoiceOutput
+  onEvent,                                       // optional: captions, approvals, canvas.command
+}): { hear(speech: HumanSpeech): VoiceTurnHandle | null; stop(): void; readonly busy: boolean }
+
+export const VOWE_VOICE = {
+  identity: (userId) => `vowe:${userId}`,
+  name: (personName) => `Vowe (for ${personName ?? 'a member'})`,
+  attributes: (userId) => ({ kind: 'vowe', speaksFor: userId }),
+};
+export function streamTurn(agent: VoiceAgent, turn: RoomAgentTurn): AsyncIterable<AgentEvent> & { handle: VoiceTurnHandle };
+```
+
+### Model authorization for voice
+
+This is the same as §1. A voice turn whose asker isn't signed in to ChatGPT, with no fallback key,
+fails with `not-signed-in`. One whose plan is exhausted fails with `usage-limit`. Show either privately
+to the asker. Nothing falls back to another member's runtime.
+
+## 4. Environment
+
+Main reads these from the process environment or from `<checkout>/.env`. Values already set in the
+environment take precedence.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `VOWE_AGENT_PROVIDER` | `auto` | `auto`: the ChatGPT plan if signed in with plan usage granted, else the first configured of OpenAI key, then Anthropic key. `chatgpt`, `openai` or `anthropic` pins one. |
+| `VOWE_CHATGPT_PLAN` | off | `on` enables Sign in with ChatGPT plan usage. **Leave it off until Vowe is eligible** (see Eligibility below). |
+| `VOWE_CHATGPT_MODEL` | first model the account lists | Plan model slug |
+| `OPENAI_API_KEY` | none | Fallback provider, billed to that key |
+| `VOWE_OPENAI_MODEL` | `gpt-6.1-sol` | Model for the OpenAI key (taken from OpenAI's SIWC examples). Set it to one your key can use. |
+| `ANTHROPIC_API_KEY` | none | Fallback provider. Instead of a key: `ant auth login`. |
+| `VOWE_AGENT_MODEL` / `VOWE_AGENT_EFFORT` / `VOWE_AGENT_FALLBACKS` | `claude-opus-5-5` / `medium` / on | The Anthropic fallback's model, effort, and fallback model |
+
+Google and Supabase sign-in (`GOOGLE_*`, `SUPABASE_*`) are unchanged and still required for rooms.
+ChatGPT tokens are never configured through the environment. They come only from the in-app OAuth
+flow, are stored in `userData/chatgpt-accounts.json` (mode 0600, token fields sealed by the OS keychain),
+and never reach the renderer.
+
+**Eligibility.** OpenAI offers plan usage to open-source, locally hosted apps. A paid or remotely
+hosted app must first complete https://openai.com/form/sign-in-with-chatgpt-interest/. Vowe runs
+locally, but its repository is private with no license, so it doesn't qualify yet. That is why
+`VOWE_CHATGPT_PLAN` is off by default.
+
+### Reproducible real-model evaluation
+
+Run these from the checkout. `--require-real` refuses to fall back to the mock.
+
+```sh
+pnpm build
+OPENAI_API_KEY=… node scripts/agent-eval/run.mjs --provider openai --require-real --json eval-openai.json
+ANTHROPIC_API_KEY=… node scripts/agent-eval/run.mjs --provider anthropic --require-real --json eval-anthropic.json
+# Only once eligible. Opens your browser to sign in, into the harness's own ~/.vowe-eval:
+VOWE_CHATGPT_PLAN=on node scripts/agent-eval/run.mjs --provider chatgpt --require-real --json eval-chatgpt.json
+# Variants: --voice (a spoken turn), --question "…"
+```
+
+The eval runs the real `Collaborator`, tools, canvas validation and evidence checks. It works against
+a synthetic payments repository, created fresh in a temp directory and committed, and the Payment
+Reliability canvas with the Payment Worker selected (`scripts/agent-eval/fixture.mjs`).
+
+It checks behaviour, not wording:
+- it answered;
+- it grounded on the selection;
+- it read the worker code;
+- its observed claims cite `src/payments/worker.ts`;
+- it explains a second charge;
+- it emitted a validated `failure` view marking a crash and a bad outcome;
+- no claim was downgraded.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | All checks passed |
+| 1 | A check failed |
+| 2 | The requested provider isn't available |
+
+The `--json` report records `kind: "real-model"` or `"mock"`, the provider, the model that answered,
+each check's result, and the reply with the room's grounding.
+
+## 5. Test kinds: mocked models vs real providers
+
+| What | Model | Network | Command |
+|---|---|---|---|
+| `assistant/runtime.test.ts`: the loop, tools, authorization, cancellation, evidence, privacy | **Mocked**: a scripted provider | none | `pnpm test` |
+| `assistant/contract.test.ts`: canvas validation, schema drift, room grounding, `readTrackedFile` | no model | none | `pnpm test` |
+| `renderer/shared/vowe-voice.test.ts`: the voice adapter and `agentOverIpc` | **Mocked**: a fake runtime | none | `pnpm test` |
+| `integrations/openai/openai.test.ts`: SIWC and the Responses wire format | **Mocked**: a fake OpenAI over HTTP, with a real loopback and a signed ID token | localhost only | `pnpm test` |
+| `pnpm eval:agent` with no credentials | **Mocked**: `scripts/agent-eval/mock.mjs`, printed as **MOCK ONLY**, `kind: "mock"` | none | `node scripts/agent-eval/run.mjs` |
+| `pnpm eval:agent --require-real` | **Real provider** | the provider's API | §4 |
+
+`pnpm test` never calls a real provider. As of this branch, **no real-provider run has been
+recorded**: the development machine had no API key, and plan usage is gated off.
+
+## 6. Unresolved integration contracts
+
+| # | Contract | Owner | What's needed |
+|---|---|---|---|
+| 1 | **Vowe's voice identity in LiveKit** | LiveKit / token service | Tokens currently allow one identity per user, microphone only (`server/src/livekit.ts`, `supabase/functions/livekit-token`). Mint a second token for `vowe:<userId>` only to the authenticated `userId`, with `canPublishSources: [MICROPHONE]`, `canSubscribe: false`, and attributes `{kind:'vowe', speaksFor}`. Clients render it as "Vowe (for …)". |
+| 2 | **`VoiceOutput` implementation** | Call layer | TTS (for example ElevenLabs, with its key kept in main or on the Vowe API, billed to Vowe, never to a ChatGPT plan) streaming into a second LiveKit connection as #1. Stop must cut audio immediately. |
+| 3 | **Local speech-to-text** | Call layer | Transcribe the local microphone into `hear()`, and feed active-speaker changes as interim speech for barge-in. Decide whether others' speech is shared as captions (their privacy) or omitted from `recentTurns`. |
+| 4 | **Room relay for canvas commands and the voice floor** | Multiplayer (`RoomEvents`) | Add `'vowe:canvas': { command: CanvasCommand }`, validated in main with `canvasCommandSchema` both ways and checked per §2. Optionally add `'vowe:speaking': { turnId, speaksFor, state: 'start' \| 'end' }` so only one Vowe speaks at a time. |
+| 5 | **Canvas engine applying commands** | Canvas | Draw commands as suggestions until a person keeps them. No ack exists yet; proposed: `{ commandId, status: 'applied' \| 'declined', reason? }` sent back to the asker. |
+| 6 | **Room UI** | Room UI | Ask box, streamed answer, approval prompt (`approve()`), errors per §1, and posting `roomGrounding` (never `grounding`) to the record. |
+| 7 | **Sign in with ChatGPT eligibility** | Product | Open-source Vowe, or get OpenAI's approval. Until then, `VOWE_CHATGPT_PLAN` stays off. |
+| 8 | **Keychain API** | Main | Electron 45 deprecates the synchronous `safeStorage` calls used by both Google and ChatGPT sign-in. Migrate both to the async variants together. |

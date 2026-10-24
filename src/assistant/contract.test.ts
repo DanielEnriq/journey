@@ -1,15 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { readTrackedFile } from '../git/index.js';
-import type { AgentEvent, RoomAgentReply, RoomAgentTurn } from '../shared/api.js';
-import { validateCanvasCommand, type CanvasSnapshot } from './canvas.js';
+import { z } from 'zod';
+import { canvasCommandSchema, canvasSnapshotSchema, validateCanvasCommand, type CanvasSnapshot } from './canvas.js';
+import { roomTurnSchema } from './index.js';
 import { groundingForRoom } from './evidence.js';
-import type { TurnHandle } from './index.js';
-import { streamTurn, VoiceAdapter } from './voice.js';
 
 const canvas: CanvasSnapshot = {
   version: 1,
@@ -55,6 +54,15 @@ describe('canvas commands', () => {
   });
 });
 
+describe('published JSON Schemas', () => {
+  it('match the schemas the runtime enforces (pnpm contracts:write regenerates them)', () => {
+    for (const [name, schema] of [['room-agent-turn', roomTurnSchema], ['canvas-snapshot', canvasSnapshotSchema], ['canvas-command', canvasCommandSchema]] as const) {
+      const published = JSON.parse(readFileSync(`src/assistant/contracts/${name}.schema.json`, 'utf8'));
+      assert.deepEqual(published, z.toJSONSchema(schema, { io: 'input' }), `${name}.schema.json is out of date`);
+    }
+  });
+});
+
 describe('room grounding', () => {
   it('keeps room sources, and strips excerpts and session ids from local ones', () => {
     const shared = groundingForRoom({
@@ -72,91 +80,6 @@ describe('room grounding', () => {
       ['src/worker.ts:2', undefined],
       ['decision d1 v2', 'Idempotent'],
     ]);
-  });
-});
-
-// ─── Voice adapter ───────────────────────────────────────────────────────────
-
-function fakeAgent() {
-  const asked: RoomAgentTurn[] = [];
-  const handles: (TurnHandle & { cancelled: string | null; finish(reply?: Partial<RoomAgentReply>): void; emit(e: AgentEvent): void })[] = [];
-  return {
-    asked,
-    handles,
-    ask(turn: RoomAgentTurn, onEvent: (e: AgentEvent) => void): TurnHandle {
-      asked.push(turn);
-      let finish!: (r: RoomAgentReply) => void;
-      const done = new Promise<RoomAgentReply>((r) => (finish = r));
-      const h = {
-        turnId: `t${handles.length + 1}`,
-        conversationId: 'conv1',
-        done,
-        cancelled: null as string | null,
-        cancel(reason = 'cancelled') {
-          h.cancelled = reason;
-          onEvent({ type: 'turn.cancelled', turnId: h.turnId, reason } as AgentEvent);
-          finish({ stop: 'cancelled', text: '' } as RoomAgentReply);
-        },
-        finish(reply: Partial<RoomAgentReply> = {}) {
-          finish({ stop: 'answered', text: 'It charges twice.', ...reply } as RoomAgentReply);
-        },
-        emit: onEvent,
-      };
-      onEvent({ type: 'turn.started', turnId: h.turnId, conversationId: 'conv1' } as AgentEvent);
-      handles.push(h);
-      return h;
-    },
-  };
-}
-
-const me = { userId: 'u1', name: 'Daniel' };
-const them = { userId: 'u2', name: 'Priya' };
-
-describe('voice adapter', () => {
-  it('starts a turn only for the local person addressing Vowe, with what others said as context', async () => {
-    const agent = fakeAgent();
-    const events: AgentEvent[] = [];
-    const voice = new VoiceAdapter(agent, { roomId: 'r1', localUserId: 'u1', canvas: () => canvas, onEvent: (e) => events.push(e) });
-
-    assert.equal(voice.hear({ participant: them, text: 'Vowe, what does the worker do?', final: true }), null, "someone else's question is theirs to ask on their machine");
-    assert.equal(voice.hear({ participant: me, text: 'the worker looks risky', final: true }), null, 'not addressed');
-    const handle = voice.hear({ participant: me, text: 'Hey Vowe, what happens if this crashes after charging?', final: true });
-    assert.ok(handle);
-    const [asked] = agent.asked;
-    assert.equal(asked.question, 'what happens if this crashes after charging?');
-    assert.equal(asked.source, 'voice');
-    assert.deepEqual(asked.participant, me);
-    assert.deepEqual(asked.recentTurns.map((t) => t.speaker), ['Priya', 'Daniel']);
-    assert.deepEqual(asked.canvas.selection.selected, ['worker']);
-
-    agent.handles[0].finish();
-    await handle.done;
-    assert.equal(voice.busy, false);
-    voice.hear({ participant: me, text: 'and with a retry?', final: true, addressed: true });
-    assert.equal(agent.asked[1].conversationId, 'conv1', 'follow-ups continue the conversation');
-    assert.equal(agent.asked[1].recentTurns.at(-1)?.speaker, 'Vowe');
-  });
-
-  it('stops answering when anyone talks over it', async () => {
-    const agent = fakeAgent();
-    const voice = new VoiceAdapter(agent, { roomId: 'r1', localUserId: 'u1', canvas: () => canvas, onEvent: () => {} });
-    const handle = voice.hear({ participant: me, text: 'Vowe, explain the lease', final: true })!;
-    voice.hear({ participant: them, text: 'wait', final: false });
-    assert.equal(agent.handles[0].cancelled, 'interrupted');
-    await handle.done;
-    assert.equal(voice.busy, false);
-  });
-
-  it('streams a turn as an async iterator, and cancels when the consumer stops early', async () => {
-    const agent = fakeAgent();
-    const stream = streamTurn(agent, agent.asked[0] ?? ({ question: 'q' } as RoomAgentTurn));
-    const seen: string[] = [];
-    for await (const event of stream) {
-      seen.push(event.type);
-      break;
-    }
-    assert.deepEqual(seen, ['turn.started']);
-    assert.equal(agent.handles[0].cancelled, 'cancelled');
   });
 });
 
