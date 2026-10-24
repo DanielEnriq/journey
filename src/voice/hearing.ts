@@ -102,6 +102,9 @@ export class Hearing {
   /** 16 kHz mono PCM from the local microphone. */
   audio(samples: Int16Array) {
     if (!this.running) return;
+    // Recognition closes when it gets no audio (you were muted) and retrying then only closes again, so
+    // the next audio reopens it: unmuting is enough for Vowe to hear you again.
+    if (!this.stream && !this.retry) void this.open();
     this.stream?.send(samples);
     // Only voice over Vowe counts toward an interruption, not the question that came before it.
     if (!this.voweSpeaking || this.bargedIn) return;

@@ -73,4 +73,14 @@ describe('Hearing', () => {
     h.stop();
     assert.equal(recognizer.stream?.closed, true);
   });
+
+  it('reopens recognition closed while muted as soon as audio comes again', async () => {
+    const { h, recognizer } = await hearing({ recognitionRetryMs: [] });
+    recognizer.event({ type: 'closed' }); // no audio for a while: the service hangs up, and there's no retry left
+    assert.equal(recognizer.opened, 1);
+    h.audio(frame(false));
+    await until(() => recognizer.opened === 2, 1000, 'reopened on audio');
+    assert.equal(recognizer.stream?.closed, false);
+    h.stop();
+  });
 });

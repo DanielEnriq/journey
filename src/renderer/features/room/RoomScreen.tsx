@@ -439,6 +439,12 @@ function FreshCall(props: InnerProps) {
   const overlays = (
     <>
       {asker ? <CallCaptions ask={asker} cc={cc} /> : cc && <NoCaptions />}
+      {voweOn && micMuted && !voweError && (
+        <div class="receipt" role="status">
+          <span class="dot"></span><span>Vowe is in the call. Unmute to talk to it: say “Vowe, …” and your question.</span>
+          <button class="mini ask" type="button" onClick={toggleMic}>Unmute</button>
+        </div>
+      )}
       {voweError && (
         <div class="receipt dropped" role="alert">
           <span class="dot needs"></span><span>Vowe: {voweError}</span>
