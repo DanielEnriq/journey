@@ -672,7 +672,7 @@ export interface RoomRecord {
 }
 
 // ─── Voice calls ─────────────────────────────────────────────────────────────
-// Each room has a LiveKit audio call, joined from the renderer (renderer/call.ts). Main only
+// Each room has a LiveKit audio call, joined from the renderer (renderer/calls/service.ts). Main only
 // hands out access; LiveKit participant identities are cloud user ids, like Participant.userId.
 
 /** Where to connect for a room's call. The token is short-lived and only admits you to that room. */
