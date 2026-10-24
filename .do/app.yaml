@@ -1,0 +1,49 @@
+# DigitalOcean App Platform spec for the Vowe cloud API (server/). See docs/DIGITALOCEAN_HANDOFF.md.
+# Only the API runs here: Electron, SQLite, Git and coding agents stay local; Supabase keeps auth,
+# Postgres and Realtime.
+#
+# Secrets are declared without values: set them in the control panel (or with `doctl apps update`)
+# after creating the app. Never commit their values.
+name: vowe
+region: nyc
+services:
+  - name: api
+    github:
+      repo: DanielEnriq/journey
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    dockerfile_path: server/Dockerfile # build context is the repo root (pnpm workspace)
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    health_check:
+      http_path: /health
+    envs:
+      - key: PORT
+        value: "8080"
+        scope: RUN_TIME
+      - key: SUPABASE_URL
+        scope: RUN_TIME
+      - key: SUPABASE_PUBLISHABLE_KEY
+        scope: RUN_TIME
+      - key: LIVEKIT_URL
+        scope: RUN_TIME
+      - key: LIVEKIT_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: LIVEKIT_API_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: ELEVENLABS_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: ELEVENLABS_AGENT_ID
+        scope: RUN_TIME
+ingress:
+  rules:
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /

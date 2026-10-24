@@ -27,6 +27,11 @@ export const config = {
     apiKey: process.env.ELEVENLABS_API_KEY,
     agentId: process.env.ELEVENLABS_AGENT_ID,
   },
+  // Optional: the Vowe cloud API (server/), which holds the LiveKit and ElevenLabs secrets. Without it,
+  // call tokens come from the Supabase Edge Function and ElevenLabs uses the local key above.
+  api: {
+    url: process.env.VOWE_API_URL?.replace(/\/+$/, ''),
+  },
   // Optional: without it the app runs local-only. src/integrations/supabase checks at use time.
   supabase: {
     url: process.env.SUPABASE_URL,
