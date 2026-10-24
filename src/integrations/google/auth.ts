@@ -1,20 +1,15 @@
 import { safeStorage, shell } from 'electron';
 import { CodeChallengeMethod, OAuth2Client, type Credentials } from 'google-auth-library';
 import { randomBytes } from 'node:crypto';
-import { config } from '../config.js';
-import { getDb } from '../db.js';
+import { config } from '../../config.js';
+import { deleteSession, getLatestSession, saveSession, upsertUser } from '../../database/sessions.js';
+import type { User } from '../../shared/api.js';
 import { listenForRedirect } from './loopback.js';
-
-export interface User {
-  id: string;
-  email: string;
-  name: string | null;
-  picture: string | null;
-}
 
 let client: OAuth2Client | undefined;
 let currentUser: User | undefined;
 let signInInFlight: Promise<User> | undefined;
+const listeners = new Set<(user: User | null) => void>();
 
 function newClient(redirectUri?: string): OAuth2Client {
   return new OAuth2Client({
@@ -28,10 +23,35 @@ export function getCurrentUser(): User | undefined {
   return currentUser;
 }
 
+/** Called after every sign-in, restore, and sign-out. */
+export function onUserChange(listener: (user: User | null) => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function notify() {
+  for (const listener of listeners) listener(currentUser ?? null);
+}
+
 /** Authenticated client for calling Google APIs; refreshes access tokens automatically. */
 export function getAuthClient(): OAuth2Client {
   if (!client || !currentUser) throw new Error('Not signed in');
   return client;
+}
+
+/**
+ * A Google ID token valid for at least another minute, for backends that accept Google identity (Supabase),
+ * plus the access token issued with it: the ID token's `at_hash` claim is checked against it.
+ */
+export async function getIdentityTokens(): Promise<{ idToken: string; accessToken: string }> {
+  const oauth = getAuthClient();
+  let { id_token, access_token, expiry_date } = oauth.credentials;
+  if (!id_token || !access_token || !expiry_date || expiry_date - 60_000 < Date.now()) {
+    // Google returns a fresh ID token alongside the access token for the openid scope.
+    ({ id_token, access_token } = (await oauth.refreshAccessToken()).credentials);
+  }
+  if (!id_token || !access_token) throw new Error('Google did not return an ID token');
+  return { idToken: id_token, accessToken: access_token };
 }
 
 /** Opens the system browser for Google sign-in and waits for the loopback redirect. */
@@ -71,23 +91,17 @@ async function doSignIn(): Promise<User> {
 
 /** Restores the most recent session from SQLite, if one exists and is still valid. */
 export async function restoreSession(): Promise<User | undefined> {
-  const row = getDb()
-    .prepare(
-      `SELECT u.id, u.email, u.name, u.picture, s.refresh_token
-         FROM sessions s JOIN users u ON u.id = s.user_id
-        ORDER BY s.updated_at DESC LIMIT 1`,
-    )
-    .get() as (User & { refresh_token: Buffer }) | undefined;
-  if (!row || !safeStorage.isEncryptionAvailable()) return undefined;
+  const session = getLatestSession();
+  if (!session || !safeStorage.isEncryptionAvailable()) return undefined;
 
-  const { refresh_token, ...user } = row;
+  const { user, refreshToken } = session;
   const oauth = newClient();
-  oauth.setCredentials({ refresh_token: safeStorage.decryptString(refresh_token) });
+  oauth.setCredentials({ refresh_token: safeStorage.decryptString(refreshToken) });
   try {
     await oauth.getAccessToken(); // proves the refresh token still works
   } catch (err) {
     console.warn('[auth] stored session is no longer valid:', (err as Error).message);
-    getDb().prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+    deleteSession(user.id);
     return undefined;
   }
   attach(oauth, user);
@@ -101,9 +115,10 @@ export async function signOut(): Promise<void> {
   } catch (err) {
     console.warn('[auth] token revoke failed:', (err as Error).message);
   }
-  getDb().prepare('DELETE FROM sessions WHERE user_id = ?').run(currentUser.id);
+  deleteSession(currentUser.id);
   client = undefined;
   currentUser = undefined;
+  notify();
 }
 
 async function verifyIdToken(oauth: OAuth2Client, tokens: Credentials): Promise<User> {
@@ -121,24 +136,16 @@ function attach(oauth: OAuth2Client, user: User) {
   });
   client = oauth;
   currentUser = user;
+  notify();
 }
 
 function persist(user: User, tokens: Credentials) {
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO users (id, email, name, picture) VALUES (@id, @email, @name, @picture)
-     ON CONFLICT(id) DO UPDATE SET email = excluded.email, name = excluded.name,
-       picture = excluded.picture, last_login = datetime('now')`,
-  ).run(user);
+  upsertUser(user);
 
   if (!tokens.refresh_token) return;
   if (!safeStorage.isEncryptionAvailable()) {
     console.warn('[auth] OS keychain unavailable; session will not be persisted');
     return;
   }
-  db.prepare(
-    `INSERT INTO sessions (user_id, refresh_token, scope) VALUES (?, ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET refresh_token = excluded.refresh_token,
-       scope = excluded.scope, updated_at = datetime('now')`,
-  ).run(user.id, safeStorage.encryptString(tokens.refresh_token), tokens.scope ?? null);
+  saveSession(user.id, safeStorage.encryptString(tokens.refresh_token), tokens.scope ?? null);
 }

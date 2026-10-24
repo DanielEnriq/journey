@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'"
+    />
+    <title>Journey</title>
+    <style>
+      /* Light/dark follows the Theme setting via nativeTheme in main. */
+      :root { color-scheme: light dark; --muted: color-mix(in srgb, currentColor 55%, transparent); --line: color-mix(in srgb, currentColor 15%, transparent); }
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 1.5rem 2rem; max-width: 720px; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+      h1 { font-size: 1.1rem; margin: 0; }
+      h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 1.75rem 0 0.5rem; }
+      #user { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+      #user img { width: 28px; height: 28px; border-radius: 50%; }
+      ul { list-style: none; margin: 0 0 0.75rem; padding: 0; }
+      li { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+      li > div { flex: 1; min-width: 0; }
+      .path { color: var(--muted); font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .empty { color: var(--muted); }
+      label { display: flex; align-items: center; gap: 0.75rem; }
+      #error { color: #d33; min-height: 1.5em; margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Journey</h1>
+      <div id="user"></div>
+    </header>
+
+    <h2>Repositories</h2>
+    <ul id="repos"></ul>
+    <button id="add-repo">Add repository…</button>
+
+    <h2>Settings</h2>
+    <label>
+      Theme
+      <select id="theme">
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
+
+    <div id="error" role="alert"></div>
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>

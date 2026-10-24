@@ -3,30 +3,41 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/main.js",
+  "main": "dist/main/index.js",
   "scripts": {
-    "build": "tsc -p .",
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node -e \"fs.cpSync('src/renderer/index.html','dist/renderer/index.html')\"",
     "start": "pnpm build && electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "typecheck": "tsc -p . --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "cloud:push": "supabase db push",
+    "cloud:types": "supabase gen types typescript --linked --schema public > src/integrations/supabase/types.ts",
     "sign-out": "pnpm build && electron . --sign-out"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
-      "better-sqlite3"
+      "better-sqlite3",
+      "supabase"
+    ],
+    "ignoredBuiltDependencies": [
+      "esbuild"
     ]
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
     "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "0.45.4",
     "google-auth-library": "^11.3.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.5",
+    "drizzle-kit": "0.31.11",
     "electron": "^45.0.0",
+    "supabase": "2.122.0",
     "typescript": "^7.0.2"
   }
 }

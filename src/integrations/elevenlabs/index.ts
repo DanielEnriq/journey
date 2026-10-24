@@ -1,4 +1,4 @@
-import { config } from '../config.js';
+import { config } from '../../config.js';
 
 /**
  * ElevenLabs Agents (realtime voice) integration path. Not wired into main yet.
