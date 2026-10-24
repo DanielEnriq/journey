@@ -102,6 +102,16 @@ const api: JourneyApi = {
     reset: (conversationId) => invoke('agent:reset', conversationId),
     onApproval: (listener) => subscribe('agent:approval', listener),
     onToolCall: (listener) => subscribe('agent:toolCall', listener),
+    ask: (turn) => invoke('agent:ask', turn),
+    cancel: (turnId) => invoke('agent:cancel', turnId),
+    onEvent: (listener) => subscribe('agent:event', listener),
+  },
+  chatgpt: {
+    status: () => invoke('chatgpt:status'),
+    signIn: (account) => invoke('chatgpt:signIn', account),
+    signOut: () => invoke('chatgpt:signOut'),
+    dismissWelcome: () => invoke('chatgpt:dismissWelcome'),
+    onChange: (listener) => subscribe('chatgpt:changed', listener),
   },
 };
 

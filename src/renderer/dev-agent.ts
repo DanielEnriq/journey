@@ -138,7 +138,9 @@ export function setupDevAgent(api: JourneyApi, attempt: (action: () => Promise<u
 
   void attempt(async () => {
     const s = await agent.status();
-    statusEl.textContent = `${s.provider} · ${s.model}${s.configured ? '' : ' · no credentials found: set ANTHROPIC_API_KEY in .env and restart'}`;
+    const billing = s.billing === 'chatgpt-plan' ? 'Using ChatGPT plan' : 'API key';
+    const missing = s.providerId === 'chatgpt' ? 'Continue with ChatGPT in the account menu, or set an API key in .env' : 'no credentials found: set its API key in .env and restart';
+    statusEl.textContent = `${s.provider} · ${s.model} · ${billing}${s.configured ? '' : ` · ${missing}`}`;
   });
   newConversation();
 

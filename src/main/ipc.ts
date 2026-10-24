@@ -1,16 +1,22 @@
-import { BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type IpcMainInvokeEvent } from 'electron';
 import { z } from 'zod';
 import { ClaudeCodeAdapter } from '../agents/claude-code.js';
 import { Collaborator } from '../assistant/index.js';
+import { reasoningTools, roomTools } from '../assistant/room-tools.js';
+import { selectProvider } from '../assistant/select.js';
 import { workContextTools } from '../assistant/tools.js';
+import { config } from '../config.js';
 import { claudeCodeActivity, getHooksStatus, installHooks, sessionActivity, uninstallHooks } from '../agents/claude-code-hooks.js';
 import { WorkContextService } from '../context/index.js';
 import { addRepository, getRepository, listRepositories, markRepositoryOpened, removeRepository } from '../database/repositories.js';
 import { getAllSettings, updateSettings } from '../database/settings.js';
+import { getWorkstream } from '../database/work-context.js';
 import { detectRepositories } from '../git/detect.js';
 import { findWorkingTreeRoot, getRemoteUrl, getStatus, listBranches, listWorktrees } from '../git/index.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
 import { anthropic } from '../integrations/anthropic/index.js';
+import { chatgptAuth, chatgptPlan, openaiApiKey } from '../integrations/openai/index.js';
+import { getCloudUserId } from '../integrations/supabase/index.js';
 import { getCallAccess } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
 import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
@@ -60,11 +66,29 @@ const agentText = z.string().trim().min(1).max(8000);
 const APPROVAL_TIMEOUT_MS = 5 * 60_000;
 const approvals = new Map<string, { conversationId: string; settle: (approved: boolean) => void }>();
 
+/** Checks the context names a real repository (and one of its workstreams), and describes it for the model. */
+function describeRepository({ repositoryId, workstreamId }: { repositoryId: string; workstreamId: string | null }): string {
+  const repo = getRepository(repositoryId);
+  if (!repo) throw new Error('No such repository');
+  const workstream = workstreamId ? getWorkstream(workstreamId) : null;
+  if (workstreamId && workstream?.repositoryId !== repositoryId) throw new Error('No such workstream in this repository');
+  const focus = workstream
+    ? `Selected workstream: ${workstream.branch || '(detached HEAD)'} in ${workstream.worktreePath} (id ${workstream.id}).`
+    : 'No workstream selected: the whole repository.';
+  return `[Vowe context] Repository: ${repo.name} at ${repo.path}. ${focus} Time: ${new Date().toISOString()}.`;
+}
+
+// The person's ChatGPT plan first; API keys only as fallbacks (or when VOWE_AGENT_PROVIDER pins one).
+const provider = () => selectProvider(config.agent.provider, chatgptPlan, [openaiApiKey, anthropic]);
+
 const collaborator = new Collaborator({
-  provider: anthropic, // swap model providers here
+  provider,
   work: workContext,
   tools: workContextTools,
-  approve: (request) =>
+  roomTools,
+  reasoningTools,
+  describeRepository,
+  approve: (request, signal) =>
     new Promise((resolve) => {
       const timer = setTimeout(() => settle(false), APPROVAL_TIMEOUT_MS);
       const settle = (approved: boolean) => {
@@ -72,10 +96,17 @@ const collaborator = new Collaborator({
         approvals.delete(request.id);
         resolve(approved);
       };
+      signal.addEventListener('abort', () => settle(false), { once: true });
       approvals.set(request.id, { conversationId: request.conversationId, settle });
       broadcast('agent:approval', request);
     }),
   onToolCall: (conversationId, call) => broadcast('agent:toolCall', { conversationId, call }),
+  rooms: {
+    // Read as the signed-in member: RLS lets a member see only their rooms.
+    source: { room: (id) => rooms.getRoom(id), members: (id) => rooms.listMembers(id), record: (id) => roomRecord.getRecord(id) },
+    checkout: (roomId) => roomCheckout(roomId),
+    localUser: () => getCloudUserId(),
+  },
 });
 
 /**
@@ -232,7 +263,7 @@ export function registerIpc() {
   handle('context:session', (sessionId) => workContext.getSessionContext(parse(id, sessionId, 'Session id')));
 
   // The model provider only sees what the tools return; transcript excerpts need the user's approval.
-  handle('agent:status', () => collaborator.status());
+  handle('agent:status', () => ({ ...collaborator.status(), chatgpt: chatgptAuth().status() }));
   handle('agent:send', (conversationId, context, text) =>
     collaborator.send(
       parse(id.nullable(), conversationId, 'Conversation id'),
@@ -248,6 +279,20 @@ export function registerIpc() {
     for (const pending of approvals.values()) if (pending.conversationId === conversation) pending.settle(false);
     collaborator.reset(conversation);
   });
+  // Room turns: validated by the runtime, which also checks the asker is the person signed in here.
+  handle('agent:ask', (turn) => {
+    const { turnId } = collaborator.ask(turn, (event) => broadcast('agent:event', event));
+    return { turnId };
+  });
+  handle('agent:cancel', (turnId) => {
+    collaborator.cancel(parse(id, turnId, 'Turn id'));
+  });
+
+  // Sign in with ChatGPT: separate from Google. Tokens stay here; the renderer sees status only.
+  handle('chatgpt:status', () => chatgptAuth().status());
+  handle('chatgpt:signIn', (account) => chatgptAuth().signIn(account === undefined ? undefined : parse(id, account, 'Account')));
+  handle('chatgpt:signOut', () => chatgptAuth().signOut());
+  handle('chatgpt:dismissWelcome', () => chatgptAuth().dismissWelcome());
 
   // Cloud: RLS decides what each call may see or change, so these only check argument shapes.
   handle('workspaces:list', () => listWorkspaces());
@@ -283,6 +328,8 @@ export function registerIpc() {
   handle('calls:requestMicrophone', () => requestMicrophone());
 
   onUserChange((user) => broadcast('auth:changed', user));
+  // The sign-in reads the keychain, so it's created once the app is ready.
+  void app.whenReady().then(() => chatgptAuth().onChange((status) => broadcast('chatgpt:changed', status)));
   claudeCodeActivity.on('event', (event) => broadcast('claudeCode:event', event));
   roomActivity.on('event', (event) => broadcast('rooms:event', event));
   roomActivity.on('presence', (update) => broadcast('rooms:presence', update));

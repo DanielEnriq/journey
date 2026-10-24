@@ -6,7 +6,12 @@
  * expose it in preload/index.cts + `JourneyApi`. The compiler checks all three agree.
  */
 
+import type { CanvasCommand, CanvasSnapshot } from '../assistant/canvas.js';
+import type { Grounding } from '../assistant/evidence.js';
+import type { ModelBilling, ModelProviderErrorCode } from '../assistant/provider.js';
 import type { Tables } from '../integrations/supabase/types.js';
+
+export type { CanvasCommand, CanvasSnapshot, Grounding };
 
 export interface User {
   id: string;
@@ -339,6 +344,24 @@ export interface SessionMessages {
   activity: ClaudeCodeEvent[];
 }
 
+/** Lines of tracked files that matched a code search. */
+export interface CodeSearch {
+  /** The worktree searched. */
+  root: string;
+  matches: { path: string; line: number; text: string }[];
+  omitted: number;
+}
+
+/** Some lines of one tracked file, each prefixed with its number. */
+export interface CodeExcerpt {
+  /** Relative to the worktree. */
+  path: string;
+  from: number;
+  to: number;
+  totalLines: number;
+  text: string;
+}
+
 /** Everything known about the work in one repository, in one object. */
 export interface WorkContext {
   generatedAt: string;
@@ -392,11 +415,113 @@ export interface AgentReply {
 }
 
 export interface AgentStatus {
+  /** The provider the next turn would use, e.g. "ChatGPT". */
   provider: string;
+  providerId: string;
+  /** Who pays: the person's ChatGPT plan, or an API key on this machine. */
+  billing: ModelBilling;
   model: string;
   /** Whether credentials appear to be set; a request can still fail on them. */
   configured: boolean;
+  chatgpt: ChatGptStatus;
 }
+
+// ─── Sign in with ChatGPT ────────────────────────────────────────────────────
+// Separate from Google sign-in (which is who you are in rooms): this lets Vowe's agent use your
+// ChatGPT plan for its requests. Tokens stay in main (integrations/openai/chatgpt.ts).
+
+export interface ChatGptStatus {
+  /** Whether this build offers ChatGPT plan usage at all (its eligibility gate). */
+  enabled: boolean;
+  /** The active account, signed in or not. */
+  account: { clientId: string; email: string | null; label: string } | null;
+  signedIn: boolean;
+  /** Whether plan usage was granted at sign-in; null with no account. */
+  planUsage: 'granted' | 'not-granted' | null;
+  /** Show "You're using your ChatGPT plan" once; dismissWelcome() after "Got it". */
+  welcome: boolean;
+  /** Why the account needs to sign in again, in words. */
+  problem: string | null;
+  savedAccounts: { clientId: string; label: string; signedIn: boolean }[];
+  /** ChatGPT settings → Usage, for "Manage usage". */
+  usageUrl: string;
+}
+
+// ─── Vowe in a room ──────────────────────────────────────────────────────────
+// One runtime for typed questions and, later, the call's voice participant (src/assistant/voice.ts).
+// It runs on the asking person's machine, with their model sign-in and their local context; see
+// src/assistant/INTEGRATION.md.
+
+/** A question to Vowe from someone in a room. */
+export interface RoomAgentTurn {
+  roomId: string;
+  /** The cloud user asking. Must be the person signed in on this machine. */
+  participant: { userId: string; name: string | null };
+  question: string;
+  /** What was said before, oldest first, for context (a few turns). */
+  recentTurns: { speaker: string; text: string; at?: string }[];
+  /** What the asker's canvas shows, including what they selected or circled. */
+  canvas: CanvasSnapshot;
+  /** Continues an earlier turn's conversation; null or absent starts one. */
+  conversationId?: string | null;
+  source: 'text' | 'voice';
+}
+
+export interface AgentError {
+  code: ModelProviderErrorCode | 'not-authorized' | 'busy' | 'invalid-turn';
+  message: string;
+  retryable: boolean;
+  /** For usage limits: ChatGPT settings → Usage. */
+  manageUrl?: string;
+  /** OpenAI's or Anthropic's own code and request id, for diagnosis. */
+  providerCode?: string;
+  requestId?: string;
+}
+
+export interface AgentProviderInfo {
+  id: string;
+  name: string;
+  billing: ModelBilling;
+  model: string;
+}
+
+export interface RoomAgentReply {
+  turnId: string;
+  conversationId: string;
+  roomId: string;
+  text: string;
+  stop: AgentReply['stop'] | 'cancelled' | 'failed';
+  /** The claims behind the answer, checked against what the tools returned. */
+  grounding: Grounding;
+  /** The same, as it may be shown to the room: local excerpts and session ids removed (groundingForRoom). Post this one. */
+  roomGrounding: Grounding;
+  /** Validated canvas requests, in the order they were made. */
+  commands: CanvasCommand[];
+  toolCalls: AgentToolCall[];
+  /** What the question was resolved against. */
+  focus: { how: 'circled' | 'selected' | 'none'; componentIds: string[] };
+  provider: AgentProviderInfo;
+  /** The model that wrote the answer. */
+  model: string | null;
+  error?: AgentError;
+}
+
+/** Everything a turn does, in order. A turn ends with exactly one of completed, cancelled, or error. */
+export type AgentEvent =
+  | { type: 'turn.started'; turnId: string; conversationId: string; roomId: string; provider: AgentProviderInfo }
+  /** Partial answer text. `step` counts model calls; text before a tool call is Vowe thinking aloud. */
+  | { type: 'text.delta'; turnId: string; step: number; delta: string }
+  /** The answer's full text, once known. */
+  | { type: 'text.final'; turnId: string; text: string }
+  | { type: 'tool.started'; turnId: string; call: { id: string; name: string; input: unknown } }
+  | { type: 'tool.finished'; turnId: string; call: AgentToolCall; evidence: string[] }
+  | { type: 'approval.requested'; turnId: string; request: AgentApprovalRequest }
+  | { type: 'canvas.command'; turnId: string; command: CanvasCommand }
+  /** A canvas request the runtime refused to emit, and why (the model is told too). */
+  | { type: 'canvas.rejected'; turnId: string; tool: string; errors: string[] }
+  | { type: 'turn.completed'; turnId: string; reply: RoomAgentReply }
+  | { type: 'turn.cancelled'; turnId: string; reason: 'interrupted' | 'cancelled'; reply: RoomAgentReply }
+  | { type: 'turn.failed'; turnId: string; error: AgentError; reply: RoomAgentReply };
 
 // ─── Cloud ───────────────────────────────────────────────────────────────────
 // Cloud ids (created_by, Participant.userId, RoomEvent.senderId) are Supabase user ids,
@@ -760,6 +885,16 @@ export interface Channels {
     'agent:approve': (approvalId: string, approved: boolean) => void;
     /** Forgets the conversation and declines anything it's waiting on. */
     'agent:reset': (conversationId: string) => void;
+    /** Starts a room turn; its progress arrives as agent:event, and it resolves once it has started. */
+    'agent:ask': (turn: RoomAgentTurn) => { turnId: string };
+    /** Cancels a running turn (an interruption, or the person gave up). */
+    'agent:cancel': (turnId: string) => void;
+    'chatgpt:status': () => ChatGptStatus;
+    /** Opens the browser to sign in: the active (or a saved) account, or 'new' for another one. */
+    'chatgpt:signIn': (account?: string) => ChatGptStatus;
+    /** Revokes and forgets the active account's tokens; `revoked` says whether OpenAI confirmed it. */
+    'chatgpt:signOut': () => { revoked: boolean };
+    'chatgpt:dismissWelcome': () => void;
   };
   event: {
     'auth:changed': User | null;
@@ -769,6 +904,8 @@ export interface Channels {
     'rooms:status': { roomId: string; status: RoomStatus };
     'agent:approval': AgentApprovalRequest;
     'agent:toolCall': { conversationId: string; call: AgentToolCall };
+    'agent:event': AgentEvent;
+    'chatgpt:changed': ChatGptStatus;
   };
 }
 
@@ -911,5 +1048,17 @@ export interface JourneyApi {
     onApproval(listener: (request: AgentApprovalRequest) => void): () => void;
     /** Each tool call as it finishes, while send() is still pending. */
     onToolCall(listener: (update: { conversationId: string; call: AgentToolCall }) => void): () => void;
+    /** Asks Vowe a question in a room; follow it with onEvent. */
+    ask(turn: RoomAgentTurn): Promise<{ turnId: string }>;
+    cancel(turnId: string): Promise<void>;
+    onEvent(listener: (event: AgentEvent) => void): () => void;
+  };
+  /** Sign in with ChatGPT, so Vowe's agent can use your ChatGPT plan. Separate from Google sign-in. */
+  chatgpt: {
+    status(): Promise<ChatGptStatus>;
+    signIn(account?: string): Promise<ChatGptStatus>;
+    signOut(): Promise<{ revoked: boolean }>;
+    dismissWelcome(): Promise<void>;
+    onChange(listener: (status: ChatGptStatus) => void): () => void;
   };
 }
