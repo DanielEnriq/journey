@@ -24,8 +24,8 @@ import type { ClaudeCodeActivity, ClaudeCodeEvent, ClaudeCodeEventType, ClaudeCo
 const EVENTS: ClaudeCodeEventType[] = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionEnd'];
 /** Names the installed script; any hook command containing it is Vowe's. */
 const SCRIPT_NAME = 'vowe-claude-hook.cjs';
-/** Without a hook for this long, a session seen working is no longer known to be working. */
-const WORKING_FOR_MS = 5 * 60_000;
+/** Activity observed this recently counts as `active`; after that, nothing says what the session is doing. */
+const ACTIVE_FOR_MS = 5 * 60_000;
 const KEEP_EVENTS_DAYS = 30;
 
 const baseDir = () => join(app.getPath('userData'), 'claude-code');
@@ -33,27 +33,30 @@ const spoolDir = () => join(baseDir(), 'events');
 const installedScript = () => join(baseDir(), SCRIPT_NAME);
 /** The compiled script inside the app; copied out so rebuilding or moving the app can't break a running hook. */
 const bundledScript = join(import.meta.dirname, 'claude-code-hook.cjs');
-const settingsPath = () => join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json');
+export const claudeConfigDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+const settingsPath = () => join(claudeConfigDir(), 'settings.json');
 
 // ─── Activity ────────────────────────────────────────────────────────────────
 
+/**
+ * Hook events and transcript events. Both sources feed the same table and the same states, and
+ * each event says which one it came from.
+ */
 export const claudeCodeActivity = new EventEmitter<{ event: [ClaudeCodeEvent] }>();
 
-/** The state a session's latest event confirms (see ClaudeCodeActivityState). */
+/** The state a session's latest event supports (see ClaudeCodeActivityState). */
 export function activityFor(lastEvent: ClaudeCodeEvent, now = Date.now()): ClaudeCodeActivity {
   switch (lastEvent.type) {
     case 'SessionEnd':
       return { state: 'ended', lastEvent };
     case 'Stop':
       return { state: 'turn-completed', lastEvent };
-    case 'SessionStart':
-      return { state: 'started', lastEvent };
     default:
-      return { state: now - Date.parse(lastEvent.timestamp) < WORKING_FOR_MS ? 'working' : 'unknown', lastEvent };
+      return { state: now - Date.parse(lastEvent.timestamp) < ACTIVE_FOR_MS ? 'active' : 'unknown', lastEvent };
   }
 }
 
-/** Activity for each of the given sessions that hooks have reported on. */
+/** Activity for each of the given sessions that has any observed events. */
 export function sessionActivity(sessionIds: string[]): Map<string, ClaudeCodeActivity> {
   const now = Date.now();
   return new Map([...latestEvents(sessionIds)].map(([id, event]) => [id, activityFor(event, now)]));
@@ -63,16 +66,20 @@ export function sessionActivity(sessionIds: string[]): Map<string, ClaudeCodeAct
 
 const nullableString = z.string().max(2000).nullable();
 /** Spool files come from outside the app: check every field before storing. */
-const spooledEvent = z.object({
-  id: z.uuid(),
-  sessionId: z.string().min(1).max(200),
-  type: z.enum(EVENTS),
-  timestamp: z.iso.datetime(),
-  cwd: nullableString,
-  toolName: nullableString,
-  summary: nullableString,
-  subagent: z.boolean(),
-}) satisfies z.ZodType<ClaudeCodeEvent>;
+const spooledEvent = z
+  .object({
+    id: z.uuid(),
+    sessionId: z.string().min(1).max(200),
+    type: z.enum(EVENTS),
+    timestamp: z.iso.datetime(),
+    cwd: nullableString,
+    toolName: nullableString,
+    summary: nullableString,
+    subagent: z.boolean(),
+    // Hook scripts installed by older builds don't send it.
+    filePath: nullableString.default(null),
+  })
+  .transform((e): ClaudeCodeEvent => ({ ...e, source: 'hook' }));
 
 let watcher: FSWatcher | null = null;
 let draining: Promise<void> | null = null;

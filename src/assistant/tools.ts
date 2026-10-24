@@ -41,7 +41,7 @@ const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0
 
 /** Hook events with what they said; only for sessions the user approved, since prompts show up in them. */
 function events(list: ClaudeCodeEvent[], max: number) {
-  return list.slice(0, max).map((e) => ({ type: e.type, tool: e.toolName, summary: e.summary, at: e.timestamp, subagent: e.subagent || undefined }));
+  return list.slice(0, max).map((e) => ({ type: e.type, tool: e.toolName, summary: e.summary, at: e.timestamp, source: e.source, subagent: e.subagent || undefined }));
 }
 
 // ─── list_coding_sessions ────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ const listCodingSessions = defineTool({
   name: 'list_coding_sessions',
   description:
     "Lists the repository's Claude Code sessions, newest activity first, with the workstreams (branch + worktree) they ran in. " +
-    'Each session has its title, timestamps, recorded branch, how confidently it is linked to a workstream, and its last observed hook state. ' +
+    'Each session has its title, timestamps, recorded branch, the workstreams it is linked to and on what evidence, and its last observed state. ' +
     'Message content is not included; use read_coding_session for that. Start here for questions about what work is happening.',
   input: z
     .object({
@@ -62,8 +62,12 @@ const listCodingSessions = defineTool({
     const work = await ctx.work.getWorkContext(ctx.repositoryId);
     const root = work.repository.repository.path;
     const rel = (path: string | null) => (path ? relative(root, path) || '.' : null);
-    const linkOf = new Map(work.workstreams.flatMap((w) => w.sessions.map((l) => [l.sessionId, { workstreamId: w.id, branchMatch: l.branch }] as const)));
-    const sessions = work.sessions.filter((s) => !workstreamId || linkOf.get(s.id)?.workstreamId === workstreamId);
+    const linksOf = new Map<string, { workstreamId: string; basis: string; branchMatch: string }[]>();
+    for (const w of work.workstreams) {
+      for (const l of w.sessions) linksOf.set(l.sessionId, [...(linksOf.get(l.sessionId) ?? []), { workstreamId: w.id, basis: l.basis, branchMatch: l.branch }]);
+    }
+    const unplaced = new Map(work.unplacedSessions.map((u) => [u.sessionId, u.reason]));
+    const sessions = work.sessions.filter((s) => !workstreamId || linksOf.get(s.id)?.some((l) => l.workstreamId === workstreamId));
     return {
       observedAt: work.generatedAt,
       workstreams: work.workstreams.map((w) => ({
@@ -82,10 +86,11 @@ const listCodingSessions = defineTool({
         lastModifiedAt: s.lastModifiedAt,
         cwd: rel(s.cwd),
         recordedBranch: s.gitBranch,
-        ...(linkOf.get(s.id) ?? { workstreamId: null, branchMatch: null }),
+        links: linksOf.get(s.id) ?? [],
+        unplaced: unplaced.get(s.id),
         messageCount: s.messageCount,
         state: s.activity?.state ?? 'unknown',
-        lastHookEvent: s.activity && { type: s.activity.lastEvent.type, tool: s.activity.lastEvent.toolName, at: s.activity.lastEvent.timestamp },
+        lastEvent: s.activity && { type: s.activity.lastEvent.type, tool: s.activity.lastEvent.toolName, at: s.activity.lastEvent.timestamp, source: s.activity.lastEvent.source },
       })),
       omittedSessions: Math.max(0, sessions.length - limit),
       unplacedSessions: work.unplacedSessions.length,
@@ -132,7 +137,7 @@ function condense(index: number, m: ClaudeCodeMessage) {
 const readCodingSession = defineTool({
   name: 'read_coding_session',
   description:
-    "Reads messages from one Claude Code session in the repository: what the user asked, what Claude Code said, the tools it called, and clipped tool output, plus the session's recent hook activity. " +
+    "Reads messages from one Claude Code session in the repository: what the user asked, what Claude Code said, the tools it called, and clipped tool output, plus its recently observed activity. " +
     'Each message has its index `n` for citing. Without `query`, returns the latest messages (or those before `before`); with `query`, returns the messages that best match any of its words. ' +
     'Ask for only what you need. The user is asked to approve sharing each session the first time; if they decline, say what you could not check.',
   input: z
@@ -150,7 +155,7 @@ const readCodingSession = defineTool({
     const session = matches[0];
     const approved = await ctx.authorize(`session:${session.id}`, {
       title: `Share messages from "${clip(session.title, 80)}" with ${ctx.providerName}?`,
-      detail: `To answer, Vowe wants to send excerpts of this Claude Code session (messages, tool calls, clipped tool output, and hook activity) to ${ctx.providerName}. Other sessions stay on this machine unless you approve them too.`,
+      detail: `To answer, Vowe wants to send excerpts of this Claude Code session (messages, tool calls, clipped tool output, and observed activity) to ${ctx.providerName}. Other sessions stay on this machine unless you approve them too.`,
     });
     if (!approved) return { declined: true, note: 'The user declined to share this session. Work from its metadata, and say what you could not check.' };
     const result = await ctx.work.getSessionMessages(session.id, { query, before, limit });
@@ -160,11 +165,11 @@ const readCodingSession = defineTool({
     return {
       session: { id: session.id, title: session.title, recordedBranch: session.gitBranch, state: session.activity?.state ?? 'unknown', totalMessages: result.total },
       workstreamId: result.workstreamId,
-      branchMatch: result.link?.branch ?? null,
+      link: result.link && { basis: result.link.basis, branchMatch: result.link.branch },
       showing: query ? `${messages.length} messages best matching "${query}"` : `messages ${first ?? 0}–${(result.messages.at(-1)?.index ?? -1)} of ${result.total}`,
       earlierAvailable: !query && first !== undefined && first > 0 ? `call again with before=${first}` : undefined,
       messages,
-      recentHookActivity: events(result.activity, 15),
+      recentActivity: events(result.activity, 15),
     };
   },
 });
@@ -256,7 +261,7 @@ const getWorktreeChanges = defineTool({
       })),
       omittedFiles: Math.max(0, status.files.length - MAX_FILES),
       recentCommits: recentCommits.slice(0, 5).map((c) => ({ commit: shortHash(c.commit), subject: c.subject, at: c.committedAt })),
-      linkedSessions: workstream.sessions.map((l) => ({ id: short(l.sessionId), branchMatch: l.branch })),
+      linkedSessions: workstream.sessions.map((l) => ({ id: short(l.sessionId), basis: l.basis, branchMatch: l.branch })),
       diffs,
     };
   },

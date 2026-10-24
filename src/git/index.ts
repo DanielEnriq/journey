@@ -46,6 +46,20 @@ export async function findWorkingTreeRoot(path: string): Promise<string | null> 
   }
 }
 
+/**
+ * Which repository `path` is in: the top of its working tree and the repository's common Git
+ * directory, which every worktree of one repository shares. Null if it isn't in a working tree
+ * (or no longer exists).
+ */
+export async function gitIdentity(path: string): Promise<{ toplevel: string; commonDir: string } | null> {
+  try {
+    const [toplevel, commonDir] = (await git(path, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'])).trim().split('\n');
+    return toplevel && commonDir ? { toplevel: resolve(toplevel), commonDir: resolve(commonDir) } : null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Status ──────────────────────────────────────────────────────────────────
 
 const CHANGE: Record<string, GitChange> = {

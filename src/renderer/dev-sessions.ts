@@ -86,7 +86,7 @@ export function setupDevSessions(api: JourneyApi, attempt: (action: () => Promis
     if (!events.length) activityEl.append(el('li', 'No hook events yet. Install the hooks, then start a new Claude Code session.', 'empty'));
     for (const e of events.slice(0, 50)) {
       const title = sessions.find((s) => s.id === e.sessionId)?.title ?? e.sessionId.slice(0, 8);
-      const what = [e.type, e.toolName].filter(Boolean).join(' · ') + (e.subagent ? ' (subagent)' : '');
+      const what = [e.type, e.toolName].filter(Boolean).join(' · ') + (e.subagent ? ' (subagent)' : '') + ` · ${e.source}`;
       const li = el('li');
       const info = el('div');
       info.append(el('div', `${what}${e.summary ? ` — ${e.summary}` : ''}`), el('div', `${new Date(e.timestamp).toLocaleTimeString()} · ${title}`, 'path'));
@@ -114,7 +114,7 @@ export function setupDevSessions(api: JourneyApi, attempt: (action: () => Promis
     $('cc-workstreams').replaceChildren(
       ...work.workstreams.map((w) => {
         const links = w.sessions.map((l) => l.branch);
-        const counts = (['same', 'different', 'unknown'] as const).map((b) => `${links.filter((x) => x === b).length} ${b}`).join(', ');
+        const counts = (['same', 'different', 'detached', 'unknown'] as const).map((b) => `${links.filter((x) => x === b).length} ${b}`).join(', ');
         const li = el('li');
         const info = el('div');
         info.append(
@@ -185,9 +185,9 @@ export function setupDevSessions(api: JourneyApi, attempt: (action: () => Promis
 
   function renderState(activity: ClaudeCodeActivity | null) {
     const state = activity?.state ?? 'unknown';
-    const label = { started: 'started', working: 'working', 'turn-completed': 'turn done', ended: 'ended', unknown: 'unknown' }[state];
+    const label = { active: 'active', 'turn-completed': 'turn done', ended: 'ended', unknown: 'unknown' }[state];
     const badge = el('span', label, `cc-state ${state}`);
-    badge.title = activity ? `${activity.lastEvent.type} at ${when(activity.lastEvent.timestamp)}` : 'No hook events observed';
+    badge.title = activity ? `${activity.lastEvent.type} at ${when(activity.lastEvent.timestamp)} (from ${activity.lastEvent.source})` : 'No activity observed';
     return badge;
   }
 

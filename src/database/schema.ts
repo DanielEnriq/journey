@@ -58,7 +58,7 @@ export const workspaceCache = sqliteTable(
 export const claudeCodeEvents = sqliteTable(
   'claude_code_events',
   {
-    id: text('id').primaryKey(), // UUID minted by the hook, so re-reading a spool file can't duplicate it
+    id: text('id').primaryKey(), // the hook's UUID, or derived from the transcript line, so re-reading can't duplicate it
     sessionId: text('session_id').notNull(),
     type: text('type').notNull(),
     occurredAt: text('occurred_at').notNull(), // ISO 8601, sortable as text
@@ -67,9 +67,20 @@ export const claudeCodeEvents = sqliteTable(
     summary: text('summary'),
     subagent: integer('subagent', { mode: 'boolean' }).notNull().default(false),
     receivedAt: text('received_at').notNull().default(now),
+    source: text('source').notNull().default('hook'), // 'hook' | 'transcript'
+    filePath: text('file_path'),
   },
   (t) => [index('claude_code_events_session').on(t.sessionId, t.occurredAt), index('claude_code_events_time').on(t.occurredAt)],
 );
+
+// How far the transcript watcher has read each Claude Code transcript, so a restart resumes there.
+export const claudeCodeTranscripts = sqliteTable('claude_code_transcripts', {
+  path: text('path').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  offset: integer('offset').notNull(), // bytes, always just after a newline
+  inode: integer('inode'),
+  updatedAt: text('updated_at').notNull().default(now),
+});
 
 /**
  * Claude Code sessions found for each repository: metadata and where to find the transcript (the

@@ -29,6 +29,13 @@
       "when": 1792860218371,
       "tag": "0003_work_context",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792861917101,
+      "tag": "0004_transcript_watcher",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { startClaudeCodeObserver, stopClaudeCodeObserver } from '../agents/claude-code-hooks.js';
+import { startTranscriptWatcher, stopTranscriptWatcher } from '../agents/claude-code-watcher.js';
 import { closeDb, getDb } from '../database/index.js';
 import { restoreSession, signIn, signOut } from '../integrations/google/auth.js';
 import { startCloudSync } from '../integrations/supabase/index.js';
@@ -18,6 +19,7 @@ app.on('activate', () => {
 });
 app.on('will-quit', () => {
   stopClaudeCodeObserver();
+  stopTranscriptWatcher();
   closeDb();
 });
 
@@ -29,6 +31,7 @@ async function main() {
   getDb();
   applySettings();
   startClaudeCodeObserver(); // reads hook events, including any that arrived while the app was closed
+  startTranscriptWatcher(); // follows Claude Code transcripts, from where it left off
   restrictPermissions();
 
   const user = await restoreSession();

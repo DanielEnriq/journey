@@ -3,17 +3,22 @@
  * sessions run in it (agents/claude-code.ts), and what hooks observed them doing
  * (agents/claude-code-hooks.ts). Callers get plain objects and never see where transcripts live.
  *
- * A workstream is one branch checked out in one worktree. Sessions are linked to the worktree their
- * working directory is in, and nothing else: the link says whether the branch they recorded still
- * matches, and sessions that fit no worktree are reported as unplaced rather than assigned.
+ * A workstream is one branch checked out in one worktree. A session is linked to a worktree by
+ * evidence, and each link names it (WorkstreamSessionLink.basis): Git placing the session's working
+ * directory in that worktree, failing that (the directory is gone) its path lying inside the
+ * worktree, and separately, files its tools worked on there. Paths are compared after resolving
+ * symlinks, and a directory Git places in another repository (say, one nested inside) isn't counted.
+ * The link also says whether the branch the session recorded matches. Sessions that fit no
+ * worktree are reported as unplaced rather than assigned.
  */
 
-import { sep } from 'node:path';
+import { realpath } from 'node:fs/promises';
+import { dirname, resolve, sep } from 'node:path';
 import type { ClaudeCodeAdapter } from '../agents/claude-code.js';
-import { recentEvents } from '../database/claude-code-events.js';
+import { recentEvents, sessionFilePaths } from '../database/claude-code-events.js';
 import { getRepository, listRepositories, type Repository } from '../database/repositories.js';
 import { getIndexedSession, getWorkstream, indexedSessionIds, indexSessions, touchWorkstream } from '../database/work-context.js';
-import { diffFile, diffStat, getStatus, listBranches, listCommits, listWorktrees } from '../git/index.js';
+import { diffFile, diffStat, getStatus, gitIdentity, listBranches, listCommits, listWorktrees } from '../git/index.js';
 import type {
   ClaudeCodeEvent,
   ClaudeCodeMessage,
@@ -36,6 +41,8 @@ const RECENT_MESSAGES = 20;
 const RECENT_COMMITS = 10;
 const MAX_DIFF_FILES = 10;
 const MAX_PATCH = 12_000;
+/** How long a directory's Git identity is trusted; worktrees come and go, but not by the second. */
+const IDENTITY_TTL_MS = 60_000;
 
 /** All the text in a message that a search can match: what was said, and what tools were asked to do. */
 function searchableText(m: ClaudeCodeMessage): string {
@@ -55,16 +62,22 @@ function worktreeOf(dir: string | null, worktrees: GitWorktree[]): GitWorktree |
   return best;
 }
 
-function link(session: ClaudeCodeSession, worktree: GitWorktree): WorkstreamSessionLink {
-  const recorded = session.gitBranch && session.gitBranch !== 'HEAD' ? session.gitBranch : null;
-  const branch = !recorded || !worktree.branch ? 'unknown' : recorded === worktree.branch ? 'same' : 'different';
-  return { sessionId: session.id, branch, sessionBranch: session.gitBranch };
+function link(session: ClaudeCodeSession, worktree: GitWorktree, basis: WorkstreamSessionLink['basis']): WorkstreamSessionLink {
+  const recorded = session.gitBranch;
+  // Claude Code records "HEAD" for a detached checkout: a real state, but not a branch to compare.
+  const branch = !recorded ? 'unknown' : recorded === 'HEAD' ? 'detached' : recorded === worktree.branch ? 'same' : 'different';
+  return { sessionId: session.id, basis, branch, sessionBranch: recorded };
 }
+
+type Placement = { worktree: GitWorktree; basis: 'cwd' | 'cwd-path' } | { worktree: null; reason: UnplacedSession['reason'] };
 
 const summary = (repo: Repository) => ({ id: repo.id, name: repo.name, path: repo.path });
 const newest = (a: ClaudeCodeEvent | null, b: ClaudeCodeEvent | null | undefined) => (!b || (a && a.timestamp >= b.timestamp) ? a : b);
 
 export class WorkContextService {
+  private canonicalPaths = new Map<string, Promise<string>>();
+  private identities = new Map<string, { at: number; value: Promise<{ toplevel: string; commonDir: string } | null> }>();
+
   constructor(private readonly claudeCode: ClaudeCodeAdapter) {}
 
   /** Lists the repository's sessions and refreshes their index, which lets a session be found by id alone. */
@@ -91,8 +104,9 @@ export class WorkContextService {
     const repo = this.repository(repositoryId);
     let ids = indexedSessionIds(repo.id);
     if (!ids.length) ids = (await this.listSessions(repo.id)).map((s) => s.id);
-    const worktrees = await listWorktrees(repo.path);
-    return recentEvents(ids, [repo.path, ...worktrees.map((w) => w.path)], limit);
+    const worktrees = await this.canonicalWorktrees(repo.path);
+    const events = recentEvents(ids, await this.matchDirs([repo.path, ...worktrees.map((w) => w.path)]), limit);
+    return this.ownActivity(repo, new Set(ids), events);
   }
 
   async getWorkContext(repositoryId: string): Promise<WorkContext> {
@@ -117,7 +131,7 @@ export class WorkContextService {
       repository: work.repository.repository,
       status: worktree.main ? work.repository.status : await getStatus(worktree.path),
       sessions: work.sessions.filter((s) => linked.has(s.id)),
-      activity: work.activity.filter((e) => linked.has(e.sessionId) || worktreeOf(e.cwd, work.repository.worktrees) === worktree),
+      activity: work.activity.filter((e) => linked.has(e.sessionId) || worktreeOf(e.cwd && resolve(e.cwd), work.repository.worktrees)?.path === worktree.path),
     };
   }
 
@@ -181,16 +195,17 @@ export class WorkContextService {
     if (!repo) return null;
     // Messages first: reading them is what makes the session's message count known.
     const recentMessages = await this.claudeCode.getMessages(repo.path, sessionId, { limit: RECENT_MESSAGES }).catch(() => null);
-    const [session, worktrees] = await Promise.all([this.claudeCode.getSession(repo.path, sessionId), listWorktrees(repo.path)]);
+    const [session, worktrees] = await Promise.all([this.claudeCode.getSession(repo.path, sessionId), this.canonicalWorktrees(repo.path)]);
     if (!session) return null;
-    const worktree = worktreeOf(session.cwd, worktrees.filter((w) => !w.bare && !w.prunable));
+    const placement = await this.place(session.cwd, worktrees.filter((w) => !w.bare && !w.prunable), await this.commonDir(repo.path));
+    const { worktree } = placement;
     const workstreamId = worktree ? touchWorkstream(repo.id, worktree.path, worktree.branch ?? '').id : null;
     return {
       session,
       repository: summary(repo),
       worktree,
       workstreamId,
-      link: worktree ? link(session, worktree) : null,
+      link: placement.worktree ? link(session, placement.worktree, placement.basis) : null,
       activity: recentEvents([sessionId], [], RECENT_EVENTS),
       recentMessages: recentMessages ?? { sessionId, offset: 0, total: 0, messages: [] },
     };
@@ -200,6 +215,68 @@ export class WorkContextService {
     const repo = getRepository(id);
     if (!repo) throw new Error('No such repository');
     return repo;
+  }
+
+  private canonical(path: string): Promise<string> {
+    let known = this.canonicalPaths.get(path);
+    if (!known) {
+      // A path that no longer exists keeps its spelling; its parent may still resolve.
+      known = realpath(path).catch(() => (dirname(path) === path ? path : this.canonical(dirname(path)).then((d) => resolve(d, path.slice(dirname(path).length + 1)))));
+      this.canonicalPaths.set(path, known);
+      if (this.canonicalPaths.size > 5000) this.canonicalPaths.clear();
+    }
+    return known;
+  }
+
+  private identity(dir: string) {
+    const cached = this.identities.get(dir);
+    if (cached && Date.now() - cached.at < IDENTITY_TTL_MS) return cached.value;
+    const value = this.canonical(dir).then(async (path) => {
+      const id = await gitIdentity(path);
+      return id && { toplevel: await this.canonical(id.toplevel), commonDir: await this.canonical(id.commonDir) };
+    });
+    this.identities.set(dir, { at: Date.now(), value });
+    return value;
+  }
+
+  private async commonDir(repoPath: string) {
+    return (await this.identity(repoPath))?.commonDir ?? null;
+  }
+
+  /** Worktrees with their paths resolved, so they compare equal to resolved session paths. */
+  private async canonicalWorktrees(repoPath: string): Promise<GitWorktree[]> {
+    return Promise.all((await listWorktrees(repoPath)).map(async (w) => ({ ...w, path: await this.canonical(w.path) })));
+  }
+
+  /** Paths to match event directories against: as Git lists them and as they resolve, since events record them unresolved. */
+  private async matchDirs(paths: string[]): Promise<string[]> {
+    return [...new Set([...paths, ...(await Promise.all(paths.map((p) => this.canonical(p))))])];
+  }
+
+  /** Which worktree a session's directory is in, by Git if it can still say, else by path alone. */
+  private async place(cwd: string | null, live: GitWorktree[], repoCommonDir: string | null): Promise<Placement> {
+    if (!cwd) return { worktree: null, reason: 'no-cwd' };
+    const id = await this.identity(cwd);
+    if (id) {
+      if (repoCommonDir && id.commonDir !== repoCommonDir) return { worktree: null, reason: 'other-repository' };
+      const worktree = live.find((w) => w.path === id.toplevel);
+      return worktree ? { worktree, basis: 'cwd' } : { worktree: null, reason: 'no-worktree' };
+    }
+    const worktree = worktreeOf(await this.canonical(cwd), live);
+    return worktree ? { worktree, basis: 'cwd-path' } : { worktree: null, reason: 'no-worktree' };
+  }
+
+  /**
+   * Drops events that matched only because their directory is under one of the repository's paths,
+   * when Git places that directory in another repository.
+   */
+  private async ownActivity(repo: Repository, sessionIds: Set<string>, events: ClaudeCodeEvent[]): Promise<ClaudeCodeEvent[]> {
+    const commonDir = await this.commonDir(repo.path);
+    if (!commonDir) return events;
+    const keep = await Promise.all(
+      events.map(async (e) => sessionIds.has(e.sessionId) || !e.cwd || ((await this.identity(e.cwd))?.commonDir ?? commonDir) === commonDir),
+    );
+    return events.filter((_, i) => keep[i]);
   }
 
   /** From the session index; a session not indexed yet is looked for in each repository. */
@@ -214,8 +291,11 @@ export class WorkContextService {
   }
 
   private async build(repo: Repository): Promise<WorkContext> {
-    const [repository, sessions] = await Promise.all([this.getRepositoryContext(repo.id), this.listSessions(repo.id)]);
-    const { status, worktrees } = repository;
+    const [repository, sessions, commonDir] = await Promise.all([this.getRepositoryContext(repo.id), this.listSessions(repo.id), this.commonDir(repo.path)]);
+    const { status } = repository;
+    const listedPaths = repository.worktrees.map((w) => w.path);
+    const worktrees = await Promise.all(repository.worktrees.map(async (w) => ({ ...w, path: await this.canonical(w.path) })));
+    repository.worktrees = worktrees;
     // Bare and deleted worktrees have no working tree for a session to have run in.
     const live = worktrees.filter((w) => !w.bare && !w.prunable);
     const statuses = new Map<string, GitStatus | null>(
@@ -227,24 +307,37 @@ export class WorkContextService {
     const links = new Map<string, WorkstreamSessionLink[]>(live.map((w) => [w.path, []]));
     const lastActivity = new Map<string, ClaudeCodeEvent | null>(live.map((w) => [w.path, null]));
     const unplacedSessions: UnplacedSession[] = [];
-    for (const session of sessions) {
-      const worktree = worktreeOf(session.cwd, live);
-      if (!worktree) {
-        unplacedSessions.push({ sessionId: session.id, reason: session.cwd ? 'no-worktree' : 'no-cwd', cwd: session.cwd });
-        continue;
+    const placements = await Promise.all(sessions.map((s) => this.place(s.cwd, live, commonDir)));
+    const edited = sessionFilePaths(sessions.map((s) => s.id));
+    for (const [i, session] of sessions.entries()) {
+      const placement = placements[i];
+      if (placement.worktree) {
+        links.get(placement.worktree.path)!.push(link(session, placement.worktree, placement.basis));
+        lastActivity.set(placement.worktree.path, newest(lastActivity.get(placement.worktree.path)!, session.activity?.lastEvent));
+      } else {
+        unplacedSessions.push({ sessionId: session.id, reason: placement.reason, cwd: session.cwd });
       }
-      links.get(worktree.path)!.push(link(session, worktree));
-      lastActivity.set(worktree.path, newest(lastActivity.get(worktree.path)!, session.activity?.lastEvent));
+      // A session can work on files in a worktree other than the one it runs in.
+      const others = new Set<GitWorktree>();
+      for (const file of edited.get(session.id) ?? []) {
+        const worktree = worktreeOf(await this.canonical(file), live);
+        if (worktree && worktree !== placement.worktree) others.add(worktree);
+      }
+      for (const worktree of others) links.get(worktree.path)!.push(link(session, worktree, 'edited-files'));
     }
 
-    const activity = recentEvents(
-      sessions.map((s) => s.id),
-      worktrees.map((w) => w.path),
-      RECENT_EVENTS,
+    const activity = await this.ownActivity(
+      repo,
+      new Set(sessions.map((s) => s.id)),
+      recentEvents(
+        sessions.map((s) => s.id),
+        await this.matchDirs(listedPaths),
+        RECENT_EVENTS,
+      ),
     );
     // Events from sessions too new to have a transcript count for the worktree they ran in.
     for (const event of activity) {
-      const worktree = worktreeOf(event.cwd, live);
+      const worktree = worktreeOf(event.cwd && (await this.canonical(event.cwd)), live);
       if (worktree) lastActivity.set(worktree.path, newest(lastActivity.get(worktree.path)!, event));
     }
 

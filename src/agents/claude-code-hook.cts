@@ -4,6 +4,7 @@
 //
 // Standalone CommonJS run with Electron as plain Node: Node built-ins only, no local imports.
 // It never reads environment variables, and tool inputs and outputs are reduced to one short line.
+// The transcript watcher imports its helpers, so both sources summarize and redact the same way.
 
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -17,7 +18,7 @@ const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null 
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
 /** Masks the usual shapes of secrets that can turn up in commands and prompts. */
-function redact(text: string): string {
+export function redact(text: string): string {
   return text
     .replace(/\b(bearer|basic)\s+[\w.~+/=-]+/gi, '$1 [redacted]')
     .replace(/\b(sk-[\w-]{8,}|gh[pousr]_\w{20,}|github_pat_\w{20,}|xox[abprs]-[\w-]+|AKIA[0-9A-Z]{16}|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]+)/g, '[redacted]')
@@ -26,10 +27,18 @@ function redact(text: string): string {
     .replace(/(\/\/)[^\s/:@]+:[^\s/@]+@/g, '$1[redacted]@');
 }
 
-function clip(text: string | null): string | null {
+export function clip(text: string | null): string | null {
   if (!text) return null;
   const line = redact(text.replace(/\s+/g, ' ').trim());
   return line.length > MAX_SUMMARY ? `${line.slice(0, MAX_SUMMARY - 1)}…` : line;
+}
+
+/** The file a file tool worked on, absolute, as evidence of which worktree a session touched. */
+export function toolFilePath(name: string, input: unknown, cwd: string | null): string | null {
+  if (!isObject(input) || !['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(name)) return null;
+  const path = str(input.file_path) ?? str(input.notebook_path);
+  if (!path) return null;
+  return isAbsolute(path) ? path : cwd ? join(cwd, path) : null;
 }
 
 function shortPath(path: string | null, cwd: string | null): string | null {
@@ -39,7 +48,7 @@ function shortPath(path: string | null, cwd: string | null): string | null {
 }
 
 /** One line saying what a tool call was about: the command, file, pattern, or URL. Never its output. */
-function describeTool(name: string, input: unknown, cwd: string | null): string | null {
+export function describeTool(name: string, input: unknown, cwd: string | null): string | null {
   if (!isObject(input)) return null;
   switch (name) {
     case 'Bash':
@@ -74,6 +83,7 @@ function normalize(input: Json) {
   if (!type || !sessionId) return null;
   const cwd = str(input.cwd);
   const toolName = str(input.tool_name);
+  const filePath = toolName ? toolFilePath(toolName, input.tool_input, cwd) : null;
   let summary: string | null = null;
   switch (type) {
     case 'SessionStart':
@@ -109,13 +119,18 @@ function normalize(input: Json) {
     toolName,
     summary: clip(summary),
     subagent: Boolean(str(input.agent_id)),
+    filePath,
   };
 }
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => (raw += chunk));
-process.stdin.on('end', () => {
+function run() {
+  let raw = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => (raw += chunk));
+  process.stdin.on('end', () => onInput(raw));
+}
+
+function onInput(raw: string) {
   try {
     const input: unknown = JSON.parse(raw);
     const event = spoolDir && isObject(input) ? normalize(input) : null;
@@ -128,4 +143,6 @@ process.stdin.on('end', () => {
   } catch {
     // Observing must never get in Claude Code's way: drop the event.
   }
-});
+}
+
+if (require.main === module) run();

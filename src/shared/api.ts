@@ -136,15 +136,22 @@ export interface ClaudeCodeSession {
   activity: ClaudeCodeActivity | null;
 }
 
-/** The Claude Code hook events Vowe observes (see agents/claude-code-hooks.ts). */
+/**
+ * What Vowe observes of a Claude Code session, named after the hook events. Hooks report all six
+ * (agents/claude-code-hooks.ts); the transcript watcher (agents/claude-code-watcher.ts) sees prompts,
+ * tool results, and completed turns, but never a session starting or ending.
+ */
 export type ClaudeCodeEventType = 'SessionStart' | 'UserPromptSubmit' | 'PostToolUse' | 'PostToolUseFailure' | 'Stop' | 'SessionEnd';
 
-/** One hook event, reduced to a summary line; tool inputs and outputs aren't kept. */
+/** One observed event, reduced to a summary line; tool inputs and outputs aren't kept. */
 export interface ClaudeCodeEvent {
+  /** The hook's own id, or `transcript:<line uuid>[:<tool use id>]`, so re-reading never duplicates one. */
   id: string;
   sessionId: string;
   type: ClaudeCodeEventType;
-  /** When the hook ran, ISO 8601. */
+  /** `hook`: from Vowe's Claude Code hooks; `transcript`: read from a line appended to the session's transcript. */
+  source: 'hook' | 'transcript';
+  /** When it happened, ISO 8601. */
   timestamp: string;
   cwd: string | null;
   /** For PostToolUse and PostToolUseFailure. */
@@ -156,19 +163,20 @@ export interface ClaudeCodeEvent {
   summary: string | null;
   /** Fired inside a subagent rather than the main conversation. */
   subagent: boolean;
+  /** The absolute path a file tool (Read, Write, Edit…) worked on: evidence of which worktree it touched. */
+  filePath: string | null;
 }
 
 /**
- * The execution state the hooks last confirmed. Only `working` claims current activity, so it
- * lapses to `unknown` when no hook has fired for a while: a long tool call or a killed process
- * look the same from outside.
- * - `started`: SessionStart was the latest event; waiting for a prompt.
- * - `working`: a prompt or tool call was seen recently.
- * - `turn-completed`: Claude finished replying (Stop); the session is still open.
- * - `ended`: the session exited (SessionEnd).
- * - `unknown`: nothing recent enough to say.
+ * What the latest observed event says about a session. None of these claims a process is running:
+ * a long tool call and a killed process look the same from outside.
+ * - `active`: new activity (a start, prompt, or tool call) was observed in the last few minutes;
+ *   it lapses to `unknown` after that.
+ * - `turn-completed`: Claude finished a reply and was waiting on its user.
+ * - `ended`: the session exited; only a SessionEnd hook confirms this.
+ * - `unknown`: nothing observed recently enough to say.
  */
-export type ClaudeCodeActivityState = 'started' | 'working' | 'turn-completed' | 'ended' | 'unknown';
+export type ClaudeCodeActivityState = 'active' | 'turn-completed' | 'ended' | 'unknown';
 
 export interface ClaudeCodeActivity {
   state: ClaudeCodeActivityState;
@@ -237,24 +245,36 @@ export interface RepositoryContext {
 }
 
 /**
- * Why a session is linked to a workstream. The only evidence is the session's working directory
- * being inside the workstream's worktree, so `branch` says whether that's the same piece of work:
+ * Why a session is linked to a workstream, and how sure that is. A session can be linked to more
+ * than one workstream (it ran in one worktree and edited files in another).
+ *
+ * `basis`, the evidence for the link:
+ * - `cwd`: Git confirms the session's directory is in this worktree of this repository.
+ * - `cwd-path`: the directory is under this worktree's path, but Git couldn't confirm it (it's gone).
+ * - `edited-files`: it ran elsewhere, but file edits observed from it are in this worktree.
+ *
+ * `branch`, whether it's the same piece of work as what's checked out now:
  * - `same`: the session's last recorded branch is the one checked out now.
- * - `different`: it ran here on another branch, so it may belong to other work.
- * - `unknown`: no branch was recorded, or the worktree's HEAD is detached.
+ * - `different`: it recorded another branch.
+ * - `detached`: it recorded a detached HEAD, so which commit it was on is unknown.
+ * - `unknown`: nothing was recorded, or the evidence (edited files) says nothing about branches.
  */
 export interface WorkstreamSessionLink {
   sessionId: string;
-  branch: 'same' | 'different' | 'unknown';
-  /** The branch the session recorded. */
+  basis: 'cwd' | 'cwd-path' | 'edited-files';
+  branch: 'same' | 'different' | 'detached' | 'unknown';
+  /** The branch the session recorded; `HEAD` means detached. */
   sessionBranch: string | null;
 }
 
 /** A session that can't be placed in any current worktree. */
 export interface UnplacedSession {
   sessionId: string;
-  /** `no-cwd`: none was recorded; `no-worktree`: its directory isn't in a worktree that still exists. */
-  reason: 'no-cwd' | 'no-worktree';
+  /**
+   * `no-cwd`: none was recorded; `no-worktree`: its directory isn't in a worktree that still exists;
+   * `other-repository`: Git says its directory belongs to another repository (say, one nested inside).
+   */
+  reason: 'no-cwd' | 'no-worktree' | 'other-repository';
   cwd: string | null;
 }
 
