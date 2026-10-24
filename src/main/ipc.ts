@@ -1,12 +1,13 @@
-import { BrowserWindow, dialog, ipcMain, nativeTheme, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type IpcMainInvokeEvent } from 'electron';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { addRepository, listRepositories, removeRepository } from '../database/repositories.js';
 import { getAllSettings, updateSettings } from '../database/settings.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
+import { getCallAccess } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
 import { createRoom, createWorkspace, listRooms, listWorkspaces } from '../integrations/supabase/workspaces.js';
-import type { Channels, EventChannel, InvokeArgs, InvokeChannel, InvokeResult } from '../shared/api.js';
+import type { Channels, EventChannel, InvokeArgs, InvokeChannel, InvokeResult, MicrophoneAccess } from '../shared/api.js';
 import { isAppPage } from './window.js';
 
 function requireString(value: unknown, what: string): string {
@@ -33,6 +34,19 @@ function handle<K extends InvokeChannel>(
 /** Pushes an event to every open window. */
 export function broadcast<K extends EventChannel>(channel: K, payload: Channels['event'][K]) {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
+}
+
+/**
+ * macOS asks once per app and remembers; Windows reports the privacy setting; elsewhere there's
+ * no OS gate, so getUserMedia decides. Electron's own permission check is in window.ts.
+ */
+async function requestMicrophone(): Promise<MicrophoneAccess> {
+  if (process.platform !== 'darwin' && process.platform !== 'win32') return 'granted';
+  const status = systemPreferences.getMediaAccessStatus('microphone');
+  if (status === 'not-determined' && process.platform === 'darwin') {
+    return (await systemPreferences.askForMediaAccess('microphone')) ? 'granted' : 'denied';
+  }
+  return status === 'denied' || status === 'restricted' ? status : 'granted'; // 'unknown': let getUserMedia find out
 }
 
 /** Applies settings that main acts on directly. Called at startup and after every update. */
@@ -85,6 +99,8 @@ export function registerIpc() {
   handle('rooms:leave', (roomId) => disconnectRoom(requireString(roomId, 'Room id')));
   // sendRoomEvent validates the type and payload against RoomEvents.
   handle('rooms:send', (roomId, type, payload) => sendRoomEvent(requireString(roomId, 'Room id'), type, payload));
+  handle('calls:access', (roomId) => getCallAccess(requireString(roomId, 'Room id')));
+  handle('calls:requestMicrophone', () => requestMicrophone());
 
   onUserChange((user) => broadcast('auth:changed', user));
   roomActivity.on('event', (event) => broadcast('rooms:event', event));

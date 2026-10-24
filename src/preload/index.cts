@@ -46,6 +46,10 @@ const api: JourneyApi = {
     onPresence: (listener) => subscribe('rooms:presence', listener),
     onStatus: (listener) => subscribe('rooms:status', listener),
   },
+  calls: {
+    access: (roomId) => invoke('calls:access', roomId),
+    requestMicrophone: () => invoke('calls:requestMicrophone'),
+  },
 };
 
 contextBridge.exposeInMainWorld('journey', api);
