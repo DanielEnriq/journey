@@ -212,10 +212,15 @@ export function createResponsesProvider(options: ResponsesProviderOptions): Mode
       );
       const requestId = res.headers.get('x-request-id') ?? undefined;
       let completed = null as { model?: string; output?: OutputItem[] } | null;
+      // Plan accounts stream each item as output_item.done and may complete with an empty `output`.
+      const done: OutputItem[] = [];
+      const seen = new Map<string, number>();
       try {
         for await (const event of sseEvents(res.body!)) {
           const type = event.type as string;
+          seen.set(type, (seen.get(type) ?? 0) + 1);
           if (type === 'response.output_text.delta') onTextDelta?.(String(event.delta ?? ''));
+          else if (type === 'response.output_item.done' && event.item) done.push(event.item as OutputItem);
           else if (type === 'response.completed') completed = event.response as { model?: string; output?: OutputItem[] };
           else if (type === 'response.failed') {
             const error = (event.response as { error?: { code?: string; message?: string; param?: string } }).error;
@@ -234,8 +239,9 @@ export function createResponsesProvider(options: ResponsesProviderOptions): Mode
       }
       // Only response.completed marks success; a stream that just ends is an interrupted one.
       if (!completed) throw new ModelProviderError('incomplete', 'The response stream ended before it completed.', { requestId, retryable: true });
-      const { items: out, refused } = fromOutput(completed.output ?? [], options.id);
+      const { items: out, refused } = fromOutput(completed.output?.length ? completed.output : done, options.id);
       const calls = out.some((i) => i.type === 'tool_call');
+      if (!out.length) console.warn(`[responses] ${options.id} returned no output items; stream events: ${[...seen].map(([t, n]) => `${t}×${n}`).join(', ')}`);
       return { items: out, stopReason: refused && !calls ? 'refusal' : calls ? 'tool_use' : 'end_turn', model: completed.model ?? (await model()) };
     },
   };

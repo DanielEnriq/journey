@@ -322,6 +322,23 @@ describe('Responses provider', () => {
     assert.equal(toInput(res.items, 'openai').length, 2);
   });
 
+  it('reads items streamed as output_item.done when the completed response carries none', async () => {
+    const { provider } = responses([
+      () =>
+        sse([
+          { type: 'response.output_item.done', item: { type: 'function_call', call_id: 'call_1', name: 'search_code', arguments: '{"terms":["charge"]}' } },
+          { type: 'response.output_item.done', item: { type: 'message', content: [{ type: 'output_text', text: 'Searching.' }] } },
+          { type: 'response.completed', response: { model: 'gpt-test-2026', output: [] } },
+        ]),
+    ]);
+    const res = await provider.complete(request);
+    assert.equal(res.stopReason, 'tool_use');
+    assert.deepEqual(res.items, [
+      { type: 'tool_call', id: 'call_1', name: 'search_code', input: { terms: ['charge'] } },
+      { type: 'assistant', text: 'Searching.' },
+    ]);
+  });
+
   it('asks for no tools on the last step', async () => {
     const { provider, sent } = responses([() => sse([{ type: 'response.completed', response: { output: [] } }])]);
     await provider.complete({ ...request, allowTools: false });
