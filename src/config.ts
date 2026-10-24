@@ -22,9 +22,14 @@ export const config = {
     },
     scopes: ['openid', 'email', 'profile'],
   },
-  // Optional until the call feature is wired in; src/voice/elevenlabs.ts checks at use time.
+  // Optional until the call feature is wired in; src/integrations/elevenlabs checks at use time.
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY,
     agentId: process.env.ELEVENLABS_AGENT_ID,
+  },
+  // Optional: without it the app runs local-only. src/integrations/supabase checks at use time.
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    publishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
   },
 };
