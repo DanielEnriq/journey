@@ -30,6 +30,19 @@
       #call li:last-child { border-bottom: 0; }
       .speaking { box-shadow: 0 0 0 2px #2a7; }
       .status { color: var(--muted); font-size: 0.85em; }
+      #repo { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; }
+      #repo-head { display: flex; align-items: center; gap: 0.75rem; }
+      #repo-head strong { flex: 1; min-width: 0; }
+      #repo h3 { font-size: 0.85em; margin: 0.75rem 0 0.25rem; }
+      #repo li { padding: 0.25rem 0; font-size: 0.9em; }
+      #repo li:last-child { border-bottom: 0; }
+      .card { border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem 1rem; margin-top: 0.75rem; }
+      .card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+      #detected { max-height: 320px; overflow-y: auto; }
+      #detected li { padding: 0.35rem 0; }
+      #detected li:last-child { border-bottom: 0; }
+      #repos li.selected > div:first-child { font-weight: 600; }
+      #repos li > div { cursor: pointer; }
       #error { color: #d33; min-height: 1.5em; margin-top: 1rem; }
     </style>
   </head>
@@ -42,6 +55,20 @@
     <h2>Repositories</h2>
     <ul id="repos"></ul>
     <button id="add-repo">Add repository…</button>
+    <button id="detect-repos">Find repositories</button>
+    <section id="detected" class="card" hidden>
+      <div class="card-head"><strong>Found on this Mac</strong><button id="detected-close" aria-label="Close">×</button></div>
+      <ul id="detected-list"></ul>
+    </section>
+    <section id="repo" hidden>
+      <div id="repo-head"><strong id="repo-name"></strong><span id="repo-branch" class="status"></span><button id="repo-refresh">Refresh</button></div>
+      <h3>Changes</h3>
+      <ul id="repo-changes"></ul>
+      <h3>Branches</h3>
+      <ul id="repo-branches"></ul>
+      <h3>Worktrees</h3>
+      <ul id="repo-worktrees"></ul>
+    </section>
 
     <h2>Rooms</h2>
     <section id="call" hidden>

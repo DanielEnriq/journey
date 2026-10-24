@@ -1,4 +1,4 @@
-import type { JourneyApi, Repository, Room, Theme, User, Workspace } from '../shared/api.js';
+import type { GitFileChange, JourneyApi, Repository, Room, Theme, User, Workspace } from '../shared/api.js';
 import { CallController, type CallParticipant, type CallSnapshot } from './call.js';
 
 declare global {
@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-const { auth, settings, repos, workspaces, rooms, calls } = window.journey;
+const { auth, settings, repos, git, workspaces, rooms, calls } = window.journey;
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const userEl = $('user');
 const reposEl = $<HTMLUListElement>('repos');
@@ -15,8 +15,11 @@ const themeEl = $<HTMLSelectElement>('theme');
 const errorEl = $('error');
 const workspaceEl = $<HTMLSelectElement>('workspace');
 const roomsEl = $<HTMLUListElement>('rooms');
+const repoEl = $('repo');
 const callEl = $('call');
 const call = new CallController(calls);
+/** The repository whose Git details are shown, if any. */
+let selectedRepo: Repository | null = null;
 /** Rooms of the selected workspace, for labelling the call. */
 let roomList: Room[] = [];
 
@@ -71,12 +74,69 @@ function renderRepos(list: Repository[]) {
     path.className = 'path';
     path.textContent = path.title = repo.path;
     info.append(name, path);
+    info.onclick = () => attempt(() => selectRepo(repo));
+    li.classList.toggle('selected', repo.id === selectedRepo?.id);
     li.append(info, button('Remove', async () => {
       await repos.remove(repo.id);
+      if (repo.id === selectedRepo?.id) await selectRepo(null);
       renderRepos(await repos.list());
     }));
     reposEl.append(li);
   }
+}
+
+function listItem(text: string, detail?: string) {
+  const li = document.createElement('li');
+  const main = document.createElement('div');
+  main.textContent = text;
+  li.append(main);
+  if (detail) {
+    const extra = document.createElement('span');
+    extra.className = 'status';
+    extra.textContent = detail;
+    li.append(extra);
+  }
+  return li;
+}
+
+function describeChange(file: GitFileChange) {
+  if (file.conflicted) return 'conflict';
+  return [file.staged && `staged ${file.staged}`, file.unstaged].filter(Boolean).join(', ');
+}
+
+async function selectRepo(repo: Repository | null) {
+  selectedRepo = repo && (await repos.open(repo.id));
+  repoEl.hidden = !selectedRepo;
+  if (!selectedRepo) return;
+  renderRepos(await repos.list());
+  await renderRepoDetails(selectedRepo);
+}
+
+async function renderRepoDetails(repo: Repository) {
+  const [status, branches, worktrees] = await Promise.all([git.status(repo.id), git.branches(repo.id), git.worktrees(repo.id)]);
+  if (repo.id !== selectedRepo?.id) return; // another repository was selected meanwhile
+  $('repo-name').textContent = repo.name;
+  const tracking = status.upstream ? ` → ${status.upstream} (↑${status.ahead} ↓${status.behind})` : '';
+  $('repo-branch').textContent = (status.branch ?? `detached at ${status.head?.slice(0, 7) ?? '?'}`) + tracking;
+
+  const fill = (id: string, items: HTMLLIElement[], empty: string) => {
+    const el = $<HTMLUListElement>(id);
+    el.replaceChildren(...(items.length ? items : [Object.assign(listItem(empty), { className: 'empty' })]));
+  };
+  fill('repo-changes', status.files.map((f) => listItem(f.originalPath ? `${f.originalPath} → ${f.path}` : f.path, describeChange(f))), 'No changes.');
+  fill(
+    'repo-branches',
+    branches.map((b) => listItem(`${b.current ? '● ' : ''}${b.name}`, b.upstreamGone ? 'upstream gone' : b.upstream ? `↑${b.ahead} ↓${b.behind}` : '')),
+    'No branches yet.',
+  );
+  fill(
+    'repo-worktrees',
+    worktrees.map((w) => {
+      const flags = [w.main && 'main worktree', w.detached && 'detached', w.locked && 'locked', w.prunable && 'missing'].filter(Boolean).join(', ');
+      return listItem(w.path, [w.branch, flags].filter(Boolean).join(' · '));
+    }),
+    'No worktrees.',
+  );
 }
 
 /** Cloud features need Supabase and a signed-in user; say so in place of the list rather than as an error. */
@@ -215,6 +275,35 @@ $('add-repo').onclick = () =>
   attempt(async () => {
     if (await repos.add()) renderRepos(await repos.list());
   });
+
+const detectedEl = $('detected');
+
+/** Lists repositories found on disk in a small card, each with an Add button. */
+async function showDetected() {
+  const found = await repos.detect();
+  const list = $<HTMLUListElement>('detected-list');
+  list.replaceChildren();
+  if (!found.length) list.append(Object.assign(listItem('No new repositories in ~/projects, ~/code, ~/Developer or similar.'), { className: 'empty' }));
+  for (const repo of found) {
+    const li = listItem(repo.name);
+    const path = document.createElement('div');
+    path.className = 'path';
+    path.textContent = path.title = repo.path;
+    li.firstElementChild!.append(path);
+    li.append(button('Add', async () => {
+      await repos.addDetected(repo.path);
+      li.remove();
+      renderRepos(await repos.list());
+    }));
+    list.append(li);
+  }
+  detectedEl.hidden = false;
+}
+
+$('detect-repos').onclick = () => attempt(showDetected);
+$('detected-close').onclick = () => (detectedEl.hidden = true);
+
+$('repo-refresh').onclick = () => attempt(async () => selectedRepo && renderRepoDetails(selectedRepo));
 
 themeEl.onchange = () => attempt(() => settings.update({ theme: themeEl.value as Theme }));
 
