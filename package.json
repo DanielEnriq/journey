@@ -12,6 +12,8 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "typecheck": "tsc -p . --noEmit",
     "test:calls": "pnpm build && pnpm api:build && node scripts/call-e2e/run.mjs",
+    "eval:agent": "pnpm build && node scripts/agent-eval/run.mjs",
+    "canvas:validate": "node scripts/agent-eval/validate-command.mjs",
     "test": "tsc -p . && node scripts/copy-renderer-assets.mjs && node --test \"dist/**/*.test.js\"",
     "db:generate": "drizzle-kit generate",
     "cloud:push": "supabase db push --linked",
