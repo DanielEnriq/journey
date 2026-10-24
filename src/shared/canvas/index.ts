@@ -11,3 +11,4 @@ export { dangling, parseDocument } from './validate.js';
 export { CANVAS_TOOLS, type ToolDefinition } from './tools.js';
 export * from './views/index.js';
 export { PAYMENT_SYSTEM, ORDERS_SYSTEM } from './fixtures/payment.js';
+export * from './runtime.js';

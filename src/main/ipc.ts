@@ -22,16 +22,19 @@ import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent, setRoomCall }
 import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
 import { createWorkspace, invitations, listWorkspaces, roomRecord, rooms } from '../integrations/supabase/workspaces.js';
 import type {
+  AgentEvent,
   Channels,
   EventChannel,
   InvokeArgs,
   InvokeChannel,
   InvokeResult,
   MicrophoneAccess,
+  RoomAgentTurn,
   RoomCheckout,
   RoomResult,
 } from '../shared/api.js';
 import { canvas, executeAsPerson, loadRoomCanvas, sharePresence } from './canvas.js';
+import { roomCanvasEvents, withRoomCanvas } from './vowe-canvas.js';
 import { isAppPage } from './window.js';
 
 function requireString(value: unknown, what: string): string {
@@ -280,9 +283,14 @@ export function registerIpc() {
     for (const pending of approvals.values()) if (pending.conversationId === conversation) pending.settle(false);
     collaborator.reset(conversation);
   });
-  // Room turns: validated by the runtime, which also checks the asker is the person signed in here.
-  handle('agent:ask', (turn) => {
-    const { turnId } = collaborator.ask(turn, (event) => broadcast('agent:event', event));
+  // Room turns: validated by the runtime, which also checks the asker is the person signed in here. The
+  // turn sees the room's canvas as the hub has it, and its canvas requests run there (main/vowe-canvas.ts).
+  handle('agent:ask', async (raw) => {
+    // Still untrusted: the runtime checks the turn against roomTurnSchema before anything else.
+    const turn = (await withRoomCanvas(raw)) as RoomAgentTurn;
+    const roomId: unknown = turn?.roomId;
+    const send = (event: AgentEvent) => broadcast('agent:event', event);
+    const { turnId } = collaborator.ask(turn, typeof roomId === 'string' ? roomCanvasEvents(roomId, send) : send);
     return { turnId };
   });
   handle('agent:cancel', (turnId) => {

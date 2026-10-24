@@ -520,6 +520,12 @@ export type AgentEvent =
   | { type: 'canvas.command'; turnId: string; command: CanvasCommand }
   /** A canvas request the runtime refused to emit, and why (the model is told too). */
   | { type: 'canvas.rejected'; turnId: string; tool: string; errors: string[] }
+  /**
+   * What the room's canvas did with validated requests (`requests` are their ids): run, landed as a proposal
+   * waiting on a person, or declined, and why. Structural requests become one proposal when the turn has
+   * answered, so these can follow `text.final`; they always come before the turn's ending event.
+   */
+  | { type: 'canvas.applied'; turnId: string; requests: string[]; result: CommandResult }
   | { type: 'turn.completed'; turnId: string; reply: RoomAgentReply }
   | { type: 'turn.cancelled'; turnId: string; reason: 'interrupted' | 'cancelled'; reply: RoomAgentReply }
   | { type: 'turn.failed'; turnId: string; error: AgentError; reply: RoomAgentReply };

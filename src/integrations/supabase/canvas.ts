@@ -132,6 +132,9 @@ export function createCanvasHub({ store, person, announce, now }: CanvasHubOptio
       await serial(roomId, async () => remember(roomId, await store.load(roomId)));
     },
 
+    /** The last canvas this hub saw for a room, without reading it again. */
+    peek(roomId: string): StoredCanvas | null { return latest.get(roomId) ?? null; },
+
     /** What the signed-in person is pointing at in this app, so "this" means something to Vowe. */
     setPresence(roomId: string, p: CanvasPresence) { presence.set(roomId, p); },
 
