@@ -76,15 +76,18 @@ Typed queries live in `src/integrations/supabase/workspaces.ts`; persistent room
 
 ### Voice calls (LiveKit)
 
-Every room has an audio call: one LiveKit room per Journey room, named `room:<room id>`. WebRTC needs a browser, so the call runs in the renderer (`src/renderer/call.ts`, `CallController`); main only lets you in:
+Every room has an audio call between its members: one LiveKit room per Journey room, named `room:<room id>`. WebRTC needs a browser, so the call runs in the renderer (`CallService` in `src/renderer/calls/service.ts`; how the UI uses it is in `src/renderer/calls/INTEGRATION.md`). Main only lets you in:
 
-1. `calls.requestMicrophone()` asks the OS for the microphone (macOS prompts once; a refusal must be undone in System Settings). Electron itself grants our page audio capture and nothing else (`restrictPermissions` in `src/main/window.ts`).
-2. `calls.access(roomId)` (room members only) calls the `livekit-token` Edge Function (`supabase/functions/livekit-token`), which checks the same rule as the Realtime channel (in the room *and* still in its workspace) and returns a 10-minute token for that room only, microphone publishing only. The LiveKit API secret lives in Supabase, never in the app.
-3. The renderer connects with `livekit-client` and reports status (`connecting` / `connected` / `reconnecting`) and each participant's speaking, muted, and connection quality (`lost` while they're dropped).
+1. `calls.access(roomId)` checks you're a member, then asks the token service: the Vowe API's `POST /livekit/token` with `VOWE_API_URL`, else the `livekit-token` Edge Function. Both verify your Supabase session, check the same rule as the Realtime channel (in the room *and* still in its workspace), and return a 10-minute token for that room only, microphone publishing only. The LiveKit API secret stays on the server side, never in the app.
+2. `CallService.join` connects **with the microphone off**. You hear the others right away.
+3. `setMicrophoneEnabled(true)` asks the OS for the microphone (`calls.requestMicrophone`; macOS prompts once, and a refusal must be undone in System Settings), then publishes it. Muting releases the device. Electron grants our pages audio capture and nothing else (`restrictPermissions` in `src/main/window.ts`).
+4. Status is `connecting` / `connected` / `reconnecting` (LiveKit recovering on its own) / `dropped` (gave up; `reconnect()` rejoins muted), plus each participant's speaking, muted and connection quality.
 
 LiveKit identities are cloud user ids, so joining from a second window or device replaces the first connection. A call is separate from the Realtime presence above: you can be in a room's channel without being in its call.
 
-The renderer has no bundler, so `pnpm build` copies livekit-client's self-contained ESM bundle to `dist/renderer/vendor/livekit-client.js`; `src/renderer/vendor/livekit-client.d.ts` supplies its types. The page's CSP admits `*.livekit.cloud`: add your host to `connect-src` in `src/renderer/index.html` if you self-host LiveKit.
+The renderer has no bundler, so `pnpm build` copies livekit-client's self-contained ESM bundle to `dist/renderer/vendor/livekit-client.js`; `src/renderer/vendor/livekit-client.d.ts` supplies its types. A page's CSP must admit the LiveKit host in `connect-src`: `index.html` allows `*.livekit.cloud`.
+
+Tests: `pnpm test` covers the service's lifecycle against a fake room, and `pnpm --filter vowe-api test` covers token issuance (sessions, membership, grants). `pnpm test:calls` is end to end. It starts a throwaway LiveKit server in Docker, and two Electron clients join one call through `CallService` with Chromium's fake microphone. It checks that audio actually decodes on the other side, and that mute, unmute, reconnect and leave behave. It needs Docker running; `LIVEKIT_E2E_URL` with `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` points it at another server.
 
 Setup, once per project (after the Supabase setup above):
 
