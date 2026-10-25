@@ -1,6 +1,6 @@
 # Journey
 
-Electron desktop app (pnpm, TypeScript). Google sign-in, local SQLite storage, a Supabase cloud backend for shared data, LiveKit voice calls in rooms, and the groundwork for AI voice agents in those calls.
+Electron desktop app (pnpm, TypeScript). Google or GitHub sign-in to one account (`docs/AUTH.md`), local SQLite storage, a Supabase cloud backend for shared data, LiveKit voice calls in rooms, and the groundwork for AI voice agents in those calls.
 
 ## Run
 
@@ -19,7 +19,7 @@ pnpm start
 | `pnpm cloud:push` | Apply `supabase/migrations/` to the linked Supabase project |
 | `pnpm cloud:types` | Regenerate `src/integrations/supabase/types.ts` from the linked project |
 | `pnpm cloud:functions` | Deploy the `livekit-token` Edge Function to the linked project |
-| `pnpm sign-out` | Revoke the stored Google session and quit |
+| `pnpm sign-out` | End this device's stored session (Google or GitHub) and quit |
 | `pnpm api:start` | Build and run the cloud API (`server/`) on `localhost:8080`, reading `.env` |
 
 ## Layout
@@ -53,7 +53,7 @@ Optional: leave `SUPABASE_*` unset and the app stays local-only. SQLite keeps wh
 | `rooms` | room members | workspace members create (and become owner); room owners rename/delete/set goal and repository |
 | `room_members` | room members | room owners add workspace members, remove anyone, change roles; anyone can leave; a room always keeps an owner |
 
-Every table has row-level security and nothing is granted to `anon`, so the publishable key on its own reads nothing. Google stays the identity provider: after Google sign-in (or session restore) main exchanges the Google ID token for a Supabase session with `signInWithIdToken`, kept in memory only. Supabase links the account by its Google `sub`, so one Google account is always the same cloud user; if the exchange fails (say, offline at launch), the next cloud call retries it from the stored Google session, with no second sign-in. Cloud user ids are Supabase UUIDs, not the Google `sub` used locally. `public.users.email` follows the Google account; `name` and `avatar_url` are filled from it once and then left to the user.
+Every table has row-level security and nothing is granted to `anon`, so the publishable key on its own reads nothing. People sign in with Google or GitHub; both are identities on one Supabase user, so either reaches the same rooms (sign-in methods, linking and setup: `docs/AUTH.md`). After Google sign-in (or session restore) main exchanges the Google ID token for a Supabase session with `signInWithIdToken`, kept in memory only. Supabase links the account by its Google `sub`, so one Google account is always the same cloud user; if the exchange fails (say, offline at launch), the next cloud call retries it from the stored Google session, with no second sign-in. Cloud user ids are Supabase UUIDs, not the Google `sub` used locally. `public.users.email` follows the Google account; `name` and `avatar_url` are filled from it once and then left to the user.
 
 ### Live rooms (Supabase Realtime)
 
@@ -68,7 +68,7 @@ Event types live in `RoomEvents` (`src/shared/api.ts`); each needs a validator i
 Setup, once per project:
 
 1. Create a Supabase project and put its URL and publishable key in `.env`.
-2. Auth → Providers → Google: enable it and add `GOOGLE_CLIENT_ID` under **Client IDs**.
+2. Auth → Providers → Google: enable it and add `GOOGLE_CLIENT_ID` under **Client IDs**. For GitHub sign-in, follow `docs/AUTH.md` → Setup (a GitHub OAuth App, Confirm email on, manual linking on, and the loopback redirect URL).
 3. Realtime → Settings: turn off **Allow public access**, so channels are private-only.
 4. `pnpm exec supabase login && pnpm exec supabase link --project-ref <ref>`, then `pnpm cloud:push`.
 
