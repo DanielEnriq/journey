@@ -1,8 +1,6 @@
 @scope (.room-screen) {
-  .win{--paper:#1a1b1f;--studio-external:color-mix(in srgb,var(--studio-card) 55%,var(--studio-field));--studio-group:color-mix(in srgb,var(--studio-card) 42%,transparent)}
-  .win.light{--paper:#fffdf8}
-  .orb{background:radial-gradient(circle at 50% 50%,var(--ask) 0,var(--ask) 34%,color-mix(in srgb,var(--ask) 22%,transparent) 36%,color-mix(in srgb,var(--ask) 22%,transparent) 60%,transparent 62%);box-shadow:none}
-  .who .orb.speaking{box-shadow:0 0 0 2px var(--pane),0 0 0 3.5px var(--ask)}
+  .win{--paper:var(--v-surface);--studio-external:color-mix(in srgb,var(--studio-card) 55%,var(--studio-field));--studio-group:color-mix(in srgb,var(--studio-card) 42%,transparent)}
+  .who .orb.speaking{box-shadow:inset 0 0 0 1.25px var(--v-info-line),0 0 0 2px var(--pane),0 0 0 3.5px var(--v-info)}
   .avatar.p2{background:var(--peer2)}
   .avatar.arrive{animation:arrive 420ms var(--studio-ease) both}
   @keyframes arrive{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
@@ -42,7 +40,7 @@
   .seg button{height:26px;padding:0 11px;border:0;border-radius:6px;background:transparent;color:var(--ink-7);font-size:12.5px;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
   .seg button:hover{color:var(--ink-3)}
   .seg button.on{background:var(--chip-strong);color:var(--ink-bright);box-shadow:inset 0 1px 0 var(--studio-card-top),0 1px 2px rgba(0,0,0,.18)}
-  .seg button.proposed{box-shadow:inset 0 0 0 1px dashed;outline:1px dashed color-mix(in srgb,var(--ask) 55%,transparent);outline-offset:-1px;color:var(--ask)}
+  .seg button.proposed{box-shadow:inset 0 0 0 1px dashed;outline:1px dashed var(--v-proposed-line);outline-offset:-1px;color:var(--v-proposed-fg)}
   .seg button.proposed.on{background:color-mix(in srgb,var(--ask) 10%,transparent)}
   .back{height:26px;padding:0 9px;border:0;border-radius:6px;background:transparent;color:var(--ink-7);font-size:12px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
   .back:hover{background:var(--hover-strong);color:var(--ink-3)}
@@ -142,7 +140,7 @@
   .part-ask:hover{background:var(--fill-3);color:var(--ink-bright)}
   .surface.tool-select .node:hover .part-ask,.part-ask:focus-visible{opacity:1}
   .tab{position:absolute;top:-19px;display:inline-flex;align-items:center;gap:5px;height:16px;padding:0 6px;border-radius:4px;font-size:10.5px;font-weight:500;white-space:nowrap}
-  .tab.peer{left:0;background:var(--peer);color:#fff}
+  .tab.peer{left:0;background:var(--peer);color:var(--v-bg)}
   .tab.me{left:0;background:var(--me);color:var(--pane)}
   .tab.agent{right:0;color:var(--ask);padding:0}
   .tab.agent i{width:5px;height:5px;border-radius:50%;background:var(--ask)}
@@ -156,10 +154,10 @@
   .note .nt{font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--ink-6)}
   .note p{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-2);text-wrap:pretty}
   .note .by{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--ink-7)}
-  .mav{width:14px;height:14px;flex:0 0 14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;background:var(--me)}
+  .mav{width:14px;height:14px;flex:0 0 14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:var(--v-bg);background:var(--me)}
   .mav.peer{background:var(--peer)}.mav.p2{background:var(--peer2)}.mav.vowe{background:var(--ask)}
   .note .link{border:0;background:transparent;padding:0;font-size:11px;color:var(--good);text-decoration:underline;text-underline-offset:2px}
-  .note.suggested{background:transparent;box-shadow:none;border:1px dashed var(--border-4)}
+  .note.suggested{background:transparent;box-shadow:none;border:1px dashed var(--v-proposed-line)}
   .note.fresh{box-shadow:0 0 0 1.5px var(--me),var(--studio-shadow)}
   .note .acts{display:flex;gap:6px}
   .capbox{display:flex;flex-direction:column;gap:7px;padding:10px 12px;border-radius:12px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow)}
@@ -232,7 +230,7 @@
   .pin.saved .pin-x{opacity:0;transition:opacity 120ms}
   .pin.saved:hover .pin-x,.pin.saved:focus-within .pin-x{opacity:1}
   .cursor{position:absolute;left:0;top:0;z-index:7;pointer-events:none;transition:transform 900ms var(--studio-ease)}
-  .cursor .label{position:absolute;left:14px;top:16px;padding:1px 6px;border-radius:5px;background:var(--peer);color:#fff;font-size:10.5px;font-weight:500;white-space:nowrap}
+  .cursor .label{position:absolute;left:14px;top:16px;padding:1px 6px;border-radius:5px;background:var(--peer);color:var(--v-bg);font-size:10.5px;font-weight:500;white-space:nowrap}
   .cursor.p2 .label{background:var(--peer2)}
   .ctx{position:absolute;left:0;top:0;z-index:9;display:flex;align-items:center;gap:2px;padding:3px;border-radius:9px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--shadow-menu);transition:transform 560ms var(--studio-ease)}
   .ctx button{height:26px;padding:0 9px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);font-size:12px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
@@ -242,11 +240,11 @@
 
   /* ---- The decision, when it is opened: a card of record, over the canvas. */
   .decov{box-sizing:border-box;padding:16px;border-radius:14px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border-3),var(--studio-shadow);display:flex;flex-direction:column;gap:12px;animation:rise 300ms var(--studio-ease) both}
-  .decov.proposed{box-shadow:none;border:1px dashed var(--border-4)}
+  .decov.proposed{box-shadow:none;border:1px dashed var(--v-proposed-line)}
   .rdec.pointed,.decov.pointed{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--studio-accent) 55%,transparent),0 0 0 5px color-mix(in srgb,var(--studio-accent) 12%,transparent)}
   .decov .dh{display:flex;align-items:center;gap:8px}
   .decov .ver{font-family:var(--mono);font-size:10.5px;color:var(--ink-8)}
-  .decov .what{font-size:15.5px;font-weight:700;line-height:1.35;letter-spacing:-.012em;color:var(--ink-bright);text-wrap:pretty}
+  .decov .what{font-family:var(--serif);font-weight:400;font-size:19px;line-height:1.2;letter-spacing:-.006em;color:var(--ink-bright);text-wrap:pretty}
   .fields{display:grid;grid-template-columns:58px minmax(0,1fr);gap:7px 10px;margin:0;font-size:12px;line-height:1.45}
   .fields dt{font-size:11px;font-weight:500;color:var(--ink-8);padding-top:1px}
   .fields dd{margin:0;color:var(--ink-3)}
@@ -279,7 +277,7 @@
   .vowe-btn:hover{background:var(--hover-strong);color:var(--ink-3)}
   .vowe-btn.speaking{color:var(--ask)}
   .vowe-btn .orb{width:20px;height:20px;flex-basis:20px}
-  .vowe-btn.speaking .orb{box-shadow:0 0 0 2px var(--menu),0 0 0 3.5px var(--ask)}
+  .vowe-btn.speaking .orb{box-shadow:inset 0 0 0 1.25px var(--v-info-line),0 0 0 2px var(--menu),0 0 0 3.5px var(--v-info)}
   .call .sep{width:1px;height:20px;background:var(--hairline);margin:0 4px}
   .cbtn{position:relative;width:36px;height:36px;border:0;border-radius:10px;background:var(--fill-2);color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center;padding:0;transition:background 140ms ease,box-shadow 140ms ease}
   .cbtn:hover{background:var(--fill-3)}
@@ -330,12 +328,12 @@
   .rsec{display:flex;flex-direction:column;gap:6px;padding:14px 0;border-top:1px solid var(--hairline)}
   .rsec .rk{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 2px;font-size:11px;font-weight:600;color:var(--ink-7)}
   .rsec .rk span{font-weight:400;color:var(--ink-8)}
-  .goal-line{margin:0;padding:0 2px;font-size:16px;font-weight:700;line-height:1.35;letter-spacing:-.014em;color:var(--ink-bright);text-wrap:pretty}
+  .goal-line{margin:0;padding:0 2px;font-family:var(--serif);font-weight:400;font-size:21px;line-height:1.15;letter-spacing:-.01em;color:var(--ink-bright);text-wrap:pretty}
   .goal-by{padding:0 2px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-7)}
   .rdec{display:flex;flex-direction:column;gap:6px;padding:12px;border:0;border-radius:11px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--border);text-align:left}
   .rdec:hover{box-shadow:inset 0 0 0 1px var(--border-4)}
-  .rdec.proposed{background:transparent;box-shadow:none;border:1px dashed var(--border-4)}
-  .rdec .t{font-size:13px;font-weight:700;line-height:1.4;color:var(--ink-bright)}
+  .rdec.proposed{background:transparent;box-shadow:none;border:1px dashed var(--v-proposed-line)}
+  .rdec .t{font-family:var(--serif);font-weight:400;font-size:16px;line-height:1.25;color:var(--ink-bright)}
   .rdec .m{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-6)}
   .rdec .m.needs{color:var(--attention-ink)}
   .rrow{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:8px 8px;border:0;border-radius:8px;background:transparent;text-align:left}
@@ -367,12 +365,12 @@
   /* Vowe’s state, without words: a ring while it speaks, dimmed while it thinks, a dashed ring while it waits its turn. */
   .vowe-btn .orb{transition:opacity 200ms ease,box-shadow 200ms ease}
   .vowe-btn.thinking .orb{opacity:.55}
-  .vowe-btn.holding .orb{box-shadow:0 0 0 2px var(--menu);outline:1.5px dashed color-mix(in srgb,var(--ask) 60%,transparent);outline-offset:2px}
+  .vowe-btn.holding .orb{box-shadow:inset 0 0 0 1.25px var(--v-info-line),0 0 0 2px var(--menu);outline:1.5px dashed color-mix(in srgb,var(--ask) 60%,transparent);outline-offset:2px}
   .subrow{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:-2px 0 4px;padding:5px 10px 6px 26px;border:0;border-radius:6px;background:transparent;text-align:left;font-size:11.5px;line-height:1.35;color:var(--attention-ink)}
   .subrow:hover{background:var(--hover)}
 
   /* ---- After the review: views are named by their question, data says where it came from, Vowe shows its working. */
-  .room-identity .q{font-size:13px;color:var(--ink-6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .room-identity .q{font-family:var(--serif);font-style:italic;font-size:15px;color:var(--ink-6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .lineage{flex:0 0 auto;height:22px;padding:0 7px;border:0;border-radius:6px;background:transparent;font-size:11.5px;color:var(--ink-8);white-space:nowrap}
   .lineage:hover{background:var(--hover-strong);color:var(--ink-3)}
   .prov{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:7px;border:1px dashed var(--border-4);font-size:11.5px;color:var(--ink-6);white-space:nowrap}
@@ -402,7 +400,7 @@
   /* ---- Beyond services: interface and code parts. */
   .part.kind-code{border-radius:9px;background:var(--paper)}
   .part.kind-code .pname{font-family:var(--mono);font-size:13px;font-weight:500}
-  .part.proposed{box-shadow:var(--studio-shadow);outline:1.5px dashed color-mix(in srgb,var(--ask) 60%,transparent);outline-offset:-1.5px}
+  .part.proposed{background:var(--v-proposed-wash);box-shadow:none;outline:1.5px dashed var(--v-proposed-line);outline-offset:-1.5px}
   .part.proposed.sel{outline-color:var(--me);outline-style:solid;outline-width:2px}
   .scr{display:flex;flex-direction:column;border-radius:9px;overflow:hidden;box-shadow:0 0 0 1px var(--border);background:var(--field)}
   .scr-bar{display:flex;align-items:center;gap:4px;height:16px;padding:0 7px;background:var(--fill-1);border-bottom:1px solid var(--hairline)}
@@ -420,10 +418,10 @@
   .sbtn.quiet{background:var(--fill-2);color:var(--ink-3)}
   .diffb{display:flex;flex-direction:column;border-radius:7px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--hairline);font-family:var(--mono);font-size:10px;line-height:1.75}
   .dl{padding:0 8px;color:var(--ink-4);white-space:pre;overflow:hidden;text-overflow:ellipsis}
-  .dl.del{background:var(--diff-remove,rgba(198,48,58,.12));color:var(--bad)}
-  .dl.add{background:var(--diff-add,rgba(15,133,93,.14));color:var(--good)}
+  .dl.del{background:var(--diff-remove,var(--v-fault-wash));color:var(--bad)}
+  .dl.add{background:var(--diff-add,var(--v-success-wash));color:var(--good)}
   /* ---- Cursors you can't see wait on the edge, pointing toward their person. */
-  .edge{position:absolute;left:0;top:0;z-index:9;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px 0 7px;border:0;border-radius:12px;background:var(--peer);color:#fff;font-size:11px;font-weight:600;box-shadow:var(--studio-shadow);transition:transform 200ms var(--studio-ease);animation:rise 240ms var(--studio-ease) both}
+  .edge{position:absolute;left:0;top:0;z-index:9;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px 0 7px;border:0;border-radius:12px;background:var(--peer);color:var(--v-bg);font-size:11px;font-weight:600;box-shadow:var(--studio-shadow);transition:transform 200ms var(--studio-ease);animation:rise 240ms var(--studio-ease) both}
   .edge.p2{background:var(--peer2)}
   /* A real person's cursor follows their pointer, not the demo's scripted glide. */
   .cursor.live{transition:transform 120ms linear}

@@ -11,12 +11,15 @@ function copy(from, to) {
   fs.cpSync(from, to);
 }
 
-// Pages, stylesheets and fonts keep their place under src/renderer.
+// Pages, stylesheets, fonts and their images keep their place under src/renderer.
 for (const entry of fs.readdirSync(SRC, { recursive: true, withFileTypes: true })) {
-  if (!entry.isFile() || !/\.(html|css|woff2)$/.test(entry.name)) continue;
+  if (!entry.isFile() || !/\.(html|css|woff2|svg)$/.test(entry.name)) continue;
   const rel = path.relative(SRC, path.join(entry.parentPath, entry.name));
   copy(path.join(SRC, rel), path.join(OUT, rel));
 }
+
+// The Pass 1 fonts are OFL 1.1, which asks that their licenses travel with them.
+fs.cpSync(`${SRC}/ui/fonts/licenses`, `${OUT}/ui/fonts/licenses`, { recursive: true });
 
 const fontsource = 'node_modules/@fontsource/jetbrains-mono/files';
 for (const weight of [400, 500]) {

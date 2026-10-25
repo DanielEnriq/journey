@@ -218,6 +218,8 @@ function App() {
   /** An invite being opened; kept in memory only, never in the route or storage. */
   const [invite, setInvite] = useState<InviteKey | null>(null);
   const light = useAppearance() === 'light';
+  // Pass 1's tokens pick light or dark from <html data-theme>; keep it on the Theme setting.
+  useLayoutEffect(() => { document.documentElement.dataset.theme = light ? 'light' : 'dark'; }, [light]);
   const demo = inDemo(route);
   const ws = demo ? demoWorkspace : realWorkspace;
   const session = demo ? demoSession : realSession;
@@ -270,7 +272,7 @@ function App() {
 
   let screen;
   if (signedOut && user === undefined) screen = null;
-  else if (signedOut || route.screen === 'login') screen = <><div class="drag-strip"></div><LoginScreen light={light} signIn={PREVIEW ? undefined : signIn} onSignedIn={home} /></>;
+  else if (signedOut || route.screen === 'login') screen = <><div class="drag-strip"></div><LoginScreen signIn={PREVIEW ? undefined : signIn} onSignedIn={home} /></>;
   else if (invite && !demo) {
     screen = <InviteScreen inviteKey={invite} light={light} onDone={() => setInvite(null)} onOpenRoom={(id) => { setInvite(null); openRoom(id); }} />;
   } else if (route.screen === 'home') {
@@ -310,4 +312,6 @@ function App() {
 }
 
 if (navigator.userAgent.includes('Electron')) document.documentElement.classList.add('in-electron');
+// The first paint already wears the right theme; App takes over once the setting has loaded.
+document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 render(<App />, document.getElementById('app')!);

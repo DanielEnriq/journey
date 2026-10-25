@@ -1,8 +1,7 @@
 /* The app around the design: the window fills the Electron window, the real title bar replaces the
    drawn one, and the developer screens (reference sheets, dev menu) that are not part of the design. */
 
-html,body{margin:0;height:100%;overflow:hidden;background:#0c0d0f}
-@media (prefers-color-scheme: light){html,body{background:#fffdf8}}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--v-bg)}
 #app,.room-screen,.welcome-screen{height:100%}
 
 /* The design draws a 1440×900 window with rounded corners; here the window is real. */
@@ -27,16 +26,16 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0c0d0f}
 .reference iframe{position:absolute;left:0;top:0;width:1440px;border:0;transform-origin:0 0;background:#0c0d0f}
 
 /* ---------- Dev menu (Ctrl+Shift+D): every screen and scenario, and which data is mock. ---------- */
-.devmenu{position:fixed;right:16px;bottom:16px;z-index:100;width:280px;padding:12px;border-radius:10px;background:#16171bf2;color:#d7d9de;box-shadow:0 0 0 1px #ffffff1f,0 18px 50px #00000080;font:12.5px/1.45 'Satoshi',system-ui,sans-serif;-webkit-app-region:no-drag}
-.devmenu h2{margin:0 0 8px;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#8b8f99;display:flex;justify-content:space-between;align-items:center}
-.devmenu h2 button{appearance:none;border:0;background:none;color:#8b8f99;cursor:pointer;font:inherit;text-transform:none;letter-spacing:0}
+.devmenu{position:fixed;right:16px;bottom:16px;z-index:100;width:280px;padding:12px;border-radius:10px;background:var(--v-surface-raised);color:var(--v-fg-2);box-shadow:var(--v-shadow-3),inset 0 0 0 1px var(--v-line-2);font:12.5px/1.45 var(--v-font-sans);-webkit-app-region:no-drag}
+.devmenu h2{margin:0 0 8px;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-3);display:flex;justify-content:space-between;align-items:center}
+.devmenu h2 button{appearance:none;border:0;background:none;color:var(--v-fg-3);cursor:pointer;font:inherit;text-transform:none;letter-spacing:0}
 .devmenu .grp{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
-.devmenu .grp b{width:100%;font-weight:500;color:#9a9ea8;font-size:11.5px}
-.devmenu .grp button{appearance:none;border:0;background:#ffffff0d;color:#d7d9de;font:inherit;padding:4px 8px;border-radius:6px;cursor:pointer}
-.devmenu .grp button:hover{background:#ffffff1a}
-.devmenu .grp button.on{background:#7f9fd9;color:#0c0d0f}
-.devmenu .note{margin:0;padding-top:8px;border-top:1px solid #ffffff14;color:#8b8f99;font-size:11.5px}
-.devmenu code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:#b4c9ef}
+.devmenu .grp b{width:100%;font-weight:500;color:var(--v-fg-3);font-size:11.5px}
+.devmenu .grp button{appearance:none;border:0;background:var(--v-surface-hover);color:var(--v-fg-2);font:inherit;padding:4px 8px;border-radius:6px;cursor:pointer}
+.devmenu .grp button:hover{background:var(--v-surface-press);color:var(--v-fg)}
+.devmenu .grp button.on{background:var(--v-fg);color:var(--v-bg)}
+.devmenu .note{margin:0;padding-top:8px;border-top:1px solid var(--v-line);color:var(--v-fg-3);font-size:11.5px}
+.devmenu code{font-family:var(--v-font-mono);font-size:11px;color:var(--v-info-fg)}
 
 /* ---------- Room panel on fixtures (Dev menu): the right column alone, as the design canvas draws it. ---------- */
 .win.panel-dev{display:flex;justify-content:center;padding-top:40px;background:var(--app)}
