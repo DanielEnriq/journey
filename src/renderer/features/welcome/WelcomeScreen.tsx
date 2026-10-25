@@ -1,6 +1,6 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
 import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
-import { account, firstName } from '../../shared/account.js';
+import { account, cancelSignIn, firstName } from '../../shared/account.js';
 import { AccountFoot } from '../../shared/components/Account.js';
 import { Compose, HomeMic, PanelLeft, Repo } from '../../shared/components/icons.js';
 import { mockLog } from '../../shared/mock.js';
@@ -9,6 +9,7 @@ import { ago } from '../../shared/time.js';
 import { roomLine, Who } from '../room/shell.js';
 import type { RepoChoice } from '../room/data/sources.js';
 import type { RoomSummary } from '../room/types.js';
+import type { SignInProvider } from '../../../shared/api.js';
 
 // Sign-in and the workspace home, from the design prototype (Welcome.dc.html). With no rooms, home is
 // the design's first-run composer; with rooms, the same page leads with what needs you and which calls
@@ -63,23 +64,30 @@ function Lights() {
 
 export interface LoginProps {
   light: boolean;
-  /** The app's Google sign-in; absent in the preview, which simulates it. The app leaves this screen once a user is signed in. */
-  signIn?: () => Promise<unknown>;
+  /** The app's sign-in; absent in the preview, which simulates it. The app leaves this screen once a user is signed in. */
+  signIn?: (provider: SignInProvider) => Promise<unknown>;
   /** Preview only: what "Continue as" does. */
   onSignedIn(): void;
 }
 
+const PROVIDER_NAMES: Record<SignInProvider, string> = { google: 'Google', github: 'GitHub' };
+
 export function LoginScreen({ light, signIn: realSignIn, onSignedIn }: LoginProps) {
-  const [login, setLogin] = useState<'idle' | 'waiting'>('idle');
+  const { ended } = useStore(account);
+  const [login, setLogin] = useState<SignInProvider | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const signIn = () => {
+  const signIn = (provider: SignInProvider) => {
     setFailed(null);
-    setLogin('waiting');
-    if (!realSignIn) { mockLog('auth', 'Continue with Google: preview sign-in; no browser opens and no account is touched'); return; }
-    realSignIn().catch((err: Error) => { setLogin('idle'); setFailed(err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') || 'Sign-in did not complete.'); });
+    setLogin(provider);
+    if (!realSignIn) { mockLog('auth', `Continue with ${PROVIDER_NAMES[provider]}: preview sign-in; no browser opens and no account is touched`); return; }
+    realSignIn(provider).catch((err: Error) => {
+      setLogin((now) => (now === provider ? null : now)); // a newer sign-in replaced this one: leave it be
+      if (!/was cancelled/.test(err.message)) setFailed(err.message || 'Sign-in did not complete.');
+    });
   };
-  // Cancel only stops waiting here; the browser's sign-in times out on its own, and pressing again reuses it.
-  const cancel = () => setLogin('idle');
+  // Stops the sign-in in main too, so the browser tab's answer no longer counts.
+  const cancel = () => { setLogin(null); void cancelSignIn(); };
+  const why = failed ?? ended?.message;
   return (
     <div class="welcome-screen">
       <div class={`win ${light ? 'light ' : ''}login-mode`}>
@@ -110,16 +118,17 @@ export function LoginScreen({ light, signIn: realSignIn, onSignedIn }: LoginProp
             <h1 class="hero-h">Talk through the system.<span>Watch it take shape.</span></h1>
             <p class="hero-p">Say what you’re building. Vowe draws it live for the whole room, and coding agents build what you agree on.</p>
             <div>
-              {login === 'idle' ? (
+              {login === null ? (
                 <>
-                  <button class="gbtn" type="button" onClick={signIn}><span class="gslot" title="Official Google “G” mark goes here">G</span>Continue with Google</button>
-                  <div class="fine">{failed ? `Sign-in didn’t finish: ${failed} · ` : 'Opens your browser to sign in · '}<NotYet link label="Terms" note="Not written yet." /> · <NotYet link label="Privacy" note="Not written yet." /></div>
+                  <button class="gbtn" type="button" onClick={() => signIn('google')}><span class="gslot" title="Official Google “G” mark goes here">G</span>Continue with Google</button>
+                  <button class="gbtn" type="button" onClick={() => signIn('github')}><span class="gslot" title="Official GitHub mark goes here">GH</span>Continue with GitHub</button>
+                  <div class="fine" role={why ? 'alert' : undefined}>{why ? `${why} · ` : 'Opens your browser to sign in · '}<NotYet link label="Terms" note="Not written yet." /> · <NotYet link label="Privacy" note="Not written yet." /></div>
                 </>
               ) : (
                 <div class="wait">
                   <div class="wait-row"><span class="spin"></span><span>Finish signing in in your browser</span><button class="x" type="button" onClick={cancel}>Cancel</button></div>
                   {realSignIn
-                    ? <div class="fine">Waiting for Google in your browser.</div>
+                    ? <div class="fine">Waiting for {PROVIDER_NAMES[login]} in your browser.</div>
                     : <div class="fine">Preview build: no browser opens. <a href="#" onClick={(e) => { e.preventDefault(); onSignedIn(); }}>Continue as Daniel</a></div>}
                 </div>
               )}
@@ -205,7 +214,8 @@ function Overview({ rooms, onOpenRoom }: { rooms: RoomSummary[]; onOpenRoom(id: 
 }
 
 export function HomeScreen({ light, rooms, repos, repoNote, simulatedMic, notice, onOpenRoom, onCreate, onNewRoom, overlay, invites }: HomeProps) {
-  const me = firstName(useStore(account).user);
+  const { user } = useStore(account);
+  const me = firstName(user);
   const [text, setText] = useState('');
   const [focus, setFocus] = useState(false);
   const [listening, setListening] = useState(false);
@@ -272,7 +282,7 @@ export function HomeScreen({ light, rooms, repos, repoNote, simulatedMic, notice
           ) : (
             <div class="side-empty"><b>No rooms yet</b>Rooms you start or get invited to will live here, with whatever needs you on top.</div>
           )}
-          <AccountFoot sub="Signed in with Google" />
+          <AccountFoot sub={`Signed in with ${user?.provider === 'github' ? 'GitHub' : 'Google'}`} />
         </aside>
 
         <main class="home">

@@ -161,7 +161,11 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# The desktop app receives OAuth redirects (GitHub sign-in and identity linking) on a one-shot loopback
+# listener at an ephemeral port, http://127.0.0.1:<port>/auth/callback/<state> (RFC 8252). PKCE makes
+# the returned code useless without the verifier held in the app. Hosted project: add the same pattern
+# under Auth → URL Configuration → Redirect URLs.
+additional_redirect_urls = ["https://127.0.0.1:3000", "http://127.0.0.1:*/auth/callback/*"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -178,7 +182,9 @@ enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
-enable_manual_linking = false
+# On: a signed-in person links another sign-in method (Google ↔ GitHub) to their one Vowe account with
+# linkIdentity. Hosted project: Auth → Providers (or Settings) → "Allow manual linking".
+enable_manual_linking = true
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
 minimum_password_length = 6
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
@@ -224,7 +230,10 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# Keep it on, here and in the hosted project (Auth → Sign In / Providers → Email → Confirm email): with it
+# off Supabase treats every email an OAuth provider reports as verified, and joins a GitHub account holding
+# someone's address unverified to their Vowe account. The app refuses GitHub sign-in while it's off.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -343,6 +352,15 @@ enabled = true
 client_id = "env(GOOGLE_CLIENT_ID)"
 secret = "env(GOOGLE_CLIENT_SECRET)"
 skip_nonce_check = true
+
+# Continue with GitHub: Supabase's GitHub provider, reached through the system browser (PKCE). It only
+# asks GitHub for `user:email`, to know who someone is; repository access is a separate grant. Create a
+# GitHub OAuth app whose callback is http://127.0.0.1:54321/auth/v1/callback for this local stack, and
+# set the two variables in supabase/.env (gitignored). Hosted project: Auth → Providers → GitHub.
+[auth.external.github]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.

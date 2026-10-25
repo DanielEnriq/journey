@@ -19,9 +19,15 @@ function subscribe<K extends EventChannel>(channel: K, listener: (payload: Chann
 const api: JourneyApi = {
   auth: {
     getUser: () => invoke('auth:getUser'),
-    signIn: () => invoke('auth:signIn'),
+    getEnded: () => invoke('auth:getEnded'),
+    signIn: (provider) => invoke('auth:signIn', provider),
+    cancel: () => invoke('auth:cancel'),
     signOut: () => invoke('auth:signOut'),
     onChange: (listener) => subscribe('auth:changed', listener),
+    onEnded: (listener) => subscribe('auth:ended', listener),
+    methods: () => invoke('auth:methods'),
+    link: (provider) => invoke('auth:link', provider),
+    unlink: (provider) => invoke('auth:unlink', provider),
   },
   settings: {
     get: () => invoke('settings:get'),

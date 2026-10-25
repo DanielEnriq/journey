@@ -52,6 +52,8 @@
   .hero-p{margin:18px 0 0;max-width:430px;font-size:15px;line-height:1.55;color:var(--ink-5)}
   .gbtn{margin-top:34px;height:46px;min-width:300px;display:inline-flex;align-items:center;justify-content:center;gap:12px;padding:0 22px;border-radius:12px;border:0;background:#fff;color:#1f1f1f;font-size:14px;font-weight:600;letter-spacing:-.005em;box-shadow:inset 0 0 0 1px rgba(18,22,30,.16),0 1px 2px rgba(18,22,30,.06),0 10px 30px color-mix(in srgb,var(--ask) 16%,transparent);transition:transform 160ms var(--ease),box-shadow 200ms ease}
   .win:not(.light) .gbtn{background:#131314;color:#e3e3e3;box-shadow:inset 0 0 0 1px #8e918f55,0 0 0 1px rgba(0,0,0,.4),0 14px 40px color-mix(in srgb,var(--ask) 22%,transparent)}
+  .gbtn + .gbtn{margin-top:10px;display:flex;margin-left:auto;margin-right:auto}
+  .gbtn:has(+ .gbtn){display:flex;margin-left:auto;margin-right:auto}
   .gbtn:hover{transform:translateY(-1px)}
   .gbtn:active{transform:translateY(0) scale(.99)}
   .gslot{width:18px;height:18px;border-radius:4px;flex:0 0 18px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-family:var(--mono);color:#8a8d95;box-shadow:inset 0 0 0 1px #c9cbd1;background:repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.04) 3px 4px)}

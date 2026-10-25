@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import type { Participant, RoomEvent, RoomEvents, RoomEventType, RoomSession, RoomStatus } from '../../shared/api.js';
 import { parseCanvasChanged, parsePresence } from '../../shared/canvas/presence.js';
-import { onUserChange } from '../google/auth.js';
+import { onUserChange } from '../account/index.js';
 import { getCloud, getCloudUserId } from './index.js';
 import { rooms } from './workspaces.js';
 

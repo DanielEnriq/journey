@@ -2,14 +2,15 @@ import { safeStorage, shell } from 'electron';
 import { CodeChallengeMethod, OAuth2Client, type Credentials } from 'google-auth-library';
 import { randomBytes } from 'node:crypto';
 import { config } from '../../config.js';
-import { deleteSession, getLatestSession, saveSession, upsertUser } from '../../database/sessions.js';
+import { deleteSession, saveSession, upsertUser, type StoredSession } from '../../database/sessions.js';
 import type { User } from '../../shared/api.js';
 import { listenForRedirect } from './loopback.js';
 
+// Continue with Google: the system browser, a loopback redirect and PKCE, natively (not through
+// Supabase), so the Google refresh token stays on this machine. Who is signed in, and with what, is
+// src/integrations/account's to say; this module holds only the Google session while there is one.
+
 let client: OAuth2Client | undefined;
-let currentUser: User | undefined;
-let signInInFlight: Promise<User> | undefined;
-const listeners = new Set<(user: User | null) => void>();
 
 function newClient(redirectUri?: string): OAuth2Client {
   return new OAuth2Client({
@@ -19,23 +20,9 @@ function newClient(redirectUri?: string): OAuth2Client {
   });
 }
 
-export function getCurrentUser(): User | undefined {
-  return currentUser;
-}
-
-/** Called after every sign-in, restore, and sign-out. */
-export function onUserChange(listener: (user: User | null) => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-function notify() {
-  for (const listener of listeners) listener(currentUser ?? null);
-}
-
 /** Authenticated client for calling Google APIs; refreshes access tokens automatically. */
 export function getAuthClient(): OAuth2Client {
-  if (!client || !currentUser) throw new Error('Not signed in');
+  if (!client) throw new Error('Not signed in');
   return client;
 }
 
@@ -54,21 +41,38 @@ export async function getIdentityTokens(): Promise<{ idToken: string; accessToke
   return { idToken: id_token, accessToken: access_token };
 }
 
-/** Opens the system browser for Google sign-in and waits for the loopback redirect. */
-export function signIn(): Promise<User> {
-  signInInFlight ??= doSignIn().finally(() => (signInInFlight = undefined));
-  return signInInFlight;
+/** Opens the system browser for Google sign-in and makes it this app's Google session. */
+export async function signIn(signal?: AbortSignal): Promise<User> {
+  const { oauth, tokens, user } = await authorize({ offline: true, signal });
+  attach(oauth, user);
+  persist(user, tokens);
+  return user;
 }
 
-async function doSignIn(): Promise<User> {
+/**
+ * Google's consent once, to prove who someone is (linking Google to the account signed in another way).
+ * Nothing is stored; revoke() once the tokens have been used.
+ */
+export async function verifyOnce(signal?: AbortSignal): Promise<{ idToken: string; accessToken: string; revoke(): Promise<void> }> {
+  const { oauth, tokens } = await authorize({ offline: false, signal });
+  if (!tokens.access_token || !tokens.id_token) throw new Error('Google did not return an ID token');
+  return {
+    idToken: tokens.id_token,
+    accessToken: tokens.access_token,
+    revoke: () => oauth.revokeCredentials().then(() => undefined, (err: Error) => console.warn('[auth] token revoke failed:', err.message)),
+  };
+}
+
+async function authorize({ offline, signal }: { offline: boolean; signal?: AbortSignal }) {
   const state = randomBytes(16).toString('hex');
-  const listener = await listenForRedirect(state);
+  const listener = await listenForRedirect(state, { signal });
   try {
     const oauth = newClient(listener.redirectUri);
     const { codeVerifier, codeChallenge } = await oauth.generateCodeVerifierAsync();
     const authUrl = oauth.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'select_account consent', // lets you pick (or switch) the account; consent ensures a refresh token
+      access_type: offline ? 'offline' : 'online',
+      // Lets you pick (or switch) the account; consent ensures a refresh token when one is kept.
+      prompt: offline ? 'select_account consent' : 'select_account',
       scope: config.google.scopes,
       state,
       code_challenge: codeChallenge,
@@ -80,21 +84,15 @@ async function doSignIn(): Promise<User> {
 
     const { tokens } = await oauth.getToken({ code, codeVerifier, redirect_uri: listener.redirectUri });
     oauth.setCredentials(tokens);
-    const user = await verifyIdToken(oauth, tokens);
-    attach(oauth, user);
-    persist(user, tokens);
-    return user;
+    return { oauth, tokens, user: await verifyIdToken(oauth, tokens) };
   } finally {
     listener.close();
   }
 }
 
-/** Restores the most recent session from SQLite, if one exists and is still valid. */
-export async function restoreSession(): Promise<User | undefined> {
-  const session = getLatestSession();
-  if (!session || !safeStorage.isEncryptionAvailable()) return undefined;
-
-  const { user, refreshToken } = session;
+/** Restores a stored Google session, if its refresh token still works. */
+export async function restoreSession({ user, refreshToken }: StoredSession): Promise<User | undefined> {
+  if (!safeStorage.isEncryptionAvailable()) return undefined;
   const oauth = newClient();
   oauth.setCredentials({ refresh_token: safeStorage.decryptString(refreshToken) });
   try {
@@ -108,17 +106,15 @@ export async function restoreSession(): Promise<User | undefined> {
   return user;
 }
 
-export async function signOut(): Promise<void> {
-  if (!currentUser) return;
+/** Revokes the Google session's tokens and forgets it. */
+export async function signOut(user: User): Promise<void> {
   try {
     await client?.revokeCredentials();
   } catch (err) {
     console.warn('[auth] token revoke failed:', (err as Error).message);
   }
-  deleteSession(currentUser.id);
+  deleteSession(user.id);
   client = undefined;
-  currentUser = undefined;
-  notify();
 }
 
 async function verifyIdToken(oauth: OAuth2Client, tokens: Credentials): Promise<User> {
@@ -126,7 +122,7 @@ async function verifyIdToken(oauth: OAuth2Client, tokens: Credentials): Promise<
   const ticket = await oauth.verifyIdToken({ idToken: tokens.id_token, audience: config.google.clientId });
   const payload = ticket.getPayload();
   if (!payload?.sub || !payload.email) throw new Error('ID token missing sub/email');
-  return { id: payload.sub, email: payload.email, name: payload.name ?? null, picture: payload.picture ?? null };
+  return { id: payload.sub, email: payload.email, name: payload.name ?? null, picture: payload.picture ?? null, provider: 'google' };
 }
 
 function attach(oauth: OAuth2Client, user: User) {
@@ -135,8 +131,6 @@ function attach(oauth: OAuth2Client, user: User) {
     if (tokens.refresh_token) persist(user, tokens);
   });
   client = oauth;
-  currentUser = user;
-  notify();
 }
 
 function persist(user: User, tokens: Credentials) {
@@ -147,5 +141,5 @@ function persist(user: User, tokens: Credentials) {
     console.warn('[auth] OS keychain unavailable; session will not be persisted');
     return;
   }
-  saveSession(user.id, safeStorage.encryptString(tokens.refresh_token), tokens.scope ?? null);
+  saveSession(user.id, 'google', safeStorage.encryptString(tokens.refresh_token), tokens.scope ?? null);
 }

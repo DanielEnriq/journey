@@ -1,6 +1,6 @@
 import { config } from '../config.js';
 import { isApiConfigured, postApi } from '../integrations/api/index.js';
-import { getCurrentUser } from '../integrations/google/auth.js';
+import { getCurrentUser } from '../integrations/account/index.js';
 import { getCloud, getCloudUserId } from '../integrations/supabase/index.js';
 import { VoiceHost } from './host.js';
 import type { LiveKitAccess } from './livekit.js';

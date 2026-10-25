@@ -1,4 +1,4 @@
-import { onUserChange } from '../integrations/google/auth.js';
+import { onUserChange } from '../integrations/account/index.js';
 import { createCanvasHub, createCanvasStore, toCanvasError } from '../integrations/supabase/canvas.js';
 import { getCloud, getCloudUserId } from '../integrations/supabase/index.js';
 import { roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';

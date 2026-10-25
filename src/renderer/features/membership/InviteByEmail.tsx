@@ -106,7 +106,7 @@ export function InviteByEmail({ memberEmails, pendingEmails, roles = ['member', 
             ? 'Remove the address that isn’t an email.'
             : sendable.length
               ? `${sendable.length} ${sendable.length === 1 ? 'person' : 'people'} · invite lasts 7 days`
-              : 'They’ll find it in Vowe when they sign in with that Google account.'}
+              : 'They’ll find it in Vowe when they sign in with that email.'}
         </span>
         <button type="button" class="vm-btn vm-btn-primary" disabled={sending || blocked || (!sendable.length && !text.trim())} onClick={() => void send()}>
           {sending && <Spinner />}

@@ -1,12 +1,13 @@
 import { h } from '../../vendor/preact.js';
 import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
-import { account, initials, signOut } from '../account.js';
+import { account, initials, linkSignInMethod, loadSignInMethods, signInMethods, signOut, unlinkSignInMethod } from '../account.js';
 import { chatgpt, continueWithChatGpt, dismissChatGptWelcome, signOutOfChatGpt } from '../chatgpt.js';
 import { useStore } from '../store.js';
 import { useThemeSetting } from '../theme/theme.js';
-import type { Theme } from '../../../shared/api.js';
+import type { SignInMethod, Theme } from '../../../shared/api.js';
 
-// The sidebar's foot: who you are, and a small panel for appearance, Vowe's model, and signing out.
+// The sidebar's foot: who you are, and a small panel for appearance, sign-in methods, Vowe's model, and
+// signing out.
 
 const THEMES: [Theme, string][] = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
 
@@ -38,6 +39,7 @@ export function AccountFoot({ sub }: { sub?: string }) {
               <button key={t} type="button" role="radio" aria-checked={theme === t} class={theme === t ? 'on' : ''} onClick={() => pickTheme(t)}>{label}</button>
             ))}
           </div>
+          <SignInMethodsSection />
           <ChatGptSection />
           <button class="account-out" type="button" disabled={leaving} onClick={out}>{leaving ? 'Signing out…' : 'Sign out'}</button>
         </div>
@@ -51,9 +53,36 @@ export function AccountFoot({ sub }: { sub?: string }) {
   );
 }
 
+const METHOD_NAMES = { google: 'Google', github: 'GitHub' } as const;
+
 /**
- * Sign in with ChatGPT, so Vowe's agent runs on your ChatGPT plan. Separate from Google, which is who
- * you are in rooms. Wording follows OpenAI's guidelines: "Continue with ChatGPT", "Using ChatGPT plan",
+ * The ways to sign in to this one Vowe account. Linking GitHub here signs you in with it next time; it
+ * doesn't give Vowe your repositories. A plain list for now: the visual treatment comes separately.
+ */
+function SignInMethodsSection() {
+  const { methods, busy, error } = useStore(signInMethods);
+  useEffect(() => { void loadSignInMethods(); }, []);
+  if (!methods && !error) return null;
+  const detail = (m: SignInMethod) => (m.linked ? [m.username && `@${m.username}`, m.email].filter(Boolean).join(' · ') : 'Not linked');
+  return (
+    <div class="account-gpt account-methods">
+      <div class="account-label">Sign-in methods</div>
+      {methods?.filter((m) => m.linked || m.available).map((m) => (
+        <div class="account-gpt-row" key={m.provider}>
+          <span class="account-gpt-on" title={detail(m)}>{METHOD_NAMES[m.provider]}<span class="account-gpt-note"> {m.current ? 'this session' : detail(m)}</span></span>
+          {m.linked
+            ? m.canUnlink && <button class="account-gpt-link" type="button" disabled={busy !== null} onClick={() => unlinkSignInMethod(m.provider)}>{busy === m.provider ? 'Removing…' : 'Remove'}</button>
+            : <button class="account-gpt-link" type="button" disabled={busy !== null} onClick={() => linkSignInMethod(m.provider)}>{busy === m.provider ? 'Waiting for browser…' : 'Link'}</button>}
+        </div>
+      ))}
+      {error && <div class="account-gpt-err" role="alert">{error.message}</div>}
+    </div>
+  );
+}
+
+/**
+ * Sign in with ChatGPT, so Vowe's agent runs on your ChatGPT plan. Separate from the sign-in methods
+ * above, which are who you are in rooms. Wording follows OpenAI's guidelines: "Continue with ChatGPT", "Using ChatGPT plan",
  * "Manage usage". Hidden when this build doesn't offer plan usage.
  */
 function ChatGptSection() {

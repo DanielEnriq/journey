@@ -1,18 +1,20 @@
 import { desc, eq, sql } from 'drizzle-orm';
-import type { User } from '../shared/api.js';
+import type { SignInProvider, User } from '../shared/api.js';
 import { getDb } from './index.js';
 import { sessions, users } from './schema.js';
 
 export interface StoredSession {
+  /** `provider` says which kind of refresh token this is. */
   user: User;
   /** Encrypted with Electron safeStorage; the database never sees plaintext tokens. */
   refreshToken: Buffer;
 }
 
 export function upsertUser(user: User) {
+  const { id, email, name, picture } = user;
   getDb()
     .insert(users)
-    .values(user)
+    .values({ id, email, name, picture })
     .onConflictDoUpdate({
       target: users.id,
       set: { email: user.email, name: user.name, picture: user.picture, lastLogin: sql`(datetime('now'))` },
@@ -25,6 +27,7 @@ export function getLatestSession(): StoredSession | undefined {
   const row = getDb()
     .select({
       user: { id: users.id, email: users.email, name: users.name, picture: users.picture },
+      provider: sessions.provider,
       refreshToken: sessions.refreshToken,
     })
     .from(sessions)
@@ -32,16 +35,16 @@ export function getLatestSession(): StoredSession | undefined {
     .orderBy(desc(sessions.updatedAt))
     .limit(1)
     .get();
-  return row;
+  return row && { user: { ...row.user, provider: row.provider }, refreshToken: row.refreshToken };
 }
 
-export function saveSession(userId: string, encryptedRefreshToken: Buffer, scope: string | null) {
+export function saveSession(userId: string, provider: SignInProvider, encryptedRefreshToken: Buffer, scope: string | null) {
   getDb()
     .insert(sessions)
-    .values({ userId, refreshToken: encryptedRefreshToken, scope })
+    .values({ userId, provider, refreshToken: encryptedRefreshToken, scope })
     .onConflictDoUpdate({
       target: sessions.userId,
-      set: { refreshToken: encryptedRefreshToken, scope, updatedAt: sql`(datetime('now'))` },
+      set: { provider, refreshToken: encryptedRefreshToken, scope, updatedAt: sql`(datetime('now'))` },
     })
     .run();
 }
