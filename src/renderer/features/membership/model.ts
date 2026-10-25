@@ -1,4 +1,4 @@
-import type { IncomingInvitation, InviteKey, InviteResolution, LinkExpiry, MembershipErrorCode, RoomRole } from '../../../shared/api.js';
+import type { IncomingInvitation, InviteContext, InviteKey, InvitePerson, InviteResolution, LinkExpiry, MembershipErrorCode, RoomRole } from '../../../shared/api.js';
 
 // Room membership as the screens see it: people, their access, invitations and the room's link, already
 // resolved for the person looking. The components are presentational (ported from the room-membership
@@ -235,3 +235,15 @@ export function inviteTokenIn(text: string): string | null {
   if (inLink) return inLink[1]!;
   return /^[A-Za-z0-9_-]{22}$/.test(value) ? value : null;
 }
+
+/**
+ * What an invite looks like once you're signed in: whether it's for this account, a preview of the room,
+ * and joining it (ui/pass2/invites/InviteGate.tsx renders it). Joining the room is all it does; the call
+ * is a separate, later choice.
+ */
+export type LandingState =
+  | { kind: 'checking' }
+  | { kind: 'wrong-account'; invite: InviteContext; signedInAs: string }
+  | { kind: 'preview'; invite: InviteContext; room: { id: string; name: string; goal: string | null; members: InvitePerson[] }; joining?: boolean }
+  | { kind: 'already-member'; roomId: string; roomName: string }
+  | { kind: 'error'; error: MembershipError; invite?: InviteContext; signedInAs?: string };

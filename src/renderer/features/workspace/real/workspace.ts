@@ -1,7 +1,7 @@
-import { buildScene } from '../../../../shared/canvas/index.js';
+import { buildScene, type Scene } from '../../../../shared/canvas/index.js';
 import type {
-  ClaudeCodeBlock, ClaudeCodeMessage, Participant, RoomActivity, RoomAuthor, RoomDecision, RoomDetails, RoomFailure, RoomInvitation,
-  RoomMember, RoomRecord, RoomResult, RoomRole, RoomSummary as CloudRoom, WorkContext,
+  ClaudeCodeBlock, ClaudeCodeMessage, Participant, Repository, RoomActivity, RoomAuthor, RoomCanvas, RoomCheckout, RoomDecision, RoomDetails,
+  RoomFailure, RoomInvitation, RoomMember, RoomRecord, RoomResult, RoomRole, RoomSummary as CloudRoom, WorkContext,
 } from '../../../../shared/api.js';
 import { CallService } from '../../../calls/service.js';
 import { account, initials } from '../../../shared/account.js';
@@ -170,6 +170,9 @@ async function read(roomId: string, room?: CloudRoom): Promise<Known> {
   return k;
 }
 
+/** Reads the rooms list again (after "Couldn’t read your rooms"). */
+export const retryRooms = () => refresh();
+
 async function refresh() {
   if (!account.state.user) return;
   try {
@@ -187,13 +190,22 @@ async function refresh() {
 
 /** The view the room's canvas was last left on, as a still for the preview; null before anything is drawn. */
 async function lastViewOf(roomId: string, who: ReturnType<typeof peopleOf>): Promise<RoomPreview['lastView']> {
-  const r = await api().canvas.load(roomId).catch(() => null);
-  if (!r?.ok || !Object.keys(r.value.doc.components).length) return null;
-  const doc = r.value.doc, last = doc.history.at(-1);
-  try {
-    const scene = buildScene(doc, doc.activeView);
-    return { name: scene.name, question: scene.question, at: last?.at ?? new Date().toISOString(), by: last && last.by.kind === 'human' ? who(last.by.id) : null, scene };
-  } catch { return null; }
+  const r = await roomScene(roomId).catch(() => null);
+  if (!r?.scene) return null;
+  const last = r.doc.history.at(-1), scene = r.scene;
+  return { name: scene.name, question: scene.question, at: last?.at ?? new Date().toISOString(), by: last && last.by.kind === 'human' ? who(last.by.id) : null, scene };
+}
+
+/**
+ * The room's canvas as it was last left: its active view's scene, or null before anything is drawn (or
+ * when the view can't be built). Rejects when the canvas can't be read at all.
+ */
+export async function roomScene(roomId: string): Promise<{ doc: RoomCanvas['doc']; scene: Scene | null }> {
+  const r = await api().canvas.load(roomId);
+  if (!r.ok) throw new RoomUnavailable(r.error.code, WORDS[r.error.code] ?? r.error.message);
+  const doc = r.value.doc;
+  if (!Object.keys(doc.components).length) return { doc, scene: null };
+  try { return { doc, scene: buildScene(doc, doc.activeView) }; } catch { return { doc, scene: null }; }
 }
 
 /** Re-reads one room after it changed, here or for another member. */
@@ -766,6 +778,61 @@ const invites: InviteSource = {
     return r.value;
   },
 };
+
+/* ---------- Home: across your rooms, from what's already read, plus this machine's repositories. ---------- */
+
+/** A decision whose current version waits on your signature. */
+export interface SignatureNeed { id: string; roomId: string; roomName: string; title: string; version: number; proposedBy: string }
+/** The decision each room is working on, and whether its owners and members have all signed it. */
+export interface CurrentDecision { id: string; roomId: string; roomName: string; title: string; version: number; agreed: boolean; at: string }
+
+/** Read from the records the rooms list already loaded; no new reads. */
+export function acrossRooms(): { signatures: SignatureNeed[]; decisions: CurrentDecision[] } {
+  const signatures: SignatureNeed[] = [], decisions: CurrentDecision[] = [];
+  for (const id of order) {
+    const k = known.get(id);
+    const { d, needsMe } = current(k?.record ?? null, k?.room.role);
+    if (!k || !d) continue;
+    const by = peopleOf(k.members)(d.proposedBy.id, d.proposedBy);
+    if (needsMe) signatures.push({ id: d.id, roomId: id, roomName: k.room.name, title: d.title, version: d.version, proposedBy: by.tone === 'me' ? 'You' : by.name });
+    decisions.push({ id: d.id, roomId: id, roomName: k.room.name, title: d.title, version: d.version, agreed: decisionOf(d, k.members).status === 'agreed', at: d.updatedAt });
+  }
+  return { signatures, decisions };
+}
+
+/**
+ * Your clone of each room's repository (rooms.checkout): the checkout, or null when this machine has
+ * none. Rooms without a repository, and rooms whose checkout couldn't be read, are left out.
+ */
+export async function roomCheckouts(roomIds: string[]): Promise<Map<string, RoomCheckout | null>> {
+  const out = new Map<string, RoomCheckout | null>();
+  await Promise.all(roomIds.filter((id) => known.get(id)?.room.repository).map(async (id) => {
+    const r = await api().rooms.checkout(id).catch(() => null);
+    if (r?.ok) out.set(id, r.value);
+  }));
+  return out;
+}
+
+/** This machine's repositories, as added (paths stay on this machine). */
+export const repositories = {
+  list: () => api().repos.list(),
+  add: () => api().repos.add(),
+  remove: (id: string) => api().repos.remove(id),
+  detect: () => api().repos.detect(),
+  addDetected: (path: string) => api().repos.addDetected(path),
+};
+
+/**
+ * Claude Code work in the repositories added on this machine, most recent first. A repository whose
+ * work can't be read is skipped, never guessed at.
+ */
+export async function localWork(repos: Repository[]): Promise<{ repository: string; stream: RoomWorkContext['workstreams'][number] }[]> {
+  const all = await Promise.all(repos.map((r) => api().context.work(r.id).then(
+    (ctx) => toRoomWorkContext(ctx).workstreams.map((stream) => ({ repository: r.name, stream })),
+    () => [],
+  )));
+  return all.flat().sort((a, b) => Date.parse(b.stream.lastActivityAt ?? '0') - Date.parse(a.stream.lastActivityAt ?? '0'));
+}
 
 export const realWorkspace = { room, call, work: workSource, record, membership, invites };
 export type RealWorkspace = typeof realWorkspace;
