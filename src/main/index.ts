@@ -2,8 +2,8 @@ import { app, BrowserWindow } from 'electron';
 import { startClaudeCodeObserver, stopClaudeCodeObserver } from '../agents/claude-code-hooks.js';
 import { startTranscriptWatcher, stopTranscriptWatcher } from '../agents/claude-code-watcher.js';
 import { closeDb, getDb } from '../database/index.js';
-import { restoreSession, signIn, signOut } from '../integrations/google/auth.js';
-import { startCloudSync } from '../integrations/supabase/index.js';
+import { isCloudConfigured } from '../integrations/supabase/index.js';
+import { restoreSession, signIn, signOut, startAccount } from '../integrations/account/index.js';
 import { disconnectAllRooms } from '../integrations/supabase/realtime.js';
 import { getVoiceAgentProvider } from '../integrations/voice/index.js';
 import { applySettings, registerIpc, voice } from './ipc.js';
@@ -25,7 +25,7 @@ app.on('will-quit', () => {
 });
 
 registerIpc();
-startCloudSync(); // before restoreSession, so a restored user connects too
+startAccount(); // before restoreSession, so a restored user connects too
 
 async function main() {
   await app.whenReady();
@@ -49,9 +49,14 @@ async function main() {
   if (user) {
     console.log(`[auth] restored session for ${user.email}`);
   } else {
+    // The window offers Continue with Google or GitHub. Where Google is the only way in (no cloud), open
+    // its sign-in right away, as before; a cancelled or timed-out one leaves the app running for a retry.
+    if (isCloudConfigured()) {
+      console.log('[auth] no session; waiting for sign-in in the window');
+      return;
+    }
     console.log('[auth] no session; opening browser for Google sign-in…');
-    // A cancelled or timed-out sign-in leaves the app running; the window offers a retry.
-    signIn().then(
+    signIn('google').then(
       (u) => console.log(`[auth] signed in as ${u.email}`),
       (err: Error) => console.warn('[auth] sign-in did not complete:', err.message),
     );

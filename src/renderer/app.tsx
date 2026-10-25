@@ -20,7 +20,7 @@ import { HomeScreen, LoginScreen } from './features/welcome/WelcomeScreen.js';
 import { devFlags, type DevFlags } from './shared/devflags.js';
 import { useStore } from './shared/store.js';
 import { useAppearance, useThemeSetting } from './shared/theme/theme.js';
-import { account } from './shared/account.js';
+import { account, signIn } from './shared/account.js';
 import type { NewRoom, RepoChoice } from './features/room/data/sources.js';
 import type { InviteKey, Theme } from '../shared/api.js';
 
@@ -270,7 +270,7 @@ function App() {
 
   let screen;
   if (signedOut && user === undefined) screen = null;
-  else if (signedOut || route.screen === 'login') screen = <><div class="drag-strip"></div><LoginScreen light={light} signIn={PREVIEW ? undefined : () => window.journey.auth.signIn()} onSignedIn={home} /></>;
+  else if (signedOut || route.screen === 'login') screen = <><div class="drag-strip"></div><LoginScreen light={light} signIn={PREVIEW ? undefined : signIn} onSignedIn={home} /></>;
   else if (invite && !demo) {
     screen = <InviteScreen inviteKey={invite} light={light} onDone={() => setInvite(null)} onOpenRoom={(id) => { setInvite(null); openRoom(id); }} />;
   } else if (route.screen === 'home') {

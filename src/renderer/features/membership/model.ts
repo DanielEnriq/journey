@@ -174,7 +174,7 @@ export const ERROR_COPY: Record<MembershipError, { title: string; body: string }
   invite_revoked: { title: 'This invite was withdrawn', body: 'The person who sent it took it back. Ask them for a new one.' },
   invite_used: { title: 'This invite was already used', body: 'Each email invite works once. If it was you, open the room from your rooms list.' },
   invite_not_found: { title: 'This invite link isn’t valid', body: 'It may be incomplete. Copy it again from the original message.' },
-  wrong_account: { title: 'This invite is for a different account', body: 'Switch to the Google account it was sent to.' },
+  wrong_account: { title: 'This invite is for a different account', body: 'Sign in with the account it was sent to (Google or GitHub, same email).' },
   domain_not_allowed: { title: 'This link is limited to one company', body: 'Your account isn’t on the allowed domain.' },
   link_revoked: { title: 'This link was turned off', body: 'The room’s owner turned it off. Ask them for a new one.' },
   room_gone: { title: 'This room no longer exists', body: 'It was deleted by its owner.' },

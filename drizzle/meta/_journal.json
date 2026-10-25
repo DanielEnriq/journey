@@ -36,6 +36,13 @@
       "when": 1792861917101,
       "tag": "0004_transcript_watcher",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792896140583,
+      "tag": "0005_session_provider",
+      "breakpoints": true
     }
   ]
 }

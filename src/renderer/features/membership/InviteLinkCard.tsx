@@ -64,9 +64,9 @@ export function InviteLinkCard({ link, now, suggestedDomain, canManage, onCreate
       <Menu buttonClass="vm-pillsel" align="start" ariaLabel="Who can use the link" label={<span>{settings.domain ? `Only @${settings.domain}` : 'Anyone signed in'}</span>}
         items={[
           ...(suggestedDomain
-            ? [{ key: 'dom', label: `Only @${suggestedDomain}`, hint: 'Their Google account must be on this domain', checked: settings.domain === suggestedDomain, onSelect: () => change({ ...settings, domain: suggestedDomain }) }]
+            ? [{ key: 'dom', label: `Only @${suggestedDomain}`, hint: 'Their sign-in email must be on this domain', checked: settings.domain === suggestedDomain, onSelect: () => change({ ...settings, domain: suggestedDomain }) }]
             : []),
-          { key: 'any', label: 'Anyone signed in with Google', hint: 'Anyone who has the link', checked: !settings.domain, onSelect: () => change({ ...settings, domain: null }) },
+          { key: 'any', label: 'Anyone signed in to Vowe', hint: 'Anyone who has the link', checked: !settings.domain, onSelect: () => change({ ...settings, domain: null }) },
         ]} />
       <Menu buttonClass="vm-pillsel" align="start" ariaLabel="Link expiry" label={<span>{live ? `Expires ${until(live.expiresAt, now)}` : `For ${EXPIRY_LABEL[settings.expiry]}`}</span>}
         items={(['24h', '7d', '30d'] as LinkExpiry[]).map((x) => ({ key: x, label: EXPIRY_LABEL[x], checked: settings.expiry === x, onSelect: () => change({ ...settings, expiry: x }) }))} />

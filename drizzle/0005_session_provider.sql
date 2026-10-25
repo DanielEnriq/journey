@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `provider` text DEFAULT 'google' NOT NULL;

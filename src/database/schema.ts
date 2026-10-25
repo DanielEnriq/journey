@@ -7,7 +7,7 @@ import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from
 const now = sql`(datetime('now'))`;
 
 export const users = sqliteTable('users', {
-  id: text('id').primaryKey(), // Google "sub"
+  id: text('id').primaryKey(), // Google "sub" for Google sessions; the Supabase user id for GitHub sessions
   email: text('email').notNull(),
   name: text('name'),
   picture: text('picture'),
@@ -19,6 +19,8 @@ export const sessions = sqliteTable('sessions', {
   userId: text('user_id')
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // 'google': a Google refresh token. 'github': a Supabase refresh token from Supabase's GitHub sign-in.
+  provider: text('provider', { enum: ['google', 'github'] }).notNull().default('google'),
   refreshToken: blob('refresh_token', { mode: 'buffer' }).notNull(), // encrypted with Electron safeStorage
   scope: text('scope'),
   updatedAt: text('updated_at').notNull().default(now),

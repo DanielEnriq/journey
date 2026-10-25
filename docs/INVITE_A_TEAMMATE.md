@@ -17,7 +17,7 @@ Inviting someone adds them to that exact room. No copy is made, and the room's c
 1. Open the room and click **Share** (top right). Only owners can invite.
 2. Under **Invite link**, choose:
    - **Role:** **Member** (talks, comments, signs decisions) or **Viewer** (listens and comments).
-   - **Who:** "Anyone signed in with Google", or limit it to one email domain.
+   - **Who:** "Anyone signed in to Vowe", or limit it to one email domain.
    - **Expiry:** 24 hours, 7 days or 30 days.
 3. Click **Create link**, then **Copy link**. The link is shown **once**, when it's made. If you lose it,
    click **Create a new link**, which turns the old one off.
@@ -28,7 +28,7 @@ Inviting someone adds them to that exact room. No copy is made, and the room's c
 6. If your Google OAuth consent screen is in **Testing**, add their Google email as a test user first (Google
    Cloud Console → APIs & Services → OAuth consent screen → Test users). Otherwise Google blocks their sign-in.
 
-Prefer email-bound invites? **Share → invite by email** makes an invitation that only that Google account
+Prefer email-bound invites? **Share → invite by email** makes an invitation that only an account with that verified email (Google, or GitHub as primary email)
 can accept. Anyone else signed in is told it's for someone else.
 
 To revoke: **Share → Turn off link**, or withdraw a pending email invitation from the access list. Anyone who

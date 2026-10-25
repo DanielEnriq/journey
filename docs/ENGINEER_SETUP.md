@@ -95,13 +95,13 @@ This builds TypeScript into `dist/`, then opens the Electron window. The first b
 - `Missing GOOGLE_CLIENT_ID — copy .env.example to .env and fill it in` (or `…SECRET`): one of the Google
   values is missing.
 
-When the window shows **Sign in with Google**, stop and hand over to the person.
+When the window shows **Continue with Google** and **Continue with GitHub**, stop and hand over to the person.
 
 ---
 
 ## For the person: sign in and join the room
 
-1. **Sign in with Google.** Your browser opens Google's consent page. Pick **your own** account. The browser
+1. **Continue with Google** (or **Continue with GitHub**, if the Vowe project has GitHub set up: `docs/AUTH.md`). Your browser opens the consent page. Pick **your own** account. The browser
    then says you can return to Vowe, and the app shows your Home.
    - If Google says **"Access blocked: … has not completed the Google verification process"** or that the app is
      in testing, Daniel has to add your Google email as a **test user** on the OAuth consent screen. Then sign

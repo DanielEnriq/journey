@@ -16,10 +16,68 @@ import type { HeardSpeech, VoiceStatus } from '../voice/index.js';
 export type { CanvasCommand, CanvasSnapshot, Grounding };
 
 export interface User {
+  /** This machine's id for the person: the Google `sub` for a Google session, the cloud user id for GitHub. */
   id: string;
   email: string;
   name: string | null;
   picture: string | null;
+  /** How this session signed in. Either way it's the same Vowe account once the methods are linked. */
+  provider: SignInProvider;
+}
+
+// ─── Sign-in methods ─────────────────────────────────────────────────────────
+// Ways to sign in to Vowe. Each is an identity on the person's one Supabase user, so every method reaches
+// the same rooms. Signing in proves who someone is and grants nothing else: repository access and
+// ChatGPT model access are separate grants with their own consent (see docs/AUTH.md).
+
+export type SignInProvider = 'google' | 'github';
+
+export type AuthErrorCode =
+  /** The person cancelled, here or on the provider's page. */
+  | 'cancelled'
+  | 'timed-out'
+  /** This build or its Supabase project doesn't offer that method, or isn't set up safely for it. */
+  | 'not-configured'
+  /** The provider has no verified email for the account, and Vowe won't join accounts on an unverified one. */
+  | 'email-unverified'
+  /** Already one of your sign-in methods. */
+  | 'already-linked'
+  /** That Google or GitHub account already signs in to a different Vowe account; nothing was merged. */
+  | 'linked-elsewhere'
+  | 'not-linked'
+  /** Removing it would leave no way to sign in. */
+  | 'last-method'
+  /** It's how this session signed in; sign in another way to remove it. */
+  | 'current-method'
+  | 'signed-out'
+  /** The session ended (revoked, expired, or signed out elsewhere); sign in again. */
+  | 'session-expired'
+  | 'unknown';
+
+export interface AuthFailure {
+  code: AuthErrorCode;
+  /** Says what happened and what to do, for showing as is. */
+  message: string;
+  provider?: SignInProvider;
+}
+
+/** What sign-in method channels resolve with: failures are values, so the code survives IPC. */
+export type AuthResult<T> = { ok: true; value: T } | { ok: false; error: AuthFailure };
+
+export interface SignInMethod {
+  provider: SignInProvider;
+  /** Whether it's on this Vowe account. */
+  linked: boolean;
+  /** The provider account: its email, plus the username for GitHub. Null when not linked. */
+  email: string | null;
+  username: string | null;
+  linkedAt: string | null;
+  /** This session signed in with it. */
+  current: boolean;
+  /** Whether this build can sign in and link with it right now. */
+  available: boolean;
+  /** unlink() would be allowed: it's linked, not this session's method, and another method remains. */
+  canUnlink: boolean;
 }
 
 export type Theme = 'system' | 'light' | 'dark';
@@ -949,8 +1007,17 @@ export type { HeardSpeech, VoiceStatus } from '../voice/index.js';
 export interface Channels {
   invoke: {
     'auth:getUser': () => User | null;
-    'auth:signIn': () => User;
+    /** Why the last session ended on its own (also at launch), until the next sign-in; else null. */
+    'auth:getEnded': () => AuthFailure | null;
+    /** Rejects with a message to show as is; `google` when no provider is given. */
+    'auth:signIn': (provider?: SignInProvider) => User;
+    /** Stops waiting for the browser: the sign-in or link in flight fails as `cancelled`. */
+    'auth:cancel': () => void;
     'auth:signOut': () => void;
+    'auth:methods': () => AuthResult<SignInMethod[]>;
+    /** Opens the provider in the browser, as the signed-in person; resolves with the methods after. */
+    'auth:link': (provider: SignInProvider) => AuthResult<SignInMethod[]>;
+    'auth:unlink': (provider: SignInProvider) => AuthResult<SignInMethod[]>;
     'settings:get': () => Settings;
     'settings:update': (patch: Partial<Settings>) => Settings;
     'repos:list': () => Repository[];
@@ -1055,6 +1122,8 @@ export interface Channels {
   };
   event: {
     'auth:changed': User | null;
+    /** The session ended without anyone signing out here (`session-expired`). Followed by auth:changed null. */
+    'auth:ended': AuthFailure;
     'claudeCode:event': ClaudeCodeEvent;
     'rooms:event': RoomEvent;
     'rooms:presence': { roomId: string; participants: Participant[] };
@@ -1080,10 +1149,18 @@ export type EventChannel = keyof Channels['event'];
 export interface JourneyApi {
   auth: {
     getUser(): Promise<User | null>;
-    signIn(): Promise<User>;
+    getEnded(): Promise<AuthFailure | null>;
+    signIn(provider?: SignInProvider): Promise<User>;
+    cancel(): Promise<void>;
     signOut(): Promise<void>;
     /** Subscribes to sign-in/sign-out; returns an unsubscribe function. */
     onChange(listener: (user: User | null) => void): () => void;
+    /** The session ended on its own (expired or revoked); auth:changed follows with null. */
+    onEnded(listener: (failure: AuthFailure) => void): () => void;
+    /** This account's sign-in methods: which are linked, and which could be removed. */
+    methods(): Promise<AuthResult<SignInMethod[]>>;
+    link(provider: SignInProvider): Promise<AuthResult<SignInMethod[]>>;
+    unlink(provider: SignInProvider): Promise<AuthResult<SignInMethod[]>>;
   };
   settings: {
     get(): Promise<Settings>;

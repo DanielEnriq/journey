@@ -13,7 +13,18 @@ import { getAllSettings, updateSettings } from '../database/settings.js';
 import { getWorkstream } from '../database/work-context.js';
 import { detectRepositories } from '../git/detect.js';
 import { findWorkingTreeRoot, getRemoteUrl, getStatus, listBranches, listWorktrees } from '../git/index.js';
-import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
+import {
+  cancelAuthFlow,
+  getCurrentUser,
+  getSessionEnded,
+  linkSignInMethod,
+  listSignInMethods,
+  onSessionEnded,
+  onUserChange,
+  signIn,
+  signOut,
+  unlinkSignInMethod,
+} from '../integrations/account/index.js';
 import { anthropic } from '../integrations/anthropic/index.js';
 import { chatgptAuth, chatgptPlan, openaiApiKey } from '../integrations/openai/index.js';
 import { getCloudUserId } from '../integrations/supabase/index.js';
@@ -63,6 +74,7 @@ function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
   return result.data;
 }
 const id = z.string().trim().min(1).max(200);
+const signInProvider = z.enum(['google', 'github']);
 const messagePage = z.object({ offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).optional() }).strict().default({});
 const agentContext = z.object({ repositoryId: id, workstreamId: id.nullable() }).strict();
 const agentText = z.string().trim().min(1).max(8000);
@@ -206,8 +218,15 @@ export function applySettings() {
  */
 export function registerIpc() {
   handle('auth:getUser', () => getCurrentUser() ?? null);
-  handle('auth:signIn', () => signIn());
+  handle('auth:getEnded', () => getSessionEnded());
+  handle('auth:signIn', (provider) => signIn(provider === undefined ? 'google' : parse(signInProvider, provider, 'Provider')));
+  handle('auth:cancel', () => cancelAuthFlow());
   handle('auth:signOut', () => signOut());
+  // Sign-in methods on the one Vowe account. Separate from tool access: none of these grant repository
+  // or model access.
+  handle('auth:methods', () => listSignInMethods());
+  handle('auth:link', (provider) => linkSignInMethod(parse(signInProvider, provider, 'Provider')));
+  handle('auth:unlink', (provider) => unlinkSignInMethod(parse(signInProvider, provider, 'Provider')));
 
   handle('settings:get', () => getAllSettings());
   handle('settings:update', (patch) => {
@@ -304,7 +323,7 @@ export function registerIpc() {
     collaborator.cancel(parse(id, turnId, 'Turn id'));
   });
 
-  // Sign in with ChatGPT: separate from Google. Tokens stay here; the renderer sees status only.
+  // Sign in with ChatGPT: separate from signing in to Vowe. Tokens stay here; the renderer sees status only.
   handle('chatgpt:status', () => chatgptAuth().status());
   handle('chatgpt:signIn', (account) => chatgptAuth().signIn(account === undefined ? undefined : parse(id, account, 'Account')));
   handle('chatgpt:signOut', () => chatgptAuth().signOut());
@@ -387,6 +406,7 @@ export function registerIpc() {
   handle('voice:end', (id) => voice.end(parse(turnId, id, 'Turn id')));
   handle('voice:cancel', (id) => voice.cancel(parse(turnId, id, 'Turn id')));
 
+  onSessionEnded((failure) => broadcast('auth:ended', failure));
   onUserChange((user) => {
     broadcast('auth:changed', user);
     if (!user) void voice.stop(); // signed out: your Vowe leaves the call
