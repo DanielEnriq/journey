@@ -1,6 +1,6 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
 import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
-import { account, cancelSignIn, firstName } from '../../shared/account.js';
+import { account, cancelSignIn, firstName, initials } from '../../shared/account.js';
 import { AccountFoot } from '../../shared/components/Account.js';
 import { Compose, HomeMic, PanelLeft, Repo } from '../../shared/components/icons.js';
 import { mockLog } from '../../shared/mock.js';
@@ -9,6 +9,7 @@ import { ago } from '../../shared/time.js';
 import { roomLine, Who } from '../room/shell.js';
 import type { RepoChoice } from '../room/data/sources.js';
 import type { RoomSummary } from '../room/types.js';
+import { SignIn, type SignInState } from '../../ui/SignIn.js';
 import type { SignInProvider } from '../../../shared/api.js';
 
 // Sign-in and the workspace home, from the design prototype (Welcome.dc.html). With no rooms, home is
@@ -63,23 +64,38 @@ function Lights() {
 }
 
 export interface LoginProps {
-  light: boolean;
   /** The app's sign-in; absent in the preview, which simulates it. The app leaves this screen once a user is signed in. */
   signIn?: (provider: SignInProvider) => Promise<unknown>;
-  /** Preview only: what "Continue as" does. */
+  /** Preview only: where the simulated sign-in lands. */
   onSignedIn(): void;
 }
 
 const PROVIDER_NAMES: Record<SignInProvider, string> = { google: 'Google', github: 'GitHub' };
+/** Where each provider's sign-in happens in the browser: Google's own page, or GitHub's by way of Supabase. */
+const PROVIDER_HOSTS: Record<SignInProvider, string> = { google: 'accounts.google.com', github: 'github.com' };
 
-export function LoginScreen({ light, signIn: realSignIn, onSignedIn }: LoginProps) {
-  const { ended } = useStore(account);
+/**
+ * The approved Pass 1 sign-in (ui/SignIn.tsx), driven by the main process's real Google and GitHub sign-in.
+ * Only the state mapping lives here. Both providers stay listed, as before: the renderer can't ask main
+ * which are configured until someone is signed in, and an unconfigured one fails with its real reason.
+ * No matching code (main issues none) and no "open again" (main can't reopen the URL).
+ */
+export function LoginScreen({ signIn: realSignIn, onSignedIn }: LoginProps) {
+  const { user, ended } = useStore(account);
   const [login, setLogin] = useState<SignInProvider | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const signIn = (provider: SignInProvider) => {
+  const [previewDone, setPreviewDone] = useState(false);
+  const later = useTimers();
+  const signIn = (id: string) => {
+    const provider = id as SignInProvider;
     setFailed(null);
     setLogin(provider);
-    if (!realSignIn) { mockLog('auth', `Continue with ${PROVIDER_NAMES[provider]}: preview sign-in; no browser opens and no account is touched`); return; }
+    if (!realSignIn) {
+      mockLog('auth', `Continue with ${PROVIDER_NAMES[provider]}: preview sign-in; no browser opens and no account is touched`);
+      later(() => setPreviewDone(true), 1400);
+      later(onSignedIn, 2200);
+      return;
+    }
     realSignIn(provider).catch((err: Error) => {
       setLogin((now) => (now === provider ? null : now)); // a newer sign-in replaced this one: leave it be
       if (!/was cancelled/.test(err.message)) setFailed(err.message || 'Sign-in did not complete.');
@@ -87,56 +103,27 @@ export function LoginScreen({ light, signIn: realSignIn, onSignedIn }: LoginProp
   };
   // Stops the sign-in in main too, so the browser tab's answer no longer counts.
   const cancel = () => { setLogin(null); void cancelSignIn(); };
-  const why = failed ?? ended?.message;
+  const state: SignInState = previewDone
+    ? { kind: 'signed-in', name: user?.name ?? firstName(user), email: 'Preview · mock data', initials: initials(user?.name ?? firstName(user)) }
+    : login
+      ? { kind: 'waiting', providerLabel: PROVIDER_NAMES[login], host: PROVIDER_HOSTS[login] }
+      : failed
+        ? { kind: 'error', message: failed }
+        : ended
+          ? { kind: 'error', title: 'You were signed out', message: ended.message }
+          : { kind: 'idle' };
   return (
     <div class="welcome-screen">
-      <div class={`win ${light ? 'light ' : ''}login-mode`}>
-        <Lights />
-        <main class="login">
-          <div class="ghost" aria-hidden="true">
-            <svg viewBox="0 0 1440 900" preserveAspectRatio="none">
-              <path pathLength="1" d="M234 258 C234 330 274 350 274 420"></path>
-              <path pathLength="1" d="M274 488 C274 560 234 580 234 650" style="animation-delay:.6s"></path>
-              <path pathLength="1" d="M358 446 C620 300 860 250 1110 232" style="animation-delay:1.2s"></path>
-              <path pathLength="1" d="M1194 270 C1194 360 1214 380 1214 460" style="animation-delay:1.8s"></path>
-              <path class="prop" d="M1214 530 C1214 600 1164 610 1164 670"></path>
-            </svg>
-            <div class="gp" style="left:150px;top:190px;animation-delay:.2s"><div class="k">Client</div><div class="n">Checkout</div></div>
-            <div class="gp" style="left:190px;top:420px;animation-delay:.5s"><div class="k">Service</div><div class="n">Webhook API</div><div class="bars"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div></div>
-            <div class="gp queue" style="left:150px;top:650px;animation-delay:.8s"><div class="k">Queue</div><div class="n">jobs</div><div class="bars"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></div></div>
-            <div class="gp" style="left:1110px;top:200px;animation-delay:1.1s"><div class="k">Store</div><div class="n">Payments DB</div></div>
-            <div class="gp" style="left:1130px;top:460px;animation-delay:1.4s"><div class="k">External</div><div class="n">Stripe</div><div class="bars"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div></div>
-            <div class="gp prop" style="left:1080px;top:670px;animation-delay:2s"><div class="k">Proposed</div><div class="n">Idempotency key</div></div>
-            <div class="cur a" style="left:330px;top:250px"><svg viewBox="0 0 14 14"><path d="M1 1l11 5-5 1.6L5 13z" style="fill:var(--peer);stroke:var(--pane);stroke-width:1;animation:none;stroke-dasharray:none"></path></svg><span style="background:var(--peer)">John</span></div>
-            <div class="cur b" style="left:1260px;top:600px"><svg viewBox="0 0 14 14"><path d="M1 1l11 5-5 1.6L5 13z" style="fill:var(--peer2);stroke:var(--pane);stroke-width:1;animation:none;stroke-dasharray:none"></path></svg><span style="background:var(--peer2)">Srikar</span></div>
-          </div>
-          <div class="veil"></div>
-
-          <section class="gate">
-            <div class="mark" aria-hidden="true"><span class="ring"></span><span class="ring r2"></span><span class="core"></span></div>
-            <div class="word"><b>Vowe</b><span class="sep"></span>Engineering rooms</div>
-            <h1 class="hero-h">Talk through the system.<span>Watch it take shape.</span></h1>
-            <p class="hero-p">Say what you’re building. Vowe draws it live for the whole room, and coding agents build what you agree on.</p>
-            <div>
-              {login === null ? (
-                <>
-                  <button class="gbtn" type="button" onClick={() => signIn('google')}><span class="gslot" title="Official Google “G” mark goes here">G</span>Continue with Google</button>
-                  <button class="gbtn" type="button" onClick={() => signIn('github')}><span class="gslot" title="Official GitHub mark goes here">GH</span>Continue with GitHub</button>
-                  <div class="fine" role={why ? 'alert' : undefined}>{why ? `${why} · ` : 'Opens your browser to sign in · '}<NotYet link label="Terms" note="Not written yet." /> · <NotYet link label="Privacy" note="Not written yet." /></div>
-                </>
-              ) : (
-                <div class="wait">
-                  <div class="wait-row"><span class="spin"></span><span>Finish signing in in your browser</span><button class="x" type="button" onClick={cancel}>Cancel</button></div>
-                  {realSignIn
-                    ? <div class="fine">Waiting for {PROVIDER_NAMES[login]} in your browser.</div>
-                    : <div class="fine">Preview build: no browser opens. <a href="#" onClick={(e) => { e.preventDefault(); onSignedIn(); }}>Continue as Daniel</a></div>}
-                </div>
-              )}
-            </div>
-          </section>
-          <div class="login-foot"><span>VOWE 0.1 · MACOS</span><span>BUILT FOR TEAMS WHO THINK OUT LOUD</span></div>
-        </main>
-      </div>
+      <SignIn
+        providers={[
+          { id: 'google', label: 'Google', available: true },
+          { id: 'github', label: 'GitHub', available: true },
+        ]}
+        upcoming={[{ id: 'chatgpt', label: 'ChatGPT' }]}
+        state={state}
+        onSignIn={signIn}
+        onCancel={cancel}
+      />
     </div>
   );
 }

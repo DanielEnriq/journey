@@ -1,0 +1,57 @@
+/* Generated from the Pass 1 icon set: 16px grid, 1.5px stroke, round caps.
+   Source: vowe-foundations-pass1.zip, imports adapted to the vendored Preact. */
+import { Fragment, h, type JSX } from '../vendor/preact.js';
+
+export const ICON_PATHS = {
+  'room': () => (<><circle cx="4.25" cy="8" r="2.25"/><path d="M6.5 8h3"/><rect x="9.5" y="5.25" width="5" height="5.5" rx="1.2"/></>),
+  'plus': () => (<><path d="M8 3.25v9.5M3.25 8h9.5"/></>),
+  'join': () => (<><path d="M9.5 2.75h2.25a1.5 1.5 0 0 1 1.5 1.5v7.5a1.5 1.5 0 0 1-1.5 1.5H9.5"/><path d="M2.75 8h7M7.5 5.5 10 8l-2.5 2.5"/></>),
+  'resume': () => (<><path d="M2.9 8a5.1 5.1 0 1 0 1.5-3.6"/><path d="M2.6 2.9v2.4H5"/><path d="M8 5.4V8l1.8 1.2"/></>),
+  'project': () => (<><path d="M2.5 4.25a1.5 1.5 0 0 1 1.5-1.5h2.4l1.5 1.6H12a1.5 1.5 0 0 1 1.5 1.5v5.9a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M2.5 6.3h11"/></>),
+  'branch': () => (<><circle cx="4.5" cy="3.75" r="1.5"/><circle cx="4.5" cy="12.25" r="1.5"/><circle cx="11.5" cy="5.75" r="1.5"/><path d="M4.5 5.25v5.5M11.5 7.25c0 2.6-3.2 2.4-6.4 3.7"/></>),
+  'search': () => (<><circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3.25 3.25"/></>),
+  'mic': () => (<><rect x="5.75" y="1.75" width="4.5" height="7.75" rx="2.25"/><path d="M3.25 7.6a4.75 4.75 0 0 0 9.5 0M8 12.35v1.9"/></>),
+  'mic-off': () => (<><path d="M10.25 6.7V4a2.25 2.25 0 0 0-4.4-.7M5.75 6.9v.35A2.25 2.25 0 0 0 9.3 9.1M3.25 7.6a4.75 4.75 0 0 0 7.9 3.55M12.75 7.6c0 .45-.06.9-.18 1.32M8 12.35v1.9M2.5 2.5l11 11"/></>),
+  'speaker': () => (<><path d="M2.75 6.25H5L8.25 3.5v9L5 9.75H2.75z"/><path d="M10.6 5.6a3.3 3.3 0 0 1 0 4.8M12.3 3.9a5.7 5.7 0 0 1 0 8.2"/></>),
+  'call-end': () => (<><path d="M2.2 9.4c3.4-3 8.2-3 11.6 0l-.9 1.7-2.4-.6-.3-1.6a6.6 6.6 0 0 0-4.4 0l-.3 1.6-2.4.6z"/></>),
+  'settings': () => (<><circle cx="8" cy="8" r="2"/><path d="M8 1.75v1.6M8 12.65v1.6M14.25 8h-1.6M3.35 8h-1.6M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"/></>),
+  'user': () => (<><circle cx="8" cy="5.75" r="2.75"/><path d="M2.75 13.6c.7-2.4 2.7-3.85 5.25-3.85s4.55 1.45 5.25 3.85"/></>),
+  'people': () => (<><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13c.5-2.2 2.2-3.4 4.2-3.4s3.7 1.2 4.2 3.4"/><path d="M10.6 3.4a2.2 2.2 0 0 1 0 4.2M12 9.9c1.1.5 1.9 1.6 2.2 3.1"/></>),
+  'link': () => (<><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.8.8M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.8-.8"/></>),
+  'check': () => (<><path d="m3.5 8.4 2.9 2.8 6.1-6.4"/></>),
+  'close': () => (<><path d="m4 4 8 8M12 4l-8 8"/></>),
+  'chevron': () => (<><path d="m5 6.5 3 3 3-3"/></>),
+  'chevron-r': () => (<><path d="m6.5 4.5 3 3.5-3 3.5"/></>),
+  'arrow-r': () => (<><path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5"/></>),
+  'arrow-ur': () => (<><path d="M5 11 11 5M6 5h5v5"/></>),
+  'lock': () => (<><rect x="3.5" y="7" width="9" height="6.5" rx="1.6"/><path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7"/></>),
+  'sidebar': () => (<><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></>),
+  'panel-r': () => (<><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></>),
+  'comment': () => (<><path d="M3 4.25A1.5 1.5 0 0 1 4.5 2.75h7A1.5 1.5 0 0 1 13 4.25v5.5a1.5 1.5 0 0 1-1.5 1.5H7.25L4.5 13.25v-2h0A1.5 1.5 0 0 1 3 9.75z"/></>),
+  'decision': () => (<><path d="M4 2.75h5.5L12 5.25v8H4z"/><path d="M9.5 2.75v2.5H12M6 9.25l1.4 1.35L10 8"/></>),
+  'pen': () => (<><path d="m10.5 2.9 2.6 2.6-7.6 7.6-3.1.5.5-3.1z"/><path d="m9.2 4.2 2.6 2.6"/></>),
+  'pointer': () => (<><path d="M3.5 2.5 12.5 7 8.4 8.4 7 12.5z"/></>),
+  'circle-sel': () => (<><path d="M8.5 2.8c3 .2 5 1.9 5 4.6 0 2.9-2.6 5.1-5.9 5.1S2.5 10.4 2.5 7.6c0-2 1.4-3.6 3.6-4.4"/></>),
+  'terminal': () => (<><rect x="2" y="3" width="12" height="10" rx="2"/><path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5"/></>),
+  'bell': () => (<><path d="M4 11V7.25a4 4 0 0 1 8 0V11l1 1.25H3z"/><path d="M6.5 13.5a1.6 1.6 0 0 0 3 0"/></>),
+  'sun': () => (<><circle cx="8" cy="8" r="2.75"/><path d="M8 1.75v1.25M8 13v1.25M1.75 8H3M13 8h1.25M3.6 3.6l.9.9M11.5 11.5l.9.9M3.6 12.4l.9-.9M11.5 4.5l.9-.9"/></>),
+  'moon': () => (<><path d="M12.9 9.6A5.25 5.25 0 0 1 6.4 3.1a5.25 5.25 0 1 0 6.5 6.5z"/></>),
+  'clock': () => (<><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.25"/></>),
+  'external': () => (<><path d="M9.25 2.75h4v4M13.25 2.75 7.5 8.5M11.5 9.5v2.75a1 1 0 0 1-1 1h-6.75a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1H6.5"/></>),
+  'more': () => (<><circle cx="3.75" cy="8" r=".75"/><circle cx="8" cy="8" r=".75"/><circle cx="12.25" cy="8" r=".75"/></>),
+  'copy': () => (<><rect x="5.25" y="5.25" width="8" height="8" rx="1.5"/><path d="M10.75 5.25V4.25a1.5 1.5 0 0 0-1.5-1.5h-4.5a1.5 1.5 0 0 0-1.5 1.5v4.5a1.5 1.5 0 0 0 1.5 1.5h.5"/></>),
+  'warn': () => (<><path d="M8 2.75 14 13.25H2z"/><path d="M8 6.75v2.75M8 11.4v.1"/></>),
+  'mail': () => (<><rect x="2" y="3.5" width="12" height="9" rx="1.8"/><path d="M2.6 4.6 8 8.6l5.4-4"/></>),
+} as const;
+
+export type IconName = keyof typeof ICON_PATHS;
+
+export function Icon({ name, size = 16, title, ...rest }: { name: IconName; size?: 14 | 16 | 20; title?: string } & JSX.SVGAttributes<SVGSVGElement>) {
+  const Paths = ICON_PATHS[name];
+  return (
+    <svg class={`v-icon${size === 20 ? ' v-icon-20' : size === 14 ? ' v-icon-14' : ''}`} viewBox="0 0 16 16" role={title ? 'img' : undefined} aria-hidden={title ? undefined : true} {...rest}>
+      {title ? <title>{title}</title> : null}
+      <Paths />
+    </svg>
+  );
+}

@@ -1,0 +1,33 @@
+/* ---- Bridge: Journey's window tokens, read by every feature stylesheet, now drawn from Pass 1's
+   Ink, Paper & Signal tokens (ui/styles/tokens.css). Light or dark comes from <html data-theme>, which
+   app.tsx keeps in step with the Theme setting, so .win and .win.light read the same lines.
+   Meaning carries over: --attention (needs you) is vermilion, --bad (failed) is oxide, --ask (Vowe and
+   the system) is slate, --good (live, passed) is sage. Delete a line once nothing reads it. */
+.win,.win.light{
+  /* surfaces, back to front */
+  --app:var(--v-bg-sunken);--rail:var(--v-bg-sunken);--pane:var(--v-bg);--surface:var(--v-surface);--field:var(--v-surface);
+  --menu:var(--v-surface-raised);--selected:var(--v-surface-selected);--chip:var(--v-surface-press);--chip-strong:var(--v-surface-raised);
+  --fill-1:var(--v-surface-hover);--fill-2:var(--v-surface-press);--fill-3:var(--v-line-2);
+  --hover:var(--v-surface-hover);--hover-strong:var(--v-surface-press);
+  /* ink */
+  --ink-bright:var(--v-fg);--ink:var(--v-fg);--ink-2:var(--v-fg-2);--ink-3:var(--v-fg-2);
+  --ink-4:var(--v-fg-3);--ink-5:var(--v-fg-3);--ink-6:var(--v-fg-3);--ink-7:var(--v-fg-3);--ink-8:var(--v-fg-3);--ink-9:var(--v-fg-3);
+  --ink-10:var(--v-fg-4);
+  /* lines */
+  --hairline:var(--v-line);--border:var(--v-line-2);--border-3:var(--v-line-2);--border-4:var(--v-line-strong);
+  /* meaning */
+  --good:var(--v-success);
+  --attention:var(--v-signal);--attention-ink:var(--v-signal-fg);--attention-text:var(--v-fg);
+  --attention-line:var(--v-signal-line);--attention-wash:var(--v-signal-wash);
+  --ask:var(--v-info-fg);--studio-accent:var(--v-info-fg);
+  --bad:var(--v-fault-fg);
+  /* the canvas: paper with inked edges, no glows */
+  --studio-field:var(--v-canvas);--studio-glow:transparent;--studio-card:var(--v-surface);--studio-card-edge:var(--v-line-2);--studio-card-top:transparent;
+  --studio-shadow:var(--v-shadow-1);--studio-lift:var(--v-shadow-2);--studio-line:var(--v-line-strong);
+  --shadow-menu:var(--v-shadow-3);--scrim:var(--v-scrim);
+  /* people keep their own tones */
+  --me:var(--v-person-1);--peer:var(--v-person-2);--peer2:var(--v-person-3);--peer3:var(--v-person-4);--peer4:var(--v-person-5);
+  /* type */
+  --font:var(--v-font-sans);--serif:var(--v-font-serif);--mono:var(--v-font-mono);
+  --ease:var(--v-ease);--studio-ease:var(--v-ease);
+}

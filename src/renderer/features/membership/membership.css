@@ -27,13 +27,13 @@
 /* ---- People */
 .vm-tone-me { --rc: var(--me); } .vm-tone-peer { --rc: var(--peer); } .vm-tone-peer2 { --rc: var(--peer2); }
 .vm-tone-peer3 { --rc: var(--peer3); } .vm-tone-peer4 { --rc: var(--peer4); }
-.vm-av { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: var(--rc, var(--ink-6)); font-weight: 700; letter-spacing: .02em; line-height: 1; }
+.vm-av { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; color: var(--v-bg); background: var(--rc, var(--ink-6)); font-weight: 700; letter-spacing: .02em; line-height: 1; }
 .vm-av-16 { width: 16px; height: 16px; font-size: 6.5px; } .vm-av-20 { width: 20px; height: 20px; font-size: 8px; }
 .vm-av-24 { width: 24px; height: 24px; font-size: 9px; } .vm-av-28 { width: 28px; height: 28px; font-size: 10px; } .vm-av-40 { width: 40px; height: 40px; font-size: 13px; }
 .vm-av-pending { background: transparent; color: var(--ink-6); outline: 1.2px dashed var(--border-4); outline-offset: -1.2px; }
 .vm-ring { box-shadow: 0 0 0 1.5px var(--studio-card), 0 0 0 3px var(--rc); }
 .vm-speaking { animation: vm-breathe 1.6s ease-in-out infinite; }
-.vm-orb { display: inline-block; flex: 0 0 auto; border-radius: 50%; background: radial-gradient(circle at 50% 50%, var(--ask) 0, var(--ask) 34%, color-mix(in srgb, var(--ask) 22%, transparent) 36%, color-mix(in srgb, var(--ask) 22%, transparent) 60%, transparent 62%); }
+.vm-orb { display: inline-block; flex: 0 0 auto; border-radius: 50%; background: radial-gradient(circle, var(--v-info) 0 31%, transparent 34%); box-shadow: inset 0 0 0 1.25px var(--v-info-line); }
 .vm-avstack { display: inline-flex; align-items: center; }
 .vm-avstack > * + * { margin-left: -5px; }
 .vm-avstack > .vm-av:not(.vm-ring) { box-shadow: 0 0 0 1.5px var(--studio-card); }
@@ -46,13 +46,14 @@
 .vm-btn:hover { background: var(--fill-3); color: var(--ink-bright); }
 .vm-btn:active { transform: scale(.98); }
 .vm-btn:disabled { opacity: .4; pointer-events: none; }
-.vm-btn:focus-visible, .vm-icon-btn:focus-visible, .vm-link-btn:focus-visible, .vm-menu-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: 2px; }
+.vm-btn:focus-visible, .vm-icon-btn:focus-visible, .vm-link-btn:focus-visible, .vm-menu-btn:focus-visible { outline: 2px solid var(--v-focus); outline-offset: 2px; }
 .vm-btn-primary { background: var(--ink-bright); color: var(--pane); font-weight: 600; }
 .vm-btn-primary:hover { background: var(--ink-2); color: var(--pane); }
 .vm-btn-ghost { background: transparent; color: var(--ink-6); }
 .vm-btn-ghost:hover { background: var(--hover-strong); color: var(--ink-2); }
-.vm-btn-danger { background: var(--bad); color: #fff; font-weight: 600; }
-.vm-btn-danger:hover { background: color-mix(in srgb, var(--bad) 88%, #000); color: #fff; }
+/* Destructive confirmation: oxide, as Pass 1's danger button; white on oxide fails contrast in dark. */
+.vm-btn-danger { background: transparent; color: var(--v-fault-fg); font-weight: 600; box-shadow: inset 0 0 0 1px var(--v-fault-line); }
+.vm-btn-danger:hover { background: var(--v-fault-wash); color: var(--v-fault-fg); box-shadow: inset 0 0 0 1px var(--v-fault); }
 .vm-btn-danger-text { color: var(--bad); }
 .vm-btn-danger-text:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .vm-btn-small { height: 24px; padding: 0 9px; border-radius: 6px; font-size: 11.5px; }
@@ -214,17 +215,18 @@
 .vm-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform 180ms var(--ease); }
 .vm-switch:checked { background: var(--good); }
 .vm-switch:checked::after { transform: translateX(12px); }
-.vm-switch:focus-visible { outline: 2px solid color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: 2px; }
+.vm-switch:focus-visible { outline: 2px solid var(--v-focus); outline-offset: 2px; }
 
 /* ---- Invite landing (the gate) */
 .vm-gate { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--studio-field); }
 .vm-gate::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(var(--border) 1px, transparent 1.2px); background-size: 22px 22px; -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, #000 20%, transparent 75%); mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, #000 20%, transparent 75%); opacity: .7; }
-.vm-gate-glow { position: absolute; left: 50%; top: 46%; width: 760px; height: 520px; transform: translate(-50%, -50%); background: radial-gradient(closest-side, color-mix(in srgb, var(--ask) 12%, transparent), transparent); pointer-events: none; }
-.vm-gate-card { position: relative; width: 400px; max-width: calc(100% - 32px); display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 28px 28px 22px; border-radius: 18px; background: var(--studio-card); box-shadow: inset 0 0 0 1px var(--studio-card-edge), 0 2px 4px rgba(18, 22, 30, .05), 0 30px 60px rgba(18, 22, 30, .12); text-align: center; animation: vm-pop 360ms var(--ease) both; }
+/* Pass 1: no glows. */
+.vm-gate-glow { display: none; }
+.vm-gate-card { position: relative; width: 400px; max-width: calc(100% - 32px); display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 28px 28px 22px; border-radius: 18px; background: var(--studio-card); box-shadow: inset 0 0 0 1px var(--studio-card-edge), var(--v-shadow-3); text-align: center; animation: vm-pop 360ms var(--ease) both; }
 .vm-gate-quiet { gap: 10px; }
 .vm-gate-head { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .vm-gate-from { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-6); }
-.vm-gate-room { margin: 0; font-size: 26px; line-height: 1.12; font-weight: 700; letter-spacing: -.028em; color: var(--ink-bright); }
+.vm-gate-room { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 32px; line-height: 1.05; letter-spacing: -.016em; color: var(--ink-bright); }
 .vm-gate-role { font-size: 12px; color: var(--ink-7); }
 .vm-gate-role b { font-weight: 600; color: var(--ink-3); }
 .vm-gate-title { margin: 4px 0 0; font-size: 18px; line-height: 1.25; font-weight: 700; letter-spacing: -.016em; color: var(--ink-bright); }

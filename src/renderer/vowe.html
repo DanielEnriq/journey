@@ -8,7 +8,12 @@
     />
     <meta name="color-scheme" content="dark light" />
     <title>Vowe</title>
-    <link rel="stylesheet" href="fonts/fonts.css" />
+    <!-- Pass 1 · Ink, Paper & Signal: fonts → tokens → components → sign-in, then the window's bridge and shell. -->
+    <link rel="stylesheet" href="ui/styles/fonts.css" />
+    <link rel="stylesheet" href="ui/styles/tokens.css" />
+    <link rel="stylesheet" href="ui/styles/components.css" />
+    <link rel="stylesheet" href="ui/styles/signin.css" />
+    <link rel="stylesheet" href="shared/theme/bridge.css" />
     <link rel="stylesheet" href="shared/theme/shell.css" />
     <link rel="stylesheet" href="features/room/room.css" />
     <link rel="stylesheet" href="features/room/panel/room-panel.css" />
@@ -18,7 +23,7 @@
     <link rel="stylesheet" href="app.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app" class="v-root"></div>
     <script type="module" src="app.js"></script>
   </body>
 </html>
