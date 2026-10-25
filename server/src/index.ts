@@ -5,6 +5,7 @@
 //   POST /livekit/token         { roomId } → 200 { url, token }               see livekit.ts
 //   POST /livekit/sync          { roomId, userId } → 200 { applied }          owners only; see livekit.ts
 //   POST /elevenlabs/signed-url            → 200 { signedUrl }                see elevenlabs.ts
+//   POST /vowe/token, /vowe/speech-token, /vowe/speech                         see vowe-voice.ts
 //
 // Authenticated routes take the caller's Supabase session as `Authorization: Bearer <jwt>`.
 // Binds 0.0.0.0:$PORT (App Platform sets PORT; 8080 locally).
@@ -13,6 +14,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { isElevenLabsConfigured, signedUrl } from './elevenlabs.js';
 import { HttpError, authenticate } from './http.js';
 import { isLiveKitConfigured, issueToken, syncParticipant } from './livekit.js';
+import { issueSpeechToken, issueVoweToken, speak } from './vowe-voice.js';
 
 type Handler = (req: IncomingMessage) => Promise<object>;
 
@@ -24,6 +26,13 @@ const routes: Record<string, Handler> = {
     await authenticate(req);
     return { signedUrl: await signedUrl() };
   },
+  'POST /vowe/token': async (req) => issueVoweToken(await authenticate(req), await readJson(req)),
+  'POST /vowe/speech-token': async (req) => issueSpeechToken(await authenticate(req), await readJson(req)),
+};
+
+/** Routes that answer with a stream rather than JSON. */
+const streams: Record<string, (req: IncomingMessage, res: ServerResponse) => Promise<void>> = {
+  'POST /vowe/speech': async (req, res) => speak(await authenticate(req), await readJson(req), res),
 };
 
 const MAX_BODY = 16 * 1024;
@@ -49,10 +58,13 @@ function reply(res: ServerResponse, status: number, body: object) {
 const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   const handler = routes[`${req.method} ${path}`];
-  if (!handler) return reply(res, 404, { error: 'Not found' });
+  const stream = streams[`${req.method} ${path}`];
+  if (!handler && !stream) return reply(res, 404, { error: 'Not found' });
   try {
+    if (stream) return await stream(req, res);
     reply(res, 200, await handler(req));
   } catch (err) {
+    if (res.headersSent) return void res.destroy();
     if (err instanceof HttpError) return reply(res, err.status, { error: err.message });
     console.error(`[api] ${req.method} ${path} failed:`, err);
     reply(res, 500, { error: 'Internal error' });

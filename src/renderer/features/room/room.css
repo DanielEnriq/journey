@@ -227,6 +227,10 @@
   .pin{position:absolute;left:0;top:0;z-index:9;display:flex;align-items:flex-start;gap:6px}
   .pin .head{width:20px;height:20px;border-radius:10px 10px 10px 2px;background:var(--me);color:var(--pane);font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
   .pin input{width:180px;height:28px;box-sizing:border-box;padding:0 9px;border:0;border-radius:7px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);color:var(--ink);font:inherit;font-size:12px;outline:none}
+  .pin-x{flex:0 0 auto;width:20px;height:20px;border:0;border-radius:6px;background:var(--menu);box-shadow:0 0 0 1px var(--border);color:var(--ink-7);font:inherit;font-size:13px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+  .pin-x:hover{color:var(--ink);background:var(--hover-strong)}
+  .pin.saved .pin-x{opacity:0;transition:opacity 120ms}
+  .pin.saved:hover .pin-x,.pin.saved:focus-within .pin-x{opacity:1}
   .cursor{position:absolute;left:0;top:0;z-index:7;pointer-events:none;transition:transform 900ms var(--studio-ease)}
   .cursor .label{position:absolute;left:14px;top:16px;padding:1px 6px;border-radius:5px;background:var(--peer);color:#fff;font-size:10.5px;font-weight:500;white-space:nowrap}
   .cursor.p2 .label{background:var(--peer2)}
@@ -299,6 +303,18 @@
   .spk{flex:0 0 auto;font-size:11px;font-weight:600;color:var(--ink-7);padding-top:2px}
   .words{display:flex;flex-wrap:wrap;column-gap:.27em;min-width:0}
   .wd{animation:wordin 200ms ease both}
+  /* Asking Vowe by text takes over the captions panel while open. */
+  .ask-vowe{gap:5px;max-height:32%;overflow-y:auto}
+  .ask-vowe .prevline{white-space:normal;-webkit-mask-image:none;mask-image:none}
+  .ask-vowe .words{display:block;white-space:pre-wrap;flex:1 1 auto}
+  .ask-vowe .cut{flex:0 0 auto;font-size:11.5px;color:var(--ink-8)}
+  .ask-vowe .acts{display:flex;gap:6px;flex:0 0 auto}
+  .ask-vowe form.curline{align-items:center;margin-top:2px}
+  .ask-field{flex:1 1 auto;min-width:0}
+  .ask-field input{width:100%;height:28px;box-sizing:border-box;padding:0 9px;border:0;border-radius:7px;background:var(--menu);box-shadow:0 0 0 1px var(--border);color:var(--ink);font:inherit;font-size:12.5px;outline:none}
+  .ask-field input:focus{box-shadow:0 0 0 1px var(--border),0 0 0 3px var(--hairline)}
+  .ask-field input:disabled{opacity:.6}
+  .ask-field .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   @keyframes wordin{from{opacity:0}to{opacity:1}}
   .wd.ref{color:var(--ask);text-decoration:underline dotted 1px;text-underline-offset:3px}
   .wd.chipref{display:inline-flex;align-items:center;gap:5px;padding:0 6px;border-radius:5px;background:color-mix(in srgb,var(--me) 13%,transparent);color:var(--me);font-weight:500}
@@ -409,6 +425,8 @@
   /* ---- Cursors you can't see wait on the edge, pointing toward their person. */
   .edge{position:absolute;left:0;top:0;z-index:9;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px 0 7px;border:0;border-radius:12px;background:var(--peer);color:#fff;font-size:11px;font-weight:600;box-shadow:var(--studio-shadow);transition:transform 200ms var(--studio-ease);animation:rise 240ms var(--studio-ease) both}
   .edge.p2{background:var(--peer2)}
+  /* A real person's cursor follows their pointer, not the demo's scripted glide. */
+  .cursor.live{transition:transform 120ms linear}
   .edge svg{flex:0 0 12px}
   .edge:hover{filter:brightness(1.08)}
   .pin .head.peer{background:var(--peer)}

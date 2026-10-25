@@ -12,7 +12,12 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "typecheck": "tsc -p . --noEmit",
     "test:calls": "pnpm build && pnpm api:build && node scripts/call-e2e/run.mjs",
+    "eval:agent": "pnpm build && node scripts/agent-eval/run.mjs",
+    "canvas:validate": "node scripts/agent-eval/validate-command.mjs",
+    "contracts:write": "pnpm build && node scripts/agent-eval/schemas.mjs",
     "test": "tsc -p . && node scripts/copy-renderer-assets.mjs && node --test \"dist/**/*.test.js\"",
+    "test:voice": "pnpm build && pnpm api:build && node scripts/voice-e2e/run.mjs",
+    "test:speech": "tsc -p . && node scripts/voice-e2e/speech-smoke.mjs",
     "db:generate": "drizzle-kit generate",
     "cloud:push": "supabase db push --linked",
     "cloud:types": "supabase gen types typescript --linked --schema public > src/integrations/supabase/types.ts",
@@ -35,6 +40,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.310",
     "@anthropic-ai/sdk": "^1.3.0",
     "@fontsource/jetbrains-mono": "5.3.0",
+    "@livekit/rtc-node": "1.1.0",
     "@supabase/supabase-js": "2.118.0",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "0.45.4",
@@ -49,6 +55,7 @@
     "@types/node": "^26.6.5",
     "drizzle-kit": "0.31.11",
     "electron": "^45.0.0",
+    "livekit-server-sdk": "2.19.1",
     "supabase": "2.122.0",
     "typescript": "^7.0.2"
   }

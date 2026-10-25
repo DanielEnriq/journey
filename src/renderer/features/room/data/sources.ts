@@ -1,3 +1,4 @@
+import type { Scene } from '../../../../shared/canvas/index.js';
 import type {
   AgentTarget, BoundDef, ChangedFile, Decision, LabelDef, Note, PartDef, Person, PersonId, PersonRef, RoomSummary, StepDef,
   ViewDef, ViewId, WireDef, Workstream,
@@ -39,7 +40,7 @@ export interface RoomPreview {
   /** What waits on a person: a signature, an agent's question. Each is amber. */
   attention: { id: string; text: string; detail: string; streamId?: string }[];
   /** The view last shared on the call, if anything has been drawn here. */
-  lastView: { name: string; question: string; at: string; by: PersonRef | null } | null;
+  lastView: { name: string; question: string; at: string; by: PersonRef | null; /** A real room's view, laid out from its saved canvas. */ scene?: Scene } | null;
 }
 
 /** Rooms and the people in them. Real: Supabase rooms plus Realtime presence. */
@@ -213,7 +214,8 @@ export interface RoomSources {
 
 /* ---------- A room's record in its call: threads, replies, the decision. ---------- */
 
-export interface RoomPin { threadId: string; x: number; y: number; body: string; author: PersonRef }
+/** A comment on the canvas: where it sits (stage units), and the anchor its thread stacks under in the panel. */
+export interface RoomPin { threadId: string; anchor: string; x: number; y: number; body: string; author: PersonRef }
 
 /** The record as the call shows it: the right column's panel, and the comments pinned on the canvas. */
 export interface RoomRecordView {
@@ -227,9 +229,12 @@ export interface RoomRecordView {
 export interface RoomRecordSource {
   load(roomId: string): Promise<RoomRecordView>;
   subscribe(roomId: string, listener: () => void): () => void;
-  /** A comment pinned to a point on the canvas starts a thread. */
-  pin(roomId: string, at: { x: number; y: number }, body: string): Promise<void>;
-  reply(roomId: string, threadId: string, body: string): Promise<void>;
+  /** A comment pinned to a point on the canvas (or on a part there) starts a thread; resolves to its id. */
+  pin(roomId: string, at: { x: number; y: number }, body: string, on?: { component: string; name: string } | null): Promise<string>;
+  /** Takes a comment off the canvas: its thread is resolved, and stays in the room's history. */
+  resolve(roomId: string, threadId: string): Promise<void>;
+  /** `vowe`: Vowe's feedback, from this person's app on their model; the panel shows it as Vowe's. */
+  reply(roomId: string, threadId: string, body: string, as?: 'vowe'): Promise<void>;
   sign(roomId: string, decisionId: string, version: number): Promise<void>;
   propose(roomId: string, decision: { title: string; verify: string }): Promise<void>;
   amend(roomId: string, decisionId: string, change: { title: string; verify: string }): Promise<void>;

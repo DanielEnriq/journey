@@ -6,7 +6,14 @@
  * expose it in preload/index.cts + `JourneyApi`. The compiler checks all three agree.
  */
 
+import type { CanvasCommand, CanvasSnapshot } from '../assistant/canvas.js';
+import type { Grounding } from '../assistant/evidence.js';
+import type { ModelBilling, ModelProviderErrorCode } from '../assistant/provider.js';
 import type { Tables } from '../integrations/supabase/types.js';
+import type { CanvasChanged, CanvasDocument, CanvasPresence, CommandResult } from './canvas/index.js';
+import type { HeardSpeech, VoiceStatus } from '../voice/index.js';
+
+export type { CanvasCommand, CanvasSnapshot, Grounding };
 
 export interface User {
   id: string;
@@ -339,6 +346,24 @@ export interface SessionMessages {
   activity: ClaudeCodeEvent[];
 }
 
+/** Lines of tracked files that matched a code search. */
+export interface CodeSearch {
+  /** The worktree searched. */
+  root: string;
+  matches: { path: string; line: number; text: string }[];
+  omitted: number;
+}
+
+/** Some lines of one tracked file, each prefixed with its number. */
+export interface CodeExcerpt {
+  /** Relative to the worktree. */
+  path: string;
+  from: number;
+  to: number;
+  totalLines: number;
+  text: string;
+}
+
 /** Everything known about the work in one repository, in one object. */
 export interface WorkContext {
   generatedAt: string;
@@ -392,11 +417,119 @@ export interface AgentReply {
 }
 
 export interface AgentStatus {
+  /** The provider the next turn would use, e.g. "ChatGPT". */
   provider: string;
+  providerId: string;
+  /** Who pays: the person's ChatGPT plan, or an API key on this machine. */
+  billing: ModelBilling;
   model: string;
   /** Whether credentials appear to be set; a request can still fail on them. */
   configured: boolean;
+  chatgpt: ChatGptStatus;
 }
+
+// ─── Sign in with ChatGPT ────────────────────────────────────────────────────
+// Separate from Google sign-in (which is who you are in rooms): this lets Vowe's agent use your
+// ChatGPT plan for its requests. Tokens stay in main (integrations/openai/chatgpt.ts).
+
+export interface ChatGptStatus {
+  /** Whether this build offers ChatGPT plan usage at all (its eligibility gate). */
+  enabled: boolean;
+  /** The active account, signed in or not. */
+  account: { clientId: string; email: string | null; label: string } | null;
+  signedIn: boolean;
+  /** Whether plan usage was granted at sign-in; null with no account. */
+  planUsage: 'granted' | 'not-granted' | null;
+  /** Show "You're using your ChatGPT plan" once; dismissWelcome() after "Got it". */
+  welcome: boolean;
+  /** Why the account needs to sign in again, in words. */
+  problem: string | null;
+  savedAccounts: { clientId: string; label: string; signedIn: boolean }[];
+  /** ChatGPT settings → Usage, for "Manage usage". */
+  usageUrl: string;
+}
+
+// ─── Vowe in a room ──────────────────────────────────────────────────────────
+// One runtime for typed questions and, later, the call's voice participant (src/assistant/voice.ts).
+// It runs on the asking person's machine, with their model sign-in and their local context; see
+// src/assistant/INTEGRATION.md.
+
+/** A question to Vowe from someone in a room. */
+export interface RoomAgentTurn {
+  roomId: string;
+  /** The cloud user asking. Must be the person signed in on this machine. */
+  participant: { userId: string; name: string | null };
+  question: string;
+  /** What was said before, oldest first, for context (a few turns). */
+  recentTurns: { speaker: string; text: string; at?: string }[];
+  /** What the asker's canvas shows, including what they selected or circled. */
+  canvas: CanvasSnapshot;
+  /** Continues an earlier turn's conversation; null or absent starts one. */
+  conversationId?: string | null;
+  source: 'text' | 'voice';
+}
+
+export interface AgentError {
+  code: ModelProviderErrorCode | 'not-authorized' | 'busy' | 'invalid-turn';
+  message: string;
+  retryable: boolean;
+  /** For usage limits: ChatGPT settings → Usage. */
+  manageUrl?: string;
+  /** OpenAI's or Anthropic's own code and request id, for diagnosis. */
+  providerCode?: string;
+  requestId?: string;
+}
+
+export interface AgentProviderInfo {
+  id: string;
+  name: string;
+  billing: ModelBilling;
+  model: string;
+}
+
+export interface RoomAgentReply {
+  turnId: string;
+  conversationId: string;
+  roomId: string;
+  text: string;
+  stop: AgentReply['stop'] | 'cancelled' | 'failed';
+  /** The claims behind the answer, checked against what the tools returned. */
+  grounding: Grounding;
+  /** The same, as it may be shown to the room: local excerpts and session ids removed (groundingForRoom). Post this one. */
+  roomGrounding: Grounding;
+  /** Validated canvas requests, in the order they were made. */
+  commands: CanvasCommand[];
+  toolCalls: AgentToolCall[];
+  /** What the question was resolved against. */
+  focus: { how: 'circled' | 'selected' | 'none'; componentIds: string[] };
+  provider: AgentProviderInfo;
+  /** The model that wrote the answer. */
+  model: string | null;
+  error?: AgentError;
+}
+
+/** Everything a turn does, in order. A turn ends with exactly one of completed, cancelled, or error. */
+export type AgentEvent =
+  | { type: 'turn.started'; turnId: string; conversationId: string; roomId: string; provider: AgentProviderInfo }
+  /** Partial answer text. `step` counts model calls; text before a tool call is Vowe thinking aloud. */
+  | { type: 'text.delta'; turnId: string; step: number; delta: string }
+  /** The answer's full text, once known. */
+  | { type: 'text.final'; turnId: string; text: string }
+  | { type: 'tool.started'; turnId: string; call: { id: string; name: string; input: unknown } }
+  | { type: 'tool.finished'; turnId: string; call: AgentToolCall; evidence: string[] }
+  | { type: 'approval.requested'; turnId: string; request: AgentApprovalRequest }
+  | { type: 'canvas.command'; turnId: string; command: CanvasCommand }
+  /** A canvas request the runtime refused to emit, and why (the model is told too). */
+  | { type: 'canvas.rejected'; turnId: string; tool: string; errors: string[] }
+  /**
+   * What the room's canvas did with validated requests (`requests` are their ids): run, landed as a proposal
+   * waiting on a person, or declined, and why. Structural requests become one proposal when the turn has
+   * answered, so these can follow `text.final`; they always come before the turn's ending event.
+   */
+  | { type: 'canvas.applied'; turnId: string; requests: string[]; result: CommandResult }
+  | { type: 'turn.completed'; turnId: string; reply: RoomAgentReply }
+  | { type: 'turn.cancelled'; turnId: string; reason: 'interrupted' | 'cancelled'; reply: RoomAgentReply }
+  | { type: 'turn.failed'; turnId: string; error: AgentError; reply: RoomAgentReply };
 
 // ─── Cloud ───────────────────────────────────────────────────────────────────
 // Cloud ids (created_by, Participant.userId, RoomEvent.senderId) are Supabase user ids,
@@ -575,9 +708,26 @@ export interface RoomEvents {
    * about tear down at once rather than on their next read.
    */
   'members:changed': { what: 'joined' | 'left' | 'removed' | 'role' | 'invitation'; userId: string | null };
+  /** Someone saved the room's canvas; members re-read it (canvas:load). Carries no content. */
+  'canvas:changed': CanvasChanged;
+  /** Where someone is on the canvas: their view, pen and selection. Never saved; cameras aren't shared. */
+  'canvas:presence': CanvasPresence;
 }
 
 export type RoomEventType = keyof RoomEvents;
+
+/** A room's canvas as saved: its semantic document (src/shared/canvas) and how many saves it has had. */
+export interface RoomCanvas {
+  roomId: string;
+  revision: number;
+  doc: CanvasDocument;
+}
+
+/** What running a canvas command did, and the canvas it left (unchanged if it failed). */
+export interface CanvasExecuted {
+  result: CommandResult;
+  canvas: RoomCanvas;
+}
 
 /** A room event as delivered: `type` narrows `payload`. */
 export type RoomEvent<K extends RoomEventType = RoomEventType> = {
@@ -619,6 +769,8 @@ export interface RoomComment {
   id: string;
   body: string;
   author: RoomAuthor;
+  /** `agent`: Vowe wrote it, from `author`'s app on their model. */
+  authorKind: 'human' | 'agent';
   createdAt: string;
 }
 
@@ -781,6 +933,14 @@ export type InviteKey = { token: string } | { invitationId: string };
 /** The OS-level microphone permission. `denied`/`restricted` mean the user must change it in system settings. */
 export type MicrophoneAccess = 'granted' | 'denied' | 'restricted';
 
+// ─── Vowe's voice ────────────────────────────────────────────────────────────
+// The speech half of the runtime's VoiceAdapter (renderer/shared/vowe-voice.ts): your Vowe's voice in
+// the call you're in, as its own participant `vowe:<your user id>`, and your microphone heard as
+// HumanSpeech. Audio, speech providers and credentials stay in main and the Vowe API. See
+// src/voice/INTEGRATION.md.
+
+export type { HeardSpeech, VoiceStatus } from '../voice/index.js';
+
 /**
  * IPC channel names. `invoke` channels are request/response handled by main
  * (arguments are untrusted at runtime; handlers must validate them). `event`
@@ -836,7 +996,7 @@ export interface Channels {
     'rooms:checkout': (roomId: string) => RoomResult<RoomCheckout | null>;
     'record:get': (roomId: string) => RoomResult<RoomRecord>;
     'record:addThread': (roomId: string, thread: NewThread) => RoomResult<RoomThread>;
-    'record:reply': (roomId: string, threadId: string, body: string) => RoomResult<RoomComment>;
+    'record:reply': (roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent') => RoomResult<RoomComment>;
     'record:resolve': (roomId: string, threadId: string) => RoomResult<void>;
     'record:propose': (roomId: string, decision: { title: string; verify: string }) => RoomResult<RoomDecision>;
     'record:amend': (roomId: string, decisionId: string, change: { title?: string; verify?: string }) => RoomResult<RoomDecision>;
@@ -852,6 +1012,11 @@ export interface Channels {
     'invites:resolve': (key: InviteKey) => RoomResult<InviteResolution>;
     /** Resolves with the room's id. */
     'invites:accept': (key: InviteKey) => RoomResult<string>;
+    'canvas:load': (roomId: string) => RoomResult<RoomCanvas>;
+    /** Runs a Canvas Command as the signed-in person; the result says if it was refused and why. */
+    'canvas:execute': (roomId: string, command: unknown) => CanvasExecuted;
+    /** Your view, pen and selection: sent to the room's call and kept for Vowe's "this". */
+    'canvas:presence': (roomId: string, presence: CanvasPresence) => void;
     'rooms:join': (roomId: string) => RoomSession;
     'rooms:leave': (roomId: string) => void;
     'rooms:send': <K extends RoomEventType>(roomId: string, type: K, payload: RoomEvents[K]) => RoomEvent<K>;
@@ -868,6 +1033,25 @@ export interface Channels {
     'agent:approve': (approvalId: string, approved: boolean) => void;
     /** Forgets the conversation and declines anything it's waiting on. */
     'agent:reset': (conversationId: string) => void;
+    /** Starts a room turn; its progress arrives as agent:event, and it resolves once it has started. */
+    'agent:ask': (turn: RoomAgentTurn) => { turnId: string };
+    /** Cancels a running turn (an interruption, or the person gave up). */
+    'agent:cancel': (turnId: string) => void;
+    'chatgpt:status': () => ChatGptStatus;
+    /** Opens the browser to sign in: the active (or a saved) account, or 'new' for another one. */
+    'chatgpt:signIn': (account?: string) => ChatGptStatus;
+    /** Revokes and forgets the active account's tokens; `revoked` says whether OpenAI confirmed it. */
+    'chatgpt:signOut': () => { revoked: boolean };
+    'chatgpt:dismissWelcome': () => void;
+    /** Brings your Vowe into the room's call; rejects with a reason to show. */
+    'voice:start': (roomId: string) => VoiceStatus;
+    'voice:stop': () => void;
+    'voice:status': () => VoiceStatus;
+    'voice:audio': (roomId: string, pcm: Uint8Array) => void;
+    'voice:begin': (turnId: string) => void;
+    'voice:say': (turnId: string, text: string) => void;
+    'voice:end': (turnId: string) => void;
+    'voice:cancel': (turnId: string) => void;
   };
   event: {
     'auth:changed': User | null;
@@ -875,8 +1059,15 @@ export interface Channels {
     'rooms:event': RoomEvent;
     'rooms:presence': { roomId: string; participants: Participant[] };
     'rooms:status': { roomId: string; status: RoomStatus };
+    /** A room's canvas changed, here or elsewhere; `result` when this app made the change. */
+    'canvas:changed': RoomCanvas & { result?: CommandResult };
     'agent:approval': AgentApprovalRequest;
     'agent:toolCall': { conversationId: string; call: AgentToolCall };
+    'agent:event': AgentEvent;
+    'chatgpt:changed': ChatGptStatus;
+    'voice:status': VoiceStatus;
+    'voice:speech': { roomId: string; speech: HeardSpeech };
+    'voice:said': { roomId: string; turnId: string; text: string };
   };
 }
 
@@ -1015,7 +1206,7 @@ export interface JourneyApi {
   record: {
     get(roomId: string): Promise<RoomResult<RoomRecord>>;
     addThread(roomId: string, thread: NewThread): Promise<RoomResult<RoomThread>>;
-    reply(roomId: string, threadId: string, body: string): Promise<RoomResult<RoomComment>>;
+    reply(roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent'): Promise<RoomResult<RoomComment>>;
     resolve(roomId: string, threadId: string): Promise<RoomResult<void>>;
     propose(roomId: string, decision: { title: string; verify: string }): Promise<RoomResult<RoomDecision>>;
     amend(roomId: string, decisionId: string, change: { title?: string; verify?: string }): Promise<RoomResult<RoomDecision>>;
@@ -1032,6 +1223,17 @@ export interface JourneyApi {
     /** Opens the system's microphone privacy settings (macOS); does nothing elsewhere. */
     openMicrophoneSettings(): Promise<void>;
   };
+  /**
+   * A room's semantic canvas. Members read it; owners and members change it, one Canvas Command at a
+   * time (src/shared/canvas/commands.ts). Changes made anywhere arrive through onChanged.
+   */
+  canvas: {
+    load(roomId: string): Promise<RoomResult<RoomCanvas>>;
+    execute(roomId: string, command: unknown): Promise<CanvasExecuted>;
+    /** Throttle this: it goes to everyone in the call. Requires having joined the room. */
+    presence(roomId: string, presence: CanvasPresence): Promise<void>;
+    onChanged(listener: (change: RoomCanvas & { result?: CommandResult }) => void): () => void;
+  };
   /** Vowe's collaborator agent: text conversations about the work, through read-only tools. */
   agent: {
     status(): Promise<AgentStatus>;
@@ -1042,5 +1244,37 @@ export interface JourneyApi {
     onApproval(listener: (request: AgentApprovalRequest) => void): () => void;
     /** Each tool call as it finishes, while send() is still pending. */
     onToolCall(listener: (update: { conversationId: string; call: AgentToolCall }) => void): () => void;
+    /** Asks Vowe a question in a room; follow it with onEvent. */
+    ask(turn: RoomAgentTurn): Promise<{ turnId: string }>;
+    cancel(turnId: string): Promise<void>;
+    onEvent(listener: (event: AgentEvent) => void): () => void;
+  };
+  /** Sign in with ChatGPT, so Vowe's agent can use your ChatGPT plan. Separate from Google sign-in. */
+  chatgpt: {
+    status(): Promise<ChatGptStatus>;
+    signIn(account?: string): Promise<ChatGptStatus>;
+    signOut(): Promise<{ revoked: boolean }>;
+    dismissWelcome(): Promise<void>;
+    onChange(listener: (status: ChatGptStatus) => void): () => void;
+  };
+  /** Your Vowe's voice in a room's call. Members only (not viewers); one call at a time. */
+  voice: {
+    /** Brings your Vowe into the room's call, hearing your microphone; rejects with a reason to show. */
+    start(roomId: string): Promise<VoiceStatus>;
+    stop(): Promise<void>;
+    status(): Promise<VoiceStatus>;
+    /** Your microphone while it's on: 16 kHz mono 16-bit PCM, in chunks of at most 1 s. */
+    audio(roomId: string, pcm: Uint8Array): Promise<void>;
+    /** The runtime's VoiceOutput: what your Vowe says for a turn, as it streams. */
+    begin(turnId: string): Promise<void>;
+    say(turnId: string, text: string): Promise<void>;
+    end(turnId: string): Promise<void>;
+    /** Silence now, dropping what's unspoken: interrupted, cancelled or failed. */
+    cancel(turnId: string): Promise<void>;
+    onStatus(listener: (status: VoiceStatus) => void): () => void;
+    /** Your speech, for VoiceAdapter.hear. Not stored anywhere. */
+    onSpeech(listener: (update: { roomId: string; speech: HeardSpeech }) => void): () => void;
+    /** Each sentence your Vowe starts saying, for captions. */
+    onSaid(listener: (update: { roomId: string; turnId: string; text: string }) => void): () => void;
   };
 }

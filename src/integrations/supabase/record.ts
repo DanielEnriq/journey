@@ -113,7 +113,8 @@ export function createRoomRecordService(client: () => Promise<Cloud>) {
       return toThread(data);
     },
 
-    async reply(roomId: string, threadId: string, body: string): Promise<RoomComment> {
+    /** `agent`: Vowe's reply, written from this person's app on their model, saved as theirs and shown as Vowe's. */
+    async reply(roomId: string, threadId: string, body: string, authorKind: 'human' | 'agent' = 'human'): Promise<RoomComment> {
       const room = requireId(roomId, 'Room');
       const thread = requireId(threadId, 'Thread');
       const text = requireText(body, 'Reply', 4000);
@@ -121,7 +122,7 @@ export function createRoomRecordService(client: () => Promise<Cloud>) {
       await requireRoom(supabase, room);
       const { data, error } = await supabase
         .from('room_comments')
-        .insert({ room_id: room, thread_id: thread, body: text })
+        .insert({ room_id: room, thread_id: thread, body: text, ...(authorKind === 'agent' ? { author_kind: 'agent' } : {}) })
         .select(`*, author:users!room_comments_created_by_fkey(${AUTHOR})`)
         .single();
       // The composite key refuses a thread from another room the same way as a missing one.
@@ -221,10 +222,10 @@ function toAuthor(row: AuthorRow): RoomAuthor {
   return row ? { id: row.id, name: row.name, email: row.email } : { id: '', name: null, email: '' };
 }
 
-type CommentRow = { id: string; body: string; created_at: string; author: AuthorRow };
+type CommentRow = { id: string; body: string; created_at: string; author_kind?: string; author: AuthorRow };
 
 function toComment(row: CommentRow): RoomComment {
-  return { id: row.id, body: row.body, author: toAuthor(row.author), createdAt: row.created_at };
+  return { id: row.id, body: row.body, author: toAuthor(row.author), authorKind: row.author_kind === 'agent' ? 'agent' : 'human', createdAt: row.created_at };
 }
 
 type ThreadRow = {

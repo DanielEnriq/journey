@@ -1,0 +1,534 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "v": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "requestedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "evidence": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "visibility": {
+          "type": "string",
+          "const": "room"
+        },
+        "type": {
+          "type": "string",
+          "const": "highlight_component"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "componentIds": {
+              "minItems": 1,
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z][\\w-]{0,63}$"
+              }
+            },
+            "tone": {
+              "type": "string",
+              "enum": [
+                "focus",
+                "risk",
+                "verified"
+              ]
+            }
+          },
+          "required": [
+            "componentIds",
+            "tone"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "v",
+        "id",
+        "roomId",
+        "turnId",
+        "requestedBy",
+        "reason",
+        "evidence",
+        "visibility",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "v": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "requestedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "evidence": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "visibility": {
+          "type": "string",
+          "const": "room"
+        },
+        "type": {
+          "type": "string",
+          "const": "annotate_component"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "componentId": {
+              "type": "string",
+              "pattern": "^[A-Za-z][\\w-]{0,63}$"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "note",
+                "concern",
+                "question",
+                "constraint"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 280
+            }
+          },
+          "required": [
+            "componentId",
+            "kind",
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "v",
+        "id",
+        "roomId",
+        "turnId",
+        "requestedBy",
+        "reason",
+        "evidence",
+        "visibility",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "v": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "requestedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "evidence": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "visibility": {
+          "type": "string",
+          "const": "room"
+        },
+        "type": {
+          "type": "string",
+          "const": "show_view"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "view": {
+              "type": "string",
+              "enum": [
+                "arch",
+                "failure",
+                "alternatives",
+                "concurrency",
+                "impl",
+                "timeout",
+                "ui"
+              ]
+            },
+            "focus": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z][\\w-]{0,63}$"
+              }
+            },
+            "sequence": {
+              "type": "object",
+              "properties": {
+                "actors": {
+                  "minItems": 1,
+                  "maxItems": 6,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z][\\w-]{0,63}$"
+                  }
+                },
+                "steps": {
+                  "minItems": 1,
+                  "maxItems": 12,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "actor": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][\\w-]{0,63}$"
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60
+                      },
+                      "detail": {
+                        "type": "string",
+                        "maxLength": 140
+                      },
+                      "tone": {
+                        "default": "normal",
+                        "type": "string",
+                        "enum": [
+                          "normal",
+                          "crash",
+                          "bad",
+                          "good"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "actor",
+                      "title"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "actors",
+                "steps"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "view"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "v",
+        "id",
+        "roomId",
+        "turnId",
+        "requestedBy",
+        "reason",
+        "evidence",
+        "visibility",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "v": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "requestedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "evidence": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "visibility": {
+          "type": "string",
+          "const": "room"
+        },
+        "type": {
+          "type": "string",
+          "const": "propose_component"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "component": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][\\w-]{0,63}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "service",
+                    "queue",
+                    "external",
+                    "store",
+                    "client",
+                    "code"
+                  ]
+                },
+                "tech": {
+                  "type": "string",
+                  "maxLength": 120
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "near": {
+              "type": "string",
+              "pattern": "^[A-Za-z][\\w-]{0,63}$"
+            }
+          },
+          "required": [
+            "component"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "v",
+        "id",
+        "roomId",
+        "turnId",
+        "requestedBy",
+        "reason",
+        "evidence",
+        "visibility",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "v": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "requestedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "evidence": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "visibility": {
+          "type": "string",
+          "const": "room"
+        },
+        "type": {
+          "type": "string",
+          "const": "connect_components"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "pattern": "^[A-Za-z][\\w-]{0,63}$"
+            },
+            "to": {
+              "type": "string",
+              "pattern": "^[A-Za-z][\\w-]{0,63}$"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "from",
+            "to",
+            "label"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "v",
+        "id",
+        "roomId",
+        "turnId",
+        "requestedBy",
+        "reason",
+        "evidence",
+        "visibility",
+        "type",
+        "payload"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

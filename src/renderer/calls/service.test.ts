@@ -13,6 +13,7 @@ class FakeParticipant {
   connectionQuality = 'excellent';
   metadata = JSON.stringify({ avatarUrl: 'https://example.com/a.png' });
   mic: { isMuted: boolean } | undefined;
+  attributes: Record<string, string> = {};
   constructor(
     readonly identity: string,
     readonly name: string,
@@ -125,7 +126,7 @@ describe('CallService', () => {
     assert.deepEqual(room().localParticipant.micCalls, []);
     assert.deepEqual(log, [`access ${ROOM}`]);
     assert.deepEqual(service.snapshot.participants, [
-      { identity: 'me', name: 'Me', avatarUrl: 'https://example.com/a.png', isLocal: true, isSpeaking: false, isMuted: true, connection: 'excellent' },
+      { identity: 'me', name: 'Me', avatarUrl: 'https://example.com/a.png', isLocal: true, isSpeaking: false, isMuted: true, connection: 'excellent', voweState: null },
     ]);
   });
 
@@ -183,8 +184,14 @@ describe('CallService', () => {
       ['me', 'ana'],
     );
     assert.equal(events[0].type, 'participant-joined');
+    // Someone's Vowe is a participant too, with what it's doing in its `state` attribute.
+    const vowe = room().addRemote('vowe:ana', 'Vowe (for Ana)');
+    vowe.attributes = { kind: 'vowe', speaksFor: 'ana', state: 'speaking' };
+    room().emit(RoomEvent.ParticipantAttributesChanged, {}, vowe);
+    assert.deepEqual(service.snapshot.participants.map((p) => [p.identity, p.voweState]), [['me', null], ['ana', null], ['vowe:ana', 'speaking']]);
+    room().removeRemote('vowe:ana');
     room().removeRemote('ana');
-    assert.deepEqual(events[1], { type: 'participant-left', identity: 'ana', name: 'Ana' });
+    assert.deepEqual(events.at(-1), { type: 'participant-left', identity: 'ana', name: 'Ana' });
     assert.deepEqual(
       service.snapshot.participants.map((p) => p.identity),
       ['me'],

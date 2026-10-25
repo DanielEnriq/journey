@@ -1,10 +1,10 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-const SUCCESS_HTML = `<!doctype html><meta charset="utf-8"><title>Signed in</title>
-<body style="font-family:system-ui;padding:3rem">You're signed in. You can close this tab and return to Journey.</body>`;
-const FAILURE_HTML = `<!doctype html><meta charset="utf-8"><title>Sign-in failed</title>
-<body style="font-family:system-ui;padding:3rem">Sign-in failed. You can close this tab and try again.</body>`;
+const page = (title: string, body: string) =>
+  `<!doctype html><meta charset="utf-8"><title>${title}</title><body style="font-family:system-ui;padding:3rem">${body}</body>`;
+const SUCCESS_HTML = page('Signed in', "You're signed in. You can close this tab and return to Vowe.");
+const FAILURE_HTML = page('Sign-in failed', 'Sign-in failed. You can close this tab and try again.');
 
 export interface LoopbackListener {
   redirectUri: string;
@@ -13,32 +13,40 @@ export interface LoopbackListener {
   close(): void;
 }
 
+export interface CallbackListener {
+  redirectUri: string;
+  /**
+   * Every query parameter of the redirect whose `state` matched; an OAuth `error` arrives here too,
+   * for the caller to handle. Rejects on a state mismatch or timeout.
+   */
+  params: Promise<URLSearchParams>;
+  close(): void;
+}
+
 /**
- * Starts a one-shot HTTP server on an ephemeral 127.0.0.1 port to receive the
- * OAuth redirect (RFC 8252 loopback flow).
+ * Starts a one-shot HTTP server on an ephemeral 127.0.0.1 port to receive an OAuth redirect
+ * (RFC 8252 loopback flow) at `path`. Start it before opening the browser.
  */
-export async function listenForRedirect(expectedState: string, timeoutMs = 5 * 60_000): Promise<LoopbackListener> {
-  let resolve!: (code: string) => void;
+export async function listenForCallback(
+  expectedState: string,
+  { path = '/callback', provider = 'the provider', timeoutMs = 5 * 60_000 }: { path?: string; provider?: string; timeoutMs?: number } = {},
+): Promise<CallbackListener> {
+  let resolve!: (params: URLSearchParams) => void;
   let reject!: (err: Error) => void;
-  const code = new Promise<string>((res, rej) => ((resolve = res), (reject = rej)));
+  const params = new Promise<URLSearchParams>((res, rej) => ((resolve = res), (reject = rej)));
 
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    if (url.pathname !== '/callback') {
+    if (url.pathname !== path) {
       res.writeHead(404).end();
       return;
     }
-    const error = url.searchParams.get('error');
-    const authCode = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-
-    const ok = !error && authCode && state === expectedState;
+    const matched = url.searchParams.get('state') === expectedState;
+    const ok = matched && !url.searchParams.get('error') && Boolean(url.searchParams.get('code'));
     res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8' }).end(ok ? SUCCESS_HTML : FAILURE_HTML);
-
-    if (error) reject(new Error(`Google returned error: ${error}`));
-    else if (state !== expectedState) reject(new Error('OAuth state mismatch'));
-    else if (!authCode) reject(new Error('No authorization code in redirect'));
-    else resolve(authCode);
+    // A redirect with the wrong state isn't ours to act on, not even its error.
+    if (!matched) reject(new Error('OAuth state mismatch'));
+    else resolve(url.searchParams);
   });
 
   await new Promise<void>((res, rej) => {
@@ -46,14 +54,27 @@ export async function listenForRedirect(expectedState: string, timeoutMs = 5 * 6
     server.listen(0, '127.0.0.1', res);
   });
 
-  const timer = setTimeout(() => reject(new Error('Timed out waiting for Google sign-in')), timeoutMs);
+  const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${provider} sign-in`)), timeoutMs);
   const close = () => {
     clearTimeout(timer);
     server.close();
     server.closeAllConnections();
   };
-  code.then(close, close);
+  params.then(close, close);
 
   const { port } = server.address() as AddressInfo;
-  return { redirectUri: `http://127.0.0.1:${port}/callback`, code, close };
+  return { redirectUri: `http://127.0.0.1:${port}${path}`, params, close };
+}
+
+/** Google's redirect: resolves with just the authorization code. */
+export async function listenForRedirect(expectedState: string, timeoutMs = 5 * 60_000): Promise<LoopbackListener> {
+  const listener = await listenForCallback(expectedState, { provider: 'Google', timeoutMs });
+  const code = listener.params.then((params) => {
+    const error = params.get('error');
+    if (error) throw new Error(`Google returned error: ${error}`);
+    const authCode = params.get('code');
+    if (!authCode) throw new Error('No authorization code in redirect');
+    return authCode;
+  });
+  return { redirectUri: listener.redirectUri, code, close: listener.close };
 }

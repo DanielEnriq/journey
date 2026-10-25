@@ -36,6 +36,8 @@ export interface CallParticipant {
   isMuted: boolean;
   /** `lost` while their connection is down; LiveKit drops them from the call if it doesn't come back. */
   connection: `${ConnectionQuality}`;
+  /** Someone's Vowe (`vowe:<their id>`): what it's doing, from its `state` attribute. Null for people. */
+  voweState: 'listening' | 'thinking' | 'speaking' | null;
 }
 
 /**
@@ -222,6 +224,11 @@ export class CallService {
   }
 
   /** Resumes playback the browser blocked. Must run from a user gesture. */
+  /** Your published microphone track while it's on, else null. Never opens one. */
+  microphoneTrack(): MediaStreamTrack | null {
+    return this.room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ?? null;
+  }
+
   async startAudio(): Promise<void> {
     await this.room?.startAudio();
     this.update();
@@ -241,6 +248,7 @@ export class CallService {
       .on(RoomEvent.LocalTrackPublished, refresh)
       .on(RoomEvent.LocalTrackUnpublished, refresh)
       .on(RoomEvent.ParticipantNameChanged, refresh)
+      .on(RoomEvent.ParticipantAttributesChanged, refresh)
       .on(RoomEvent.AudioPlaybackStatusChanged, refresh)
       .on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
         if (!live()) return;
@@ -333,6 +341,12 @@ export class CallService {
   }
 }
 
+function voweState(p: Participant): CallParticipant['voweState'] {
+  if (!p.identity.startsWith('vowe:')) return null;
+  const s = p.attributes?.state;
+  return s === 'thinking' || s === 'speaking' ? s : 'listening';
+}
+
 function isSending(p: Participant): boolean {
   const microphone = p.getTrackPublication(Track.Source.Microphone);
   return Boolean(microphone && !microphone.isMuted);
@@ -347,6 +361,7 @@ function describe(p: Participant): CallParticipant {
     isSpeaking: p.isSpeaking,
     isMuted: !isSending(p),
     connection: p.connectionQuality,
+    voweState: voweState(p),
   };
 }
 

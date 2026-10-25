@@ -90,12 +90,19 @@ describe('room record (local Supabase)', integration, () => {
 
     const reply = await bob.record.reply(roomId, thread.id, 'Confirmed in the logs.');
     assert.equal(reply.author.id, bob.id);
+    assert.equal(reply.authorKind, 'human');
+    // Vowe's feedback, from Alice's app on her model: saved as hers, shown as Vowe's.
+    const vowe = await alice.record.reply(roomId, thread.id, 'An idempotency key on the charge would cover it.', 'agent');
+    assert.deepEqual([vowe.author.id, vowe.authorKind], [alice.id, 'agent']);
 
     // A fresh read, as after reopening the room.
     const record = await alice.record.getRecord(roomId);
     const read = record.threads.find((t) => t.id === thread.id)!;
-    assert.deepEqual(read.replies.map((r) => [r.body, r.author.name]), [['Confirmed in the logs.', 'Bob']]);
-    assert.deepEqual(record.activity.slice(0, 2).map((a) => [a.kind, a.actor?.id]), [['reply', bob.id], ['thread', alice.id]]);
+    assert.deepEqual(read.replies.map((r) => [r.body, r.author.name, r.authorKind]), [
+      ['Confirmed in the logs.', 'Bob', 'human'],
+      ['An idempotency key on the charge would cover it.', 'Alice', 'agent'],
+    ]);
+    assert.deepEqual(record.activity.slice(0, 3).map((a) => [a.kind, a.actor?.id]), [['reply', alice.id], ['reply', bob.id], ['thread', alice.id]]);
 
     await bob.record.resolve(roomId, thread.id);
     assert.ok(!(await alice.record.getRecord(roomId)).threads.some((t) => t.id === thread.id));

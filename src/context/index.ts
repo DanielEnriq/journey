@@ -18,9 +18,11 @@ import type { ClaudeCodeAdapter } from '../agents/claude-code.js';
 import { recentEvents, sessionFilePaths } from '../database/claude-code-events.js';
 import { getRepository, listRepositories, type Repository } from '../database/repositories.js';
 import { getIndexedSession, getWorkstream, indexedSessionIds, indexSessions, touchWorkstream } from '../database/work-context.js';
-import { diffFile, diffStat, getStatus, gitIdentity, listBranches, listCommits, listWorktrees } from '../git/index.js';
+import { diffFile, diffStat, getStatus, gitIdentity, grepTracked, listBranches, readTrackedFile, listCommits, listWorktrees } from '../git/index.js';
 import type {
   ClaudeCodeEvent,
+  CodeExcerpt,
+  CodeSearch,
   ClaudeCodeMessage,
   ClaudeCodeSession,
   GitStatus,
@@ -43,6 +45,7 @@ const MAX_DIFF_FILES = 10;
 const MAX_PATCH = 12_000;
 /** How long a directory's Git identity is trusted; worktrees come and go, but not by the second. */
 const IDENTITY_TTL_MS = 60_000;
+const MAX_CODE_MATCHES = 60;
 
 /** All the text in a message that a search can match: what was said, and what tools were asked to do. */
 function searchableText(m: ClaudeCodeMessage): string {
@@ -190,6 +193,21 @@ export class WorkContextService {
     return { session, workstreamId, link, total: transcript.length, messages: picked, activity };
   }
 
+  /**
+   * Lines of tracked files matching any of `terms`, in a workstream's worktree (default: the
+   * repository's main one). Only Git-tracked files are searched, so ignored files never are.
+   */
+  async searchCode(repositoryId: string, workstreamId: string | null, terms: string[], pathspec?: string): Promise<CodeSearch> {
+    const root = this.codeRoot(repositoryId, workstreamId);
+    const matches = await grepTracked(root, terms, { pathspec });
+    return { root, matches: matches.slice(0, MAX_CODE_MATCHES), omitted: Math.max(0, matches.length - MAX_CODE_MATCHES) };
+  }
+
+  /** Some lines of one tracked file as it is in the worktree now (see readTrackedFile for what's refused). */
+  async readCode(repositoryId: string, workstreamId: string | null, path: string, from?: number, to?: number): Promise<CodeExcerpt> {
+    return readTrackedFile(this.codeRoot(repositoryId, workstreamId), path, from, to);
+  }
+
   async getSessionContext(sessionId: string): Promise<SessionContext | null> {
     const repo = await this.repositoryOfSession(sessionId);
     if (!repo) return null;
@@ -209,6 +227,15 @@ export class WorkContextService {
       activity: recentEvents([sessionId], [], RECENT_EVENTS),
       recentMessages: recentMessages ?? { sessionId, offset: 0, total: 0, messages: [] },
     };
+  }
+
+  /** The worktree code is read from: the workstream's, which must belong to the repository, else the main one. */
+  private codeRoot(repositoryId: string, workstreamId: string | null): string {
+    const repo = this.repository(repositoryId);
+    if (!workstreamId) return repo.path;
+    const workstream = getWorkstream(workstreamId);
+    if (!workstream || workstream.repositoryId !== repo.id) throw new Error('No such workstream in this repository.');
+    return workstream.worktreePath;
   }
 
   private repository(id: string): Repository {

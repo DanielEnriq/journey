@@ -1,28 +1,60 @@
 /**
- * The collaborator's tools. Each is read-only, goes through the WorkContextService (never the
- * filesystem or Git directly), stays inside the conversation's repository, and returns a compact
- * summary sized for a model request rather than the raw objects.
+ * Vowe's tools. Each is read-only, goes through a service (the WorkContextService for local work, the
+ * room source for the room's record, the canvas snapshot), never the filesystem or Git directly,
+ * stays inside the turn's repository and room, and returns a compact summary sized for a model request.
  *
- * To add a tool: define it with defineTool and add it to a registry list below. A tool that would
- * send something that stays local by default asks first with ctx.authorize.
+ * Every fact a tool returns that a conclusion could rest on is registered with ctx.cite, which hands
+ * back an evidence id ("E3") that the tool includes beside it; the model cites those ids when it
+ * reports its reasoning (see evidence.ts).
+ *
+ * To add a tool: define it with defineTool and add it to a registry list. A tool that would send
+ * something that stays local by default asks first with ctx.authorize.
  */
 
 import { relative } from 'node:path';
 import { z } from 'zod';
 import type { WorkContextService } from '../context/index.js';
-import type { ClaudeCodeBlock, ClaudeCodeEvent, ClaudeCodeMessage } from '../shared/api.js';
+import type { ClaudeCodeBlock, ClaudeCodeEvent, ClaudeCodeMessage, RoomDetails, RoomMember, RoomRecord } from '../shared/api.js';
+import type { CanvasCommand, CanvasSnapshot, CanvasValidation } from './canvas.js';
+import type { EvidenceSource } from './evidence.js';
+
+/** The parts of the WorkContextService tools use, so tests can stand in for it. */
+export type WorkContextReader = Pick<
+  WorkContextService,
+  'getWorkContext' | 'listSessions' | 'listWorkstreams' | 'getSessionMessages' | 'getWorktreeChanges' | 'searchCode' | 'readCode'
+>;
+
+/** The room's shared record, as the asking member may read it. */
+export interface RoomSource {
+  room(roomId: string): Promise<RoomDetails>;
+  members(roomId: string): Promise<RoomMember[]>;
+  record(roomId: string): Promise<RoomRecord>;
+}
 
 export interface ToolContext {
-  work: WorkContextService;
-  repositoryId: string;
+  work: WorkContextReader;
+  /** The repository this turn may read; null when the room's repository isn't checked out here. */
+  repositoryId: string | null;
   workstreamId: string | null;
   /** Who the content would go to, for approval prompts. */
   providerName: string;
   /**
-   * Asks the user before sending content that stays on this machine by default. Answers are
+   * Asks the person before sending content that stays on this machine by default. Answers are
    * remembered per `key` for the conversation.
    */
   authorize(key: string, request: { title: string; detail: string }): Promise<boolean>;
+  /** Registers a source and returns its evidence id. */
+  cite(source: Omit<EvidenceSource, 'id' | 'toolCallId'>): string;
+  /** Present for room turns. */
+  room: {
+    id: string;
+    source: RoomSource;
+    canvas: CanvasSnapshot;
+    /** Validates and emits a canvas command; the result goes back to the model. */
+    emit(type: CanvasCommand['type'], payload: unknown, reason: string, evidence: string[]): CanvasValidation;
+  } | null;
+  /** Records the model's reasoning report for the turn. */
+  report(report: { claims: { text: string; basis: 'observed' | 'inferred' | 'hypothetical' | 'decided'; evidence: string[] }[]; gaps: string[] }): void;
 }
 
 export interface AgentTool<I = unknown> {
@@ -37,7 +69,19 @@ export const defineTool = <I>(tool: AgentTool<I>) => tool as AgentTool<unknown>;
 
 const short = (id: string | null | undefined) => id?.slice(0, 8) ?? null;
 const shortHash = (hash: string | null) => hash?.slice(0, 7) ?? null;
-const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text);
+export const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text);
+
+/** The turn's repository, or a clear refusal the model can pass on. */
+export function repositoryOf(ctx: ToolContext): string {
+  if (!ctx.repositoryId) {
+    throw new Error(
+      ctx.room
+        ? "This room's repository isn't checked out on this machine (or the room has none), so there is no local code, Git state or Claude Code session to read."
+        : 'No repository selected.',
+    );
+  }
+  return ctx.repositoryId;
+}
 
 /** Hook events with what they said; only for sessions the user approved, since prompts show up in them. */
 function events(list: ClaudeCodeEvent[], max: number) {
@@ -59,7 +103,7 @@ const listCodingSessions = defineTool({
     })
     .strict(),
   async run({ workstreamId, limit = 12 }, ctx) {
-    const work = await ctx.work.getWorkContext(ctx.repositoryId);
+    const work = await ctx.work.getWorkContext(repositoryOf(ctx));
     const root = work.repository.repository.path;
     const rel = (path: string | null) => (path ? relative(root, path) || '.' : null);
     const linksOf = new Map<string, { workstreamId: string; basis: string; branchMatch: string }[]>();
@@ -79,19 +123,29 @@ const listCodingSessions = defineTool({
         sessions: w.sessions.length,
         lastActivity: w.lastActivity && { type: w.lastActivity.type, at: w.lastActivity.timestamp, session: short(w.lastActivity.sessionId) },
       })),
-      sessions: sessions.slice(0, limit).map((s) => ({
-        id: s.id,
-        title: s.title,
-        createdAt: s.createdAt,
-        lastModifiedAt: s.lastModifiedAt,
-        cwd: rel(s.cwd),
-        recordedBranch: s.gitBranch,
-        links: linksOf.get(s.id) ?? [],
-        unplaced: unplaced.get(s.id),
-        messageCount: s.messageCount,
-        state: s.activity?.state ?? 'unknown',
-        lastEvent: s.activity && { type: s.activity.lastEvent.type, tool: s.activity.lastEvent.toolName, at: s.activity.lastEvent.timestamp, source: s.activity.lastEvent.source },
-      })),
+      sessions: sessions.slice(0, limit).map((s) => {
+        const state = s.activity?.state ?? 'unknown';
+        const lastEvent = s.activity && { type: s.activity.lastEvent.type, tool: s.activity.lastEvent.toolName, at: s.activity.lastEvent.timestamp, source: s.activity.lastEvent.source };
+        return {
+          id: s.id,
+          evidence: ctx.cite({
+            kind: 'activity',
+            ref: `session ${short(s.id)} (metadata)`,
+            excerpt: `"${clip(s.title, 80)}": last observed ${lastEvent ? `${lastEvent.type} at ${lastEvent.at} (${lastEvent.source})` : 'nothing'}; state ${state}`,
+            visibility: 'local',
+          }),
+          title: s.title,
+          createdAt: s.createdAt,
+          lastModifiedAt: s.lastModifiedAt,
+          cwd: rel(s.cwd),
+          recordedBranch: s.gitBranch,
+          links: linksOf.get(s.id) ?? [],
+          unplaced: unplaced.get(s.id),
+          messageCount: s.messageCount,
+          state,
+          lastEvent,
+        };
+      }),
       omittedSessions: Math.max(0, sessions.length - limit),
       unplacedSessions: work.unplacedSessions.length,
     };
@@ -138,7 +192,7 @@ const readCodingSession = defineTool({
   name: 'read_coding_session',
   description:
     "Reads messages from one Claude Code session in the repository: what the user asked, what Claude Code said, the tools it called, and clipped tool output, plus its recently observed activity. " +
-    'Each message has its index `n` for citing. Without `query`, returns the latest messages (or those before `before`); with `query`, returns the messages that best match any of its words. ' +
+    'Each message has its index `n` and an evidence id for citing. Without `query`, returns the latest messages (or those before `before`); with `query`, returns the messages that best match any of its words. ' +
     'Ask for only what you need. The user is asked to approve sharing each session the first time; if they decline, say what you could not check.',
   input: z
     .object({
@@ -149,18 +203,23 @@ const readCodingSession = defineTool({
     })
     .strict(),
   async run({ sessionId, query, before, limit = 20 }, ctx) {
-    const sessions = await ctx.work.listSessions(ctx.repositoryId);
+    const sessions = await ctx.work.listSessions(repositoryOf(ctx));
     const matches = sessions.filter((s) => s.id.startsWith(sessionId.toLowerCase()));
     if (matches.length !== 1) throw new Error(matches.length ? 'That id prefix matches several sessions; use more characters.' : 'No session with that id in this repository.');
     const session = matches[0];
     const approved = await ctx.authorize(`session:${session.id}`, {
       title: `Share messages from "${clip(session.title, 80)}" with ${ctx.providerName}?`,
-      detail: `To answer, Vowe wants to send excerpts of this Claude Code session (messages, tool calls, clipped tool output, and observed activity) to ${ctx.providerName}. Other sessions stay on this machine unless you approve them too.`,
+      detail: `To answer, Vowe wants to send excerpts of this Claude Code session (messages, tool calls, clipped tool output, and observed activity) to ${ctx.providerName}. It isn't shown to the room. Other sessions stay on this machine unless you approve them too.`,
     });
     if (!approved) return { declined: true, note: 'The user declined to share this session. Work from its metadata, and say what you could not check.' };
     const result = await ctx.work.getSessionMessages(session.id, { query, before, limit });
     if (!result) throw new Error('That session is no longer readable.');
-    const messages = result.messages.flatMap(({ index, message }) => condense(index, message) ?? []);
+    const messages = result.messages.flatMap(({ index, message }) => {
+      const m = condense(index, message);
+      if (!m) return [];
+      const excerpt = clip([m.text, ...(m.toolCalls ?? []), ...(m.toolResults ?? []).map((r) => r.output)].filter(Boolean).join(' | '), 300);
+      return [{ evidence: ctx.cite({ kind: 'session', ref: `session ${short(session.id)} #${index}`, excerpt, visibility: 'local' }), ...m }];
+    });
     const first = result.messages[0]?.index;
     return {
       session: { id: session.id, title: session.title, recordedBranch: session.gitBranch, state: session.activity?.state ?? 'unknown', totalMessages: result.total },
@@ -184,11 +243,17 @@ const getRepositoryStatus = defineTool({
     "Reads the repository's actual Git state now: current branch and upstream, changed files in the main worktree, every worktree with its workstream id, local branches, and recent commits.",
   input: z.object({}).strict(),
   async run(_input, ctx) {
-    const work = await ctx.work.getWorkContext(ctx.repositoryId);
+    const work = await ctx.work.getWorkContext(repositoryOf(ctx));
     const { repository, status, worktrees, branches, recentCommits } = work.repository;
     const workstreamOf = new Map(work.workstreams.map((w) => [w.worktreePath, w.id]));
     const local = branches.filter((b) => !b.remote);
     return {
+      evidence: ctx.cite({
+        kind: 'git',
+        ref: `git status @ ${shortHash(status.head) ?? 'no commits'}`,
+        excerpt: `${status.branch ?? 'detached'}: ${status.files.length} changed files, ahead ${status.ahead ?? '?'}, behind ${status.behind ?? '?'}`,
+        visibility: 'local',
+      }),
       observedAt: work.generatedAt,
       repository: { name: repository.name, path: repository.path },
       branch: status.branch ?? `detached at ${shortHash(status.head)}`,
@@ -238,14 +303,21 @@ const getWorktreeChanges = defineTool({
     })
     .strict(),
   async run({ workstreamId, diffPaths = [] }, ctx) {
+    const repositoryId = repositoryOf(ctx);
     let id = workstreamId ?? ctx.workstreamId;
-    if (!id) id = (await ctx.work.listWorkstreams(ctx.repositoryId)).find((w) => w.mainWorktree)?.id ?? null;
+    if (!id) id = (await ctx.work.listWorkstreams(repositoryId)).find((w) => w.mainWorktree)?.id ?? null;
     if (!id) throw new Error('The repository has no worktree with a working tree.');
     const changes = await ctx.work.getWorktreeChanges(id, diffPaths);
-    if (!changes || changes.workstream.repositoryId !== ctx.repositoryId) throw new Error('No such workstream in this repository (its branch may no longer be checked out).');
+    if (!changes || changes.workstream.repositoryId !== repositoryId) throw new Error('No such workstream in this repository (its branch may no longer be checked out).');
     const { workstream, status, diffStat, recentCommits, diffs } = changes;
     const lines = new Map(diffStat.map((d) => [d.path, d]));
     return {
+      evidence: ctx.cite({
+        kind: 'git',
+        ref: `git status ${workstream.branch ?? 'detached'} @ ${shortHash(workstream.head)}`,
+        excerpt: `${status.files.length} changed files: ${clip(status.files.map((f) => f.path).join(', '), 200)}`,
+        visibility: 'local',
+      }),
       workstream: { id: workstream.id, branch: workstream.branch ?? `detached at ${shortHash(workstream.head)}`, worktree: workstream.worktreePath, main: workstream.mainWorktree },
       upstream: status.upstream,
       ahead: status.ahead,
@@ -262,10 +334,75 @@ const getWorktreeChanges = defineTool({
       omittedFiles: Math.max(0, status.files.length - MAX_FILES),
       recentCommits: recentCommits.slice(0, 5).map((c) => ({ commit: shortHash(c.commit), subject: c.subject, at: c.committedAt })),
       linkedSessions: workstream.sessions.map((l) => ({ id: short(l.sessionId), basis: l.basis, branchMatch: l.branch })),
-      diffs,
+      diffs: diffs.map((d) => ({ ...d, evidence: ctx.cite({ kind: 'git', ref: `git diff ${d.path}`, excerpt: clip(d.patch, 300), visibility: 'local' }) })),
     };
   },
 });
 
-/** The read-only tools over the work context. Future registries (room context, decisions, canvas, handoffs) sit beside it. */
-export const workContextTools: AgentTool[] = [listCodingSessions, readCodingSession, getRepositoryStatus, getWorktreeChanges];
+// ─── search_code / read_code ─────────────────────────────────────────────────
+
+/** Repository content stays on this machine until the person lets this conversation send it. */
+async function authorizeCode(ctx: ToolContext, repositoryId: string) {
+  return ctx.authorize(`code:${repositoryId}`, {
+    title: `Share code from this repository with ${ctx.providerName}?`,
+    detail: `To answer, Vowe wants to send search results and excerpts of tracked files in this repository to ${ctx.providerName}. Ignored and untracked files are never read. Excerpts aren't shown to the room.`,
+  });
+}
+
+const DECLINED_CODE = { declined: true, note: 'The user declined to share code from this repository. Say what you could not check, and do not guess at its contents.' };
+
+const searchCode = defineTool({
+  name: 'search_code',
+  description:
+    'Searches the tracked files of the repository (or a workstream\'s worktree) for lines containing any of the given words, case-insensitive. ' +
+    'Returns `path:line: text` matches, each with an evidence id. Use it to find where a component\'s behaviour is implemented, then read_code for context. ' +
+    'The person is asked once per conversation before any code is shared.',
+  input: z
+    .object({
+      terms: z.array(z.string().min(2).max(80)).min(1).max(6).describe('Identifiers or words, e.g. ["retry", "timeout", "lock"].'),
+      path: z.string().max(200).optional().describe('Limit to a directory or glob, e.g. "src/server".'),
+      workstreamId: z.string().optional().describe('Search this workstream\'s worktree instead of the main one.'),
+    })
+    .strict(),
+  async run({ terms, path, workstreamId }, ctx) {
+    const repositoryId = repositoryOf(ctx);
+    if (!(await authorizeCode(ctx, repositoryId))) return DECLINED_CODE;
+    const found = await ctx.work.searchCode(repositoryId, workstreamId ?? ctx.workstreamId, terms, path);
+    return {
+      matches: found.matches.map((m) => ({
+        at: `${m.path}:${m.line}`,
+        text: clip(m.text.trim(), 200),
+        evidence: ctx.cite({ kind: 'code', ref: `${m.path}:${m.line}`, excerpt: clip(m.text.trim(), 200), visibility: 'local' }),
+      })),
+      omitted: found.omitted,
+      note: found.matches.length ? undefined : 'No tracked file contains these words.',
+    };
+  },
+});
+
+const readCode = defineTool({
+  name: 'read_code',
+  description:
+    'Reads lines of one tracked file as it is in the worktree now (up to 200 lines), numbered. Cite the returned evidence id for what the lines show. ' +
+    'Paths are relative to the repository root, as search_code returns them.',
+  input: z
+    .object({
+      path: z.string().min(1).max(300),
+      from: z.number().int().min(1).optional().describe('First line (default 1).'),
+      to: z.number().int().min(1).optional().describe('Last line (default from + 199).'),
+      workstreamId: z.string().optional(),
+    })
+    .strict(),
+  async run({ path, from, to, workstreamId }, ctx) {
+    const repositoryId = repositoryOf(ctx);
+    if (!(await authorizeCode(ctx, repositoryId))) return DECLINED_CODE;
+    const excerpt = await ctx.work.readCode(repositoryId, workstreamId ?? ctx.workstreamId, path, from, to);
+    return {
+      ...excerpt,
+      evidence: ctx.cite({ kind: 'code', ref: `${excerpt.path}:${excerpt.from}-${excerpt.to}`, excerpt: clip(excerpt.text, 400), visibility: 'local' }),
+    };
+  },
+});
+
+/** The read-only tools over local work: Claude Code sessions, Git, and code. */
+export const workContextTools: AgentTool[] = [listCodingSessions, readCodingSession, getRepositoryStatus, getWorktreeChanges, searchCode, readCode];

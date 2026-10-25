@@ -1,8 +1,15 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
-import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
+import { useEffect, useMemo, useRef, useState } from '../../vendor/preact-hooks.js';
 import { ClearInk, ToolComment, ToolDraw, ToolSelect } from '../../shared/components/icons.js';
-import { useStore } from '../../shared/store.js';
+import { account } from '../../shared/account.js';
+import { Store, useStore } from '../../shared/store.js';
+import type { VoiceStatus } from '../../../shared/api.js';
+import { snapshotOf } from '../../../shared/canvas/index.js';
 import { MICROPHONE_DENIED, type CallService } from '../../calls/service.js';
+import { CallVoice } from '../../voice/call-voice.js';
+import { AskVowe, AskVowePanel } from '../canvas/AskVowe.js';
+import { CanvasClient, ipcTransport } from '../canvas/client.js';
+import { LiveSurface } from '../canvas/LiveSurface.js';
 import type { CallSession } from '../call/session.js';
 import { AccessLostScreen, AccessNotice } from '../membership/AccessNotice.js';
 import { PeopleSection, ShareControl, useAccess, useNow, useVoice } from '../membership/hooks.js';
@@ -11,6 +18,7 @@ import { can, type MembershipSource, type RoomAccess } from '../membership/model
 import { PreJoinSheet } from '../membership/PreJoinSheet.js';
 import { Toasts, useToasts } from '../membership/primitives.js';
 import { useLoaded, useRooms } from '../workspace/hooks.js';
+import { selfCloudId, VOWE } from '../workspace/real/workspace.js';
 import type { CallControls } from './call/CallBar.js';
 import { CallBar } from './call/CallBar.js';
 import { Surface } from './canvas/Surface.js';
@@ -73,6 +81,8 @@ type InnerProps = RoomScreenProps & { ui: RoomUi };
 
 /** The OS refused the microphone in this session: the join sheet says so before you choose to talk. */
 let micRefused = false;
+/** For rooms without a canvas: nobody is asking Vowe. */
+const NOT_ASKING = new Store<{ reviewing: string | null }>({ reviewing: null });
 
 const typing = (e: KeyboardEvent) => {
   const t = e.target as HTMLElement | null;
@@ -80,6 +90,33 @@ const typing = (e: KeyboardEvent) => {
 };
 
 /** The call dropped: say so on the canvas, and let you rejoin or step back out to the room. */
+const NoCaptions = () => <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>;
+
+/** The captions panel: asking Vowe takes it over while open. */
+function CallCaptions({ ask, cc }: { ask: AskVowe; cc: boolean }) {
+  const open = useStore(ask.store).open;
+  return open ? <AskVowePanel ask={ask} /> : cc ? <NoCaptions /> : null;
+}
+
+/** A real room's canvas with nothing on it yet: the fresh call's empty state, told what works now. */
+function LiveEmpty({ client, onAsk }: { client: CanvasClient; onAsk?(): void }) {
+  const c = useStore(client.store);
+  if (c.status === 'loading' || Object.keys(c.doc.components).length) return null;
+  return (
+    <div class="fresh-empty">
+      <span class="orb"></span>
+      <b>{c.status === 'failed' ? 'Couldn’t read this room’s canvas' : 'Nothing drawn yet'}</b>
+      {c.status === 'failed' ? <span>{c.error}</span> : (
+        <>
+          <span>When Vowe sketches the system it lands here for everyone in the call, saved with the room. Circle, draw and pin comments on it together.</span>
+          <span class="fine">Ask Vowe about the system and it can sketch it here; structural changes wait for someone to accept them.</span>
+          {onAsk && <button class="mini ask" type="button" onClick={onAsk}>Ask Vowe</button>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function Dropped({ session, onJoin, onLeave }: { session: CallSession; onJoin(): void; onLeave(): void }) {
   const cs = useStore(session.store);
   if (cs.status !== 'dropped') return null;
@@ -213,7 +250,8 @@ function FreshCall(props: InnerProps) {
   const [tool, setTool] = useState<FreshTool>('select');
   const [ink, setInk] = useState<string[]>([]);
   /** Comments placed but not yet written; with a record, Enter saves one as a thread. */
-  const [drafts, setDrafts] = useState<{ x: number; y: number }[]>([]);
+  // At most one unwritten comment: placing another moves it. On the real canvas, x/y are stage units.
+  const [drafts, setDrafts] = useState<{ x: number; y: number; on?: { component: string; name: string } | null }[]>([]);
   const [stroke, setStroke] = useState<string | null>(null);
   const [muted, setMuted] = useState(true);
   const [cc, setCc] = useState(false);
@@ -230,6 +268,17 @@ function FreshCall(props: InnerProps) {
     roomId,
   );
   const view = rec.value;
+  // A real room's semantic canvas: kept with the room, changed by Canvas Commands, shared with its call.
+  const board = useMemo(() => record && window.journey
+    ? new CanvasClient(roomId, ipcTransport(() => ({ kind: 'human', id: selfCloudId() ?? 'me', name: account.state.user?.name ?? 'You' })))
+    : null, [roomId, !!record]);
+  useEffect(() => () => board?.dispose(), [board]);
+  // Asking Vowe by text, on this person's own model sign-in; what it changes on the canvas is shared.
+  const asker = useMemo(() => board
+    ? new AskVowe(roomId, board, () => ({ userId: selfCloudId(), name: account.state.user?.name ?? null }))
+    : null, [board]);
+  useEffect(() => () => asker?.close(), [asker]);
+  const reviewing = useStore<{ reviewing: string | null }>(asker?.store ?? NOT_ASKING).reviewing;
 
   // Opening People (from Share's Manage access) opens the column it lives in.
   useEffect(() => { if (ui.people) setDesk(true); }, [ui.people]);
@@ -254,7 +303,7 @@ function FreshCall(props: InnerProps) {
   const path = (p: [number, number][]) => p.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
   const down = (e: PointerEvent) => {
     if ((e.target as Element).closest('button, input, label, .call, .tools, .pin, .receipt')) return;
-    if (tool === 'comment') { const [x, y] = at(e); setDrafts(drafts.concat([{ x: x - 10, y: y - 20 }])); return; }
+    if (tool === 'comment') { const [x, y] = at(e); setDrafts([{ x: x - 10, y: y - 20 }]); return; }
     if (tool !== 'draw') return;
     surf.current!.setPointerCapture(e.pointerId);
     pts.current = [at(e)];
@@ -264,11 +313,17 @@ function FreshCall(props: InnerProps) {
   const save = (i: number, body: string) => {
     const d = drafts[i];
     if (!record || !body.trim()) return;
-    act(record.pin(roomId, d, body.trim())).then(() => setDrafts((all) => all.filter((x) => x !== d)), () => {});
+    const text = body.trim();
+    record.pin(roomId, d, text, d.on).then((threadId) => {
+      setFailure(null);
+      setDrafts((all) => all.filter((x) => x !== d));
+      // Vowe answers each new comment in its thread, on this person's model.
+      asker?.feedback(threadId, text, d.on ?? null, (said) => act(record.reply(roomId, threadId, said, 'vowe')));
+    }, (err: Error) => setFailure(err.message));
   };
+  // A thread opened in the panel lights its comment on the canvas (or every comment on that part).
   const show = (anchor: string) => {
-    if (!anchor.startsWith('pin:')) return;
-    setLit(anchor.slice(4));
+    setLit(anchor);
     setTimeout(() => setLit(null), 1600);
   };
 
@@ -281,7 +336,44 @@ function FreshCall(props: InnerProps) {
   const decides = !summary?.role || can(summary.role, 'sign_decision');
   const micMuted = live ? !snap!.micEnabled : muted;
   const voiceOff = record && !voice ? 'Voice isn’t connected in this build' : undefined;
-  const agentOff = live ? 'Vowe’s voice isn’t connected in this build' : undefined;
+  // Your Vowe in this call: it hears your microphone while it's on, answers on your model sign-in, and
+  // speaks into the call as "Vowe (for you)". Its turns show in the Ask Vowe panel, like typed asks.
+  const callVoice = useMemo(() => {
+    const userId = selfCloudId();
+    if (!live || !board || !asker || !voice || !window.journey?.voice || !userId) return null;
+    return new CallVoice({
+      api: window.journey,
+      roomId,
+      localUser: { userId, name: account.state.user?.name ?? null },
+      canvas: () => snapshotOf(board.store.state.doc, { selected: [], circled: [] }),
+      call: voice,
+      microphone: () => voice.microphoneTrack(),
+      onEvent: (event) => asker.follow(event),
+    });
+  }, [live, board, asker, voice, roomId]);
+  useEffect(() => () => { void callVoice?.stop().catch(() => {}); }, [callVoice]);
+  const [vowe, setVowe] = useState<VoiceStatus | null>(null);
+  const [voweError, setVoweError] = useState<string | null>(null);
+  useEffect(() => {
+    const api = window.journey?.voice;
+    if (!api || !asker) return;
+    void api.status().then(setVowe, () => {});
+    const offStatus = api.onStatus((s) => { setVowe(s); if (s.status === 'failed' && s.error) setVoweError(s.error); });
+    const offSpeech = api.onSpeech(({ roomId: r, speech }) => {
+      if (r === roomId && speech.final && speech.addressed) asker.heard(speech.text.replace(/^vowe,\s*/i, ''));
+    });
+    return () => { offStatus(); offSpeech(); };
+  }, [roomId, asker]);
+  const mine = vowe?.roomId === roomId ? vowe : null;
+  const voweOn = mine?.status === 'on' || mine?.status === 'joining';
+  const voweState = !mine || !voweOn ? null : mine.status === 'joining' ? 'thinking' : mine.state;
+  const toggleVowe = () => {
+    if (!callVoice) return;
+    setVoweError(null);
+    if (voweOn) void callVoice.stop().catch((err: Error) => setVoweError(err.message));
+    else callVoice.start().catch((err: Error) => setVoweError(err.message)); // from the click: speech needs a gesture
+  };
+  const agentOff = live && !callVoice ? 'Vowe’s voice isn’t connected in this build' : undefined;
   const micOff = !live ? undefined
     : !talks ? 'Viewers listen. Ask an owner to make you a member to talk.'
     : snap!.status !== 'connected' ? 'Connecting to the call…' : undefined;
@@ -291,14 +383,21 @@ function FreshCall(props: InnerProps) {
     voice.setMicrophoneEnabled(!snap.micEnabled).catch(() => { /* the snapshot says why */ });
   };
   const call: CallControls = {
-    voweCls: 'vowe-btn' + (voiceOff || agentOff ? '' : ' listening'), agentLabel: voiceOff || agentOff ? 'not in this call' : 'Listening', partOpen, chime,
+    voweCls: callVoice ? 'vowe-btn' + (voweState ? ' ' + voweState : '') : 'vowe-btn' + (voiceOff || agentOff ? '' : ' listening'),
+    agentLabel: callVoice
+      ? (mine?.status === 'joining' ? 'joining the call…' : voweState === 'listening' && micMuted ? 'in the call · unmute so it can hear you' : voweState ? { listening: 'Listening · say “Vowe, …”', thinking: 'Thinking', speaking: 'Speaking' }[voweState] : 'not in this call')
+      : voiceOff || agentOff ? 'not in this call' : 'Listening',
+    partOpen, chime,
+    toggleVowe: callVoice ? toggleVowe : undefined, voweOn,
     togglePart: () => setPartOpen(!partOpen), pickChime: (c) => { setChime(c); setPartOpen(false); },
     micCls: 'cbtn' + (micMuted ? ' muted' : '') + (meSpeaking ? ' talking' : '') + (live && snap!.micPending ? ' pending' : ''),
     micLabel: voiceOff ?? (live && snap!.micPending ? 'Turning the mic on…' : micMuted ? 'Unmute' : 'Mute'), muted: micMuted,
     micDown: () => {}, micUp: () => { if (voiceOff) return; setMuted(!muted); sources.call.setMuted(!muted); },
     micToggle: live ? toggleMic : undefined,
     cc, ccCls: 'cbtn' + (cc ? ' on' : ''), toggleCc: () => { setCc(!cc); sources.call.setCaptions(!cc); },
-    voiceOff, agentOff, micOff, leaving: cs.status === 'leaving', leave: onLeave,
+    voiceOff, agentOff, micOff, leaving: cs.status === 'leaving',
+    leave: () => { if (voweOn) void callVoice?.stop().catch(() => {}); onLeave(); },
+    askByText: asker ? () => asker.open() : undefined,
   };
   // Who's speaking, by initials (how the band draws people).
   const ring: Record<string, string> = {};
@@ -311,6 +410,86 @@ function FreshCall(props: InnerProps) {
   const callError = live && snap!.error && snap!.error !== dismissed ? snap!.error : null;
   const pins = view?.pins ?? [];
   const empty = !ink.length && !drafts.length && !pins.length;
+  // Comments: saved pins from the room's record, and ones you placed but haven't written yet.
+  // `place` puts a point on screen: as-is on the sketch surface, through the camera on the real canvas.
+  const marksAt = (place: (x: number, y: number) => { x: number; y: number }, nudge: [number, number]) => (
+    <>
+      {pins.map((p) => { const q = place(p.x, p.y); return (
+        <div key={p.threadId} class={'pin saved' + (lit === p.anchor ? ' lit' : '')} style={`transform: translate(${q.x + nudge[0]}px, ${q.y + nudge[1]}px)`}>
+          <span class={'head ' + p.author.tone} title={p.author.name}>{p.author.initials}</span>
+          <span class="pin-note">{p.body}</span>
+          {record && p.author.tone === 'me' && (
+            <button class="pin-x" type="button" aria-label="Remove comment" title="Remove from the canvas (kept in the room's history)"
+              onClick={() => act(record.resolve(roomId, p.threadId)).catch(() => {})}>×</button>
+          )}
+        </div>
+      ); })}
+      {drafts.map((p, i) => { const q = place(p.x, p.y); return (
+        <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${q.x + nudge[0]}px, ${q.y + nudge[1]}px)`}>
+          <span class="head">{me.initials}</span>
+          <label style="display:flex"><span class="sr">Comment</span>
+            <input type="text" placeholder={record ? 'Add a comment, then Enter' : 'Add a comment…'}
+              onKeyDown={(e) => { if (e.key === 'Enter') save(i, (e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDrafts(drafts.filter((x) => x !== p)); }} />
+          </label>
+          <button class="pin-x" type="button" aria-label="Discard comment" title="Discard" onClick={() => setDrafts(drafts.filter((x) => x !== p))}>×</button>
+        </div>
+      ); })}
+    </>
+  );
+  const overlays = (
+    <>
+      {asker ? <CallCaptions ask={asker} cc={cc} /> : cc && <NoCaptions />}
+      {voweOn && micMuted && !voweError && (
+        <div class="receipt" role="status">
+          <span class="dot"></span><span>Vowe is in the call. Unmute to talk to it: say “Vowe, …” and your question.</span>
+          <button class="mini ask" type="button" onClick={toggleMic}>Unmute</button>
+        </div>
+      )}
+      {voweError && (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>Vowe: {voweError}</span>
+          <button class="mini ghost" type="button" onClick={() => setVoweError(null)}>Dismiss</button>
+        </div>
+      )}
+      {failure && (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>Not saved: {failure}</span>
+          <button class="mini ghost" type="button" onClick={() => setFailure(null)}>Dismiss</button>
+        </div>
+      )}
+      {live && snap!.status === 'reconnecting' && (
+        <div class="receipt dropped" role="status"><span class="spinlet"></span><span>Reconnecting to the call. Audio is paused until it’s back.</span></div>
+      )}
+      {live && snap!.audioBlocked && (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>Your system paused the call’s audio.</span>
+          <button class="mini" type="button" onClick={() => { void voice!.startAudio(); }}>Play audio</button>
+        </div>
+      )}
+      {callError === MICROPHONE_DENIED ? (
+        <div class="vm-micdenied vm-call-notice" role="alert">
+          <b>Microphone is blocked for Vowe</b>
+          <span>Allow it in System Settings › Privacy &amp; Security › Microphone. You’re still on the call, muted.</span>
+          <span class="vm-gate-acts">
+            <button type="button" class="vm-link-btn" onClick={() => setDismissed(callError)}>Not now</button>
+            <button type="button" class="vm-btn vm-btn-small" onClick={() => { void window.journey.calls.openMicrophoneSettings(); }}>Open System Settings</button>
+          </span>
+        </div>
+      ) : callError ? (
+        <div class="receipt dropped" role="alert">
+          <span class="dot needs"></span><span>{callError}</span>
+          <button class="mini ghost" type="button" onClick={() => setDismissed(callError)}>Dismiss</button>
+        </div>
+      ) : live && !talks && viewerNote ? (
+        <div class="vm-call-notice">
+          <AccessNotice title="You’re listening as a viewer" body={<>Viewers hear the call and comment, with the mic off. Ask {ui.access?.ownerName ?? 'an owner'} to make you a member to talk.</>}
+            action="OK" onAction={() => setViewerNote(false)} />
+        </div>
+      ) : null}
+      <Dropped session={session} onJoin={() => onJoin()} onLeave={onLeave} />
+      <CallBar c={call} />
+    </>
+  );
 
   return (
     <div class={`win ${light ? 'light ' : ''}${side ? 'side-open ' : ''}${record && desk ? 'desk-open ' : ''}in-call`}>
@@ -323,91 +502,48 @@ function FreshCall(props: InnerProps) {
         <div class="room-identity">
           <h1>{summary?.name ?? 'Room'}</h1>
           <span class="q">{summary?.repo ?? 'No repository'}</span>
-          <div class="presence"><Who people={[me, ...others]} vowe={!voiceOff && !agentOff} ring={ring} /></div>
+          <div class="presence"><Who people={[me, ...others]} vowe={callVoice ? voweOn : !voiceOff && !agentOff} ring={ring} /></div>
         </div>
-        <section ref={surf} class={'surface fresh tool-' + tool} tabIndex={0} aria-label="Shared canvas · V select, P draw, C comment, [ rooms"
-          onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-          <svg class="ink fresh-ink" aria-hidden="true">
-            {ink.map((d, i) => <path key={i} class="stroke" d={d}></path>)}
-            {stroke && <path class="stroke" d={stroke}></path>}
-          </svg>
-          {pins.map((p) => (
-            <div key={p.threadId} class={'pin saved' + (lit === p.threadId ? ' lit' : '')} style={`transform: translate(${p.x}px, ${p.y}px)`}>
-              <span class={'head ' + p.author.tone} title={p.author.name}>{p.author.initials}</span>
-              <span class="pin-note">{p.body}</span>
+        {board ? (
+          <LiveSurface client={board} onComment={(x, y, on) => setDrafts([{ x, y, on }])} onAsk={asker ? (about) => asker.open(about) : undefined}
+            anchored={(place) => marksAt(place, [-10, -20])}>
+            {!pins.length && !drafts.length && <LiveEmpty client={board} onAsk={asker ? () => asker.open() : undefined} />}
+            {overlays}
+          </LiveSurface>
+        ) : (
+          <section ref={surf} class={'surface fresh tool-' + tool} tabIndex={0} aria-label="Shared canvas · V select, P draw, C comment, [ rooms"
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+            <svg class="ink fresh-ink" aria-hidden="true">
+              {ink.map((d, i) => <path key={i} class="stroke" d={d}></path>)}
+              {stroke && <path class="stroke" d={stroke}></path>}
+            </svg>
+            {marksAt((x, y) => ({ x, y }), [0, 0])}
+            {empty && (
+              <div class="fresh-empty">
+                <span class="orb"></span>
+                <b>Nothing drawn yet</b>
+                {record ? (
+                  <>
+                    <span>Draw and pin comments here. Comments become the room’s threads and stay after the call; ink stays on your screen only.</span>
+                    <span class="fine">{voice ? 'Your mic starts off: unmute below to talk. Vowe’s own voice, and drawing as you talk, aren’t connected in this build.' : 'Voice, and Vowe drawing as you talk, aren’t connected in this build.'}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Say what you’re building. Vowe sketches it here for everyone in the call, and you can point, circle and draw on it together.</span>
+                    <span class="fine">This build has no voice pipeline, so only the Payment Reliability demo draws by itself. Draw and comment work here.</span>
+                  </>
+                )}
+              </div>
+            )}
+            <div class="tools" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
+              {FRESH_TOOLS.map(({ id, label, title, Icon }) => (
+                <button key={id} class={tool === id ? 'on' : ''} type="button" aria-label={label} title={title} aria-pressed={tool === id} onClick={() => setTool(id)}><Icon /></button>
+              ))}
+              {(ink.length > 0 || drafts.length > 0) && <button type="button" aria-label="Clear your ink" title="Clear your ink and unsaved comments" onClick={() => { setInk([]); setDrafts([]); }}><ClearInk /></button>}
             </div>
-          ))}
-          {drafts.map((p, i) => (
-            <div key={`${p.x},${p.y}`} class="pin" style={`transform: translate(${p.x}px, ${p.y}px)`}>
-              <span class="head">{me.initials}</span>
-              <label style="display:flex"><span class="sr">Comment</span>
-                <input type="text" placeholder={record ? 'Add a comment, then Enter' : 'Add a comment…'}
-                  onKeyDown={(e) => { if (e.key === 'Enter') save(i, (e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDrafts(drafts.filter((x) => x !== p)); }} />
-              </label>
-            </div>
-          ))}
-          {empty && (
-            <div class="fresh-empty">
-              <span class="orb"></span>
-              <b>Nothing drawn yet</b>
-              {record ? (
-                <>
-                  <span>Draw and pin comments here. Comments become the room’s threads and stay after the call; ink stays on your screen only.</span>
-                  <span class="fine">{voice ? 'Your mic starts off: unmute below to talk. Vowe’s own voice, and drawing as you talk, aren’t connected in this build.' : 'Voice, and Vowe drawing as you talk, aren’t connected in this build.'}</span>
-                </>
-              ) : (
-                <>
-                  <span>Say what you’re building. Vowe sketches it here for everyone in the call, and you can point, circle and draw on it together.</span>
-                  <span class="fine">This build has no voice pipeline, so only the Payment Reliability demo draws by itself. Draw and comment work here.</span>
-                </>
-              )}
-            </div>
-          )}
-          <div class="tools" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
-            {FRESH_TOOLS.map(({ id, label, title, Icon }) => (
-              <button key={id} class={tool === id ? 'on' : ''} type="button" aria-label={label} title={title} aria-pressed={tool === id} onClick={() => setTool(id)}><Icon /></button>
-            ))}
-            {(ink.length > 0 || drafts.length > 0) && <button type="button" aria-label="Clear your ink" title="Clear your ink and unsaved comments" onClick={() => { setInk([]); setDrafts([]); }}><ClearInk /></button>}
-          </div>
-          {cc && <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>}
-          {failure && (
-            <div class="receipt dropped" role="alert">
-              <span class="dot needs"></span><span>Not saved: {failure}</span>
-              <button class="mini ghost" type="button" onClick={() => setFailure(null)}>Dismiss</button>
-            </div>
-          )}
-          {live && snap!.status === 'reconnecting' && (
-            <div class="receipt dropped" role="status"><span class="spinlet"></span><span>Reconnecting to the call. Audio is paused until it’s back.</span></div>
-          )}
-          {live && snap!.audioBlocked && (
-            <div class="receipt dropped" role="alert">
-              <span class="dot needs"></span><span>Your system paused the call’s audio.</span>
-              <button class="mini" type="button" onClick={() => { void voice!.startAudio(); }}>Play audio</button>
-            </div>
-          )}
-          {callError === MICROPHONE_DENIED ? (
-            <div class="vm-micdenied vm-call-notice" role="alert">
-              <b>Microphone is blocked for Vowe</b>
-              <span>Allow it in System Settings › Privacy &amp; Security › Microphone. You’re still on the call, muted.</span>
-              <span class="vm-gate-acts">
-                <button type="button" class="vm-link-btn" onClick={() => setDismissed(callError)}>Not now</button>
-                <button type="button" class="vm-btn vm-btn-small" onClick={() => { void window.journey.calls.openMicrophoneSettings(); }}>Open System Settings</button>
-              </span>
-            </div>
-          ) : callError ? (
-            <div class="receipt dropped" role="alert">
-              <span class="dot needs"></span><span>{callError}</span>
-              <button class="mini ghost" type="button" onClick={() => setDismissed(callError)}>Dismiss</button>
-            </div>
-          ) : live && !talks && viewerNote ? (
-            <div class="vm-call-notice">
-              <AccessNotice title="You’re listening as a viewer" body={<>Viewers hear the call and comment, with the mic off. Ask {ui.access?.ownerName ?? 'an owner'} to make you a member to talk.</>}
-                action="OK" onAction={() => setViewerNote(false)} />
-            </div>
-          ) : null}
-          <Dropped session={session} onJoin={() => onJoin()} onLeave={onLeave} />
-          <CallBar c={call} />
-        </section>
+            {overlays}
+          </section>
+        )}
       </main>
       {record && (
         <aside class="desk" aria-label="Where the room is" aria-hidden={!desk}>
@@ -430,6 +566,8 @@ function FreshCall(props: InnerProps) {
             <div class="desk-panel">
               <RoomPanel
                 {...view.panel}
+                people={reviewing ? { ...view.panel.people, [VOWE.id]: VOWE } : view.panel.people}
+                threads={reviewing ? view.panel.threads.map((t) => t.id === reviewing ? { ...t, presence: { personId: VOWE.id, mode: 'typing' as const } } : t) : view.panel.threads}
                 onSign={(id, v) => { act(record.sign(roomId, id, v)).catch(() => {}); }}
                 onProposeChange={decides ? () => setDrafting('amend') : undefined}
                 onPropose={decides ? () => setDrafting('new') : undefined}
