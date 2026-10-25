@@ -288,10 +288,6 @@
 .vm-prejoin-pop { position: absolute; z-index: 30; top: calc(100% + 8px); left: 0; }
 .vm-call-notice { position: absolute; z-index: 8; left: 50%; bottom: 84px; transform: translateX(-50%); width: 340px; }
 .vm-call-notice.vm-micdenied { background: var(--menu); box-shadow: 0 0 0 1px color-mix(in srgb, var(--bad) 25%, transparent), var(--shadow-menu); }
-.vm-invites-home { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
-.vm-invite-row-home { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px; border-radius: 10px; background: var(--fill-1); box-shadow: inset 0 0 0 1px var(--hairline); }
-.vm-redeem { display: flex; align-items: center; gap: 8px; }
-.vm-redeem .vm-field { flex: 1; min-width: 0; }
 
 /* ---- Invite email */
 .vm-email { width: 520px; max-width: 100%; border-radius: 14px; background: var(--studio-card); box-shadow: inset 0 0 0 1px var(--studio-card-edge), var(--studio-shadow); overflow: hidden; }

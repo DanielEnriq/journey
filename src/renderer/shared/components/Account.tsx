@@ -7,7 +7,8 @@ import { useThemeSetting } from '../theme/theme.js';
 import type { SignInMethod, Theme } from '../../../shared/api.js';
 
 // The sidebar's foot: who you are, and a small panel for appearance, sign-in methods, Vowe's model, and
-// signing out.
+// signing out. The room keeps this panel until Pass 3; Home uses ui/pass2/auth/Account.tsx, which opens
+// ChatGptSection from its menu and shows ChatGptWelcome itself.
 
 const THEMES: [Theme, string][] = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']];
 
@@ -85,7 +86,7 @@ function SignInMethodsSection() {
  * above, which are who you are in rooms. Wording follows OpenAI's guidelines: "Continue with ChatGPT", "Using ChatGPT plan",
  * "Manage usage". Hidden when this build doesn't offer plan usage.
  */
-function ChatGptSection() {
+export function ChatGptSection() {
   const { status, busy, error } = useStore(chatgpt);
   if (!status?.enabled) return null;
   const using = status.signedIn && status.planUsage === 'granted';
@@ -120,7 +121,7 @@ function ChatGptSection() {
 }
 
 /** Shown once, after the first sign-in with plan usage. */
-function ChatGptWelcome() {
+export function ChatGptWelcome() {
   const { status } = useStore(chatgpt);
   if (!status?.welcome) return null;
   return (

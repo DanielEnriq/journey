@@ -11,12 +11,11 @@ import {
 import {
   addLocalRepo, attachErrors, callEnded, localRepos, realStatus, realWorkspace, RoomUnavailable, startRealWorkspace, voice,
 } from './features/workspace/real/workspace.js';
-import { HomeInvites } from './features/membership/HomeInvites.js';
-import { InviteLanding, type LandingState } from './features/membership/InviteLanding.js';
-import type { MembershipError } from './features/membership/model.js';
-import { NewRoomSheet } from './features/workspace/NewRoom.js';
-import { Lights } from './features/room/shell.js';
-import { HomeScreen, LoginScreen } from './features/welcome/WelcomeScreen.js';
+import type { LandingState, MembershipError } from './features/membership/model.js';
+import { Home, type HomePage } from './features/home/Home.js';
+import { LoginScreen, OpeningVowe } from './features/welcome/LoginScreen.js';
+import { CreateRoomSheet } from './ui/pass2/rooms/CreateRoom.js';
+import { InviteGate } from './ui/pass2/invites/InviteGate.js';
 import { devFlags, type DevFlags } from './shared/devflags.js';
 import { useStore } from './shared/store.js';
 import { useAppearance, useThemeSetting } from './shared/theme/theme.js';
@@ -24,17 +23,17 @@ import { account, signIn } from './shared/account.js';
 import type { NewRoom, RepoChoice } from './features/room/data/sources.js';
 import type { InviteKey, Theme } from '../shared/api.js';
 
-// Vowe's renderer: sign-in → your rooms → a room's preview → its call, plus the design's reference
+// Vowe's renderer: sign-in → Home (and your rooms, projects and invitations) → a room's preview → its call, plus the design's reference
 // sheets and a developer menu. Screens are hash routes kept in localStorage, so a relaunch lands back
 // on the same one; a call is the exception, since it is never rejoined without you asking.
 //
-// Two workspaces, never mixed: your real rooms (#/home, #/room/…), and the Payment Reliability demo
-// (#/demo/home, #/demo/room/…), reached from the developer menu and marked as a demo while it shows.
+// Two workspaces, never mixed: your real rooms (#/home, #/rooms, #/projects, #/invitations, #/room/…), and
+// the Payment Reliability demo (#/demo/home, #/demo/room/…, and so on), reached from the developer menu and marked as a demo while it shows.
 // The browser preview has no main process, so it only has the demo.
 
 type Route =
   | { screen: 'login' }
-  | { screen: 'home'; demo: boolean }
+  | { screen: 'home'; demo: boolean; page?: HomePage }
   | { screen: 'room'; id: string; call: boolean; demo: boolean }
   | { screen: 'reference'; sheet: Sheet }
   | { screen: 'room-panel' }
@@ -45,6 +44,8 @@ type Sheet = keyof typeof SHEETS;
 const ROUTE_KEY = 'vowe.route';
 /** No main process (the development preview, or a plain browser): only the demo exists here. */
 const PREVIEW = !window.journey;
+/** Home's pages, each its own route under the same shell. */
+const PAGES: HomePage[] = ['home', 'rooms', 'projects', 'invitations'];
 
 const demoSession = new CallSession(demoWorkspace.call);
 const realSession = new CallSession(realWorkspace.call);
@@ -58,7 +59,7 @@ function parseRoute(hash: string): Route {
   const demo = PREVIEW || parts[0] === 'demo';
   if (parts[0] === 'demo') parts.shift();
   const [screen, a, b] = parts;
-  if (screen === 'home') return { screen: 'home', demo };
+  if (PAGES.includes(screen as HomePage)) return { screen: 'home', demo, ...(screen === 'home' ? {} : { page: screen as HomePage }) };
   if (screen === 'room' && a) return { screen: 'room', id: decodeURIComponent(a), call: b === 'call', demo };
   if (screen === 'reference') return { screen: 'reference', sheet: a in SHEETS ? a as Sheet : 'Components' };
   if (screen === 'dev' && a === 'room-panel') return { screen: 'room-panel' };
@@ -68,7 +69,7 @@ function parseRoute(hash: string): Route {
 
 function routeHash(r: Route) {
   const d = (r.screen === 'home' || r.screen === 'room') && r.demo && !PREVIEW ? '#/demo' : '#';
-  if (r.screen === 'home') return `${d}/home`;
+  if (r.screen === 'home') return `${d}/${r.page ?? 'home'}`;
   if (r.screen === 'room') return `${d}/room/${encodeURIComponent(r.id)}` + (r.call ? '/call' : '');
   if (r.screen === 'reference') return `#/reference/${r.sheet}`;
   if (r.screen === 'room-panel') return '#/dev/room-panel';
@@ -127,10 +128,11 @@ function ReferenceScreen({ sheet, go, onClose }: { sheet: Sheet; go(s: Sheet): v
 }
 
 /**
- * An invite, opened from home: checked against the account you're signed in with, then previewed, then
- * joined. The key (a link's token, or your email invitation's id) lives only in this screen's memory.
+ * An invite, opened from Home or Invitations: checked against the account you're signed in with, then
+ * previewed, then joined, in place of the page inside the shell. The key (a link's token, or your email
+ * invitation's id) lives only in this screen's memory.
  */
-function InviteScreen({ inviteKey, light, onDone, onOpenRoom }: { inviteKey: InviteKey; light: boolean; onDone(): void; onOpenRoom(id: string): void }) {
+function InviteScreen({ inviteKey, onDone, onOpenRoom }: { inviteKey: InviteKey; onDone(): void; onOpenRoom(id: string): void }) {
   const [state, setState] = useState<LandingState>({ kind: 'checking' });
   const [attempt, setAttempt] = useState(0);
   const errorOf = (err: unknown): MembershipError => (err as { reason?: MembershipError }).reason
@@ -149,13 +151,8 @@ function InviteScreen({ inviteKey, light, onDone, onOpenRoom }: { inviteKey: Inv
     catch (err) { setState({ kind: 'error', error: errorOf(err), invite: state.invite }); }
   };
   return (
-    <div class="room-screen">
-      <div class={`win ${light ? 'light ' : ''}outside`}>
-        <Lights />
-        <InviteLanding state={state} onJoinRoom={() => void join()} onNotNow={onDone} onHome={onDone} onOpenRoom={onOpenRoom}
-          onRetry={() => setAttempt((n) => n + 1)} onSwitchAccount={() => { void window.journey.auth.signOut(); }} />
-      </div>
-    </div>
+    <InviteGate state={state} onJoinRoom={() => void join()} onNotNow={onDone} onHome={onDone} onOpenRoom={onOpenRoom}
+      onRetry={() => setAttempt((n) => n + 1)} onSwitchAccount={() => { void window.journey.auth.signOut(); }} />
   );
 }
 
@@ -213,7 +210,6 @@ function App() {
   const [route, go] = useRoute();
   const [dev, setDev] = useState(false);
   const [newRoom, setNewRoom] = useState(false);
-  const [homeError, setHomeError] = useState<string | null>(null);
   const [repos, setRepos] = useState<RepoChoice[]>([]);
   /** An invite being opened; kept in memory only, never in the route or storage. */
   const [invite, setInvite] = useState<InviteKey | null>(null);
@@ -259,7 +255,6 @@ function App() {
   const home = () => { leaveCallUnlessIn(null); go({ screen: 'home', demo }); };
   const openRoom = (id: string) => { leaveCallUnlessIn(id); go({ screen: 'room', id, call: false, demo }); };
   const create = async (r: NewRoom) => {
-    setHomeError(null);
     const made = await ws.room.create(r);
     setNewRoom(false);
     openRoom(made.id);
@@ -267,18 +262,20 @@ function App() {
   const choices = demo ? EXAMPLE_REPOS : repos;
   const repoNote = demo ? 'examples · this is the demo' : repos.length ? 'added on this machine · only its remote is shared' : 'none added on this machine yet';
   const addRepo = demo ? undefined : () => addLocalRepo().then((r) => { loadRepos(); return r; });
-  const overlay = newRoom ? <NewRoomSheet repos={choices} repoNote={repoNote} onAddRepo={addRepo} onCreate={create} onClose={() => setNewRoom(false)} /> : null;
-  const notice = homeError ?? (!demo && real.state === 'failed' ? `Couldn’t read your rooms: ${real.error}` : null);
+  const overlay = newRoom ? <CreateRoomSheet repos={choices} repoNote={repoNote} onAddRepo={addRepo} onCreate={create} onClose={() => setNewRoom(false)} /> : null;
+  const notice = !demo && real.state === 'failed' ? `Couldn’t read your rooms: ${real.error}` : null;
 
   let screen;
-  if (signedOut && user === undefined) screen = null;
+  if (signedOut && user === undefined) screen = <><div class="drag-strip"></div><OpeningVowe /></>;
   else if (signedOut || route.screen === 'login') screen = <><div class="drag-strip"></div><LoginScreen signIn={PREVIEW ? undefined : signIn} onSignedIn={home} /></>;
-  else if (invite && !demo) {
-    screen = <InviteScreen inviteKey={invite} light={light} onDone={() => setInvite(null)} onOpenRoom={(id) => { setInvite(null); openRoom(id); }} />;
-  } else if (route.screen === 'home') {
-    screen = <HomeScreen light={light} rooms={rooms} repos={choices} repoNote={repoNote} simulatedMic={demo} notice={notice} onOpenRoom={openRoom}
-      onCreate={(r) => { create(r).catch((err: Error) => setHomeError(`Couldn’t create the room: ${err.message}`)); }} onNewRoom={() => setNewRoom(true)} overlay={overlay}
-      invites={demo || PREVIEW ? undefined : <HomeInvites source={realWorkspace.invites} onOpen={setInvite} refreshKey={rooms.length} />} />;
+  else if (route.screen === 'home') {
+    const page = route.page ?? 'home';
+    // Keyed by workspace: nothing Home read for your rooms carries over into the demo, or back.
+    screen = <Home key={demo ? 'demo' : 'real'} page={page} demo={demo} rooms={rooms} repos={choices} repoNote={repoNote} onAddRepo={addRepo} notice={notice}
+      onNavigate={(to) => { setInvite(null); go({ screen: 'home', demo, ...(to === 'home' ? {} : { page: to }) }); }}
+      onOpenRoom={(id) => { setInvite(null); openRoom(id); }} onCreate={create} onNewRoom={() => setNewRoom(true)}
+      onOpenInvite={demo ? undefined : setInvite} overlay={overlay}
+      invite={invite && !demo ? <InviteScreen inviteKey={invite} onDone={() => setInvite(null)} onOpenRoom={(id) => { setInvite(null); openRoom(id); }} /> : undefined} />;
   } else if (route.screen === 'room') {
     const id = route.id;
     screen = (

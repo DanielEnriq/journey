@@ -1,7 +1,6 @@
 /* Surfaces the design didn't draw, built from its tokens and parts: a room from outside its call
-   (the preview), a call in a room with nothing drawn yet, the workspace home once you have rooms, and
-   the New room sheet. One attention system throughout: amber only when a person has to act, green
-   and red only for verification outcomes, everything else ink. */
+   (the preview) and a call in a room with nothing drawn yet. One attention system throughout: amber
+   only when a person has to act, green and red only for verification outcomes, everything else ink. */
 
 /* ---------- Shared by every screen. ---------- */
 .win .dot.call{background:var(--ink-4)}
@@ -9,28 +8,6 @@
 .win .avatar.p2{background:var(--peer2)}
 .win .avatar.p3{background:var(--ink-6)}
 .win .mav.p3{background:var(--ink-6)}
-
-/* New room: a small sheet under the band, over whichever screen asked for it. */
-.nr-veil{position:absolute;inset:0;z-index:40;background:color-mix(in srgb,var(--pane) 40%,transparent);animation:nrIn 180ms ease both}
-@keyframes nrIn{from{opacity:0}to{opacity:1}}
-.nr{position:absolute;left:86px;top:46px;width:400px;max-width:calc(100% - 110px);box-sizing:border-box;display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:14px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--shadow-menu);font-family:var(--font);color:var(--ink)}
-.nr-h{font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--ink-bright)}
-.nr-f{display:flex;flex-direction:column;gap:6px;font-size:11.5px;font-weight:500;color:var(--ink-6)}
-.nr-f i{font-style:normal;font-weight:400;color:var(--ink-8)}
-.nr-f input{height:34px;box-sizing:border-box;padding:0 10px;border:0;border-radius:8px;background:var(--field);color:var(--ink-bright);font:inherit;font-size:13px;font-weight:400;box-shadow:inset 0 0 0 1px var(--border);outline:none}
-.nr-f input:focus{box-shadow:inset 0 0 0 1px var(--border-4)}
-.nr-f input::placeholder{color:var(--ink-10)}
-.nr-repos{display:flex;flex-wrap:wrap;gap:4px}
-.nr-repos button{height:26px;padding:0 9px;border:0;border-radius:6px;background:var(--fill-1);box-shadow:inset 0 0 0 1px var(--hairline);color:var(--ink-5);font-family:var(--mono);font-size:11px}
-.nr-repos button:first-child{font-family:var(--font);font-size:12px}
-.nr-repos button:hover{color:var(--ink-2)}
-.nr-repos button.on{background:var(--chip-strong);color:var(--ink-bright);box-shadow:inset 0 0 0 1px var(--border-3)}
-.nr-acts{display:flex;align-items:center;gap:8px}
-.nr-fine{margin-right:auto;font-size:11px;color:var(--ink-8)}
-.nr-ghost{height:30px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--ink-6);font-size:12.5px}
-.nr-ghost:hover{background:var(--hover-strong);color:var(--ink-3)}
-.nr-go{height:30px;padding:0 13px;border:0;border-radius:8px;background:var(--ink-bright);color:var(--pane);font-size:12.5px;font-weight:700}
-.nr-go:disabled{opacity:.4;cursor:default}
 
 /* ---------- A room from outside its call. ---------- */
 @scope (.room-screen) {
@@ -133,42 +110,6 @@
   .fresh-empty span{font-size:12.5px;line-height:1.55;color:var(--ink-6)}
   .fresh-empty .fine{font-size:11.5px;color:var(--ink-8)}
   .fresh-empty button{pointer-events:auto;margin-top:4px}
-}
-
-/* ---------- Home, once you have rooms. ---------- */
-@scope (.welcome-screen) {
-  .home{overflow-y:auto}
-  .home-in.has-rooms{padding-top:120px;padding-bottom:64px}
-  .ws{margin-top:34px;display:flex;flex-direction:column;gap:22px}
-  .ws-sec{display:flex;flex-direction:column;gap:2px}
-  .ws-k{padding:0 10px 6px;font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-9)}
-  .ws-row{display:flex;align-items:center;gap:12px;min-height:40px;padding:6px 10px;border:0;border-radius:8px;background:transparent;text-align:left}
-  .ws-row:hover{background:var(--hover)}
-  .ws-row .dot{width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:var(--ink-10)}
-  .ws-row .dot.needs{background:var(--attention)}
-  .ws-n{flex:0 0 auto;font-size:13.5px;font-weight:600;color:var(--ink-2)}
-  .ws-a{flex:1;min-width:0;font-size:12.5px;color:var(--ink-7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ws-a.needs{color:var(--attention-ink)}
-  .ws-t{flex:0 0 auto;font-size:11.5px;color:var(--ink-8)}
-  .ws-row .who{display:flex;align-items:center;gap:4px}
-  .ws-row .avatar{box-shadow:0 0 0 2px var(--pane)}
-  .ws-row .orb.small{width:18px;height:18px;flex-basis:18px}
-  .row .act.ask{color:var(--attention-ink)}
-  .sidebar .dot.needs{background:var(--attention)}
-
-  /* The repo picker, explicitly showing examples. */
-  .composer{position:relative;z-index:5}
-  .repo-wrap{position:relative;display:inline-flex}
-  .repo-pop{position:absolute;left:0;top:calc(100% + 6px);z-index:6;width:240px;display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:10px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--shadow-menu)}
-  .repo-pop .rp-note{padding:4px 8px 6px;font-size:11px;line-height:1.4;color:var(--ink-8)}
-  .repo-pop button{height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;text-align:left;font-family:var(--mono);font-size:11.5px;color:var(--ink-4)}
-  .repo-pop button:first-of-type{font-family:var(--font);font-size:12.5px}
-  .repo-pop button:hover{background:var(--hover-strong);color:var(--ink-bright)}
-  .repo-pop button.on{background:var(--selected);color:var(--ink-bright)}
-
-  /* An entry point this build can't do: it says so where it was pressed. */
-  .notyet{display:inline-flex;align-items:baseline;gap:6px}
-  .notyet-note{font-size:11.5px;color:var(--ink-8);animation:fadeUp 220ms var(--ease) both}
 }
 
 /* ---------- The development preview's way into the developer menu. ---------- */
