@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, dialog, ipcMain, nativeTheme, shell, systemPreferences, type IpcMainInvokeEvent } from 'electron';
 import { z } from 'zod';
 import { ClaudeCodeAdapter } from '../agents/claude-code.js';
 import { Collaborator } from '../assistant/index.js';
@@ -11,10 +11,10 @@ import { detectRepositories } from '../git/detect.js';
 import { findWorkingTreeRoot, getRemoteUrl, getStatus, listBranches, listWorktrees } from '../git/index.js';
 import { getCurrentUser, onUserChange, signIn, signOut } from '../integrations/google/auth.js';
 import { anthropic } from '../integrations/anthropic/index.js';
-import { getCallAccess } from '../integrations/livekit/index.js';
-import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent } from '../integrations/supabase/realtime.js';
+import { getCallAccess, syncCallParticipant } from '../integrations/livekit/index.js';
+import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent, setRoomCall } from '../integrations/supabase/realtime.js';
 import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
-import { createWorkspace, listWorkspaces, roomRecord, rooms } from '../integrations/supabase/workspaces.js';
+import { createWorkspace, invitations, listWorkspaces, roomRecord, rooms } from '../integrations/supabase/workspaces.js';
 import type {
   Channels,
   EventChannel,
@@ -104,9 +104,9 @@ async function roomResult<T>(run: () => Promise<T>): Promise<RoomResult<T>> {
   try {
     return { ok: true, value: await run() };
   } catch (err) {
-    const { code, message } = toRoomError(err);
+    const { code, message, reason } = toRoomError(err);
     if (code === 'unknown') console.warn('[rooms]', err);
-    return { ok: false, error: { code, message } };
+    return { ok: false, error: reason ? { code, message, reason } : { code, message } };
   }
 }
 
@@ -260,8 +260,20 @@ export function registerIpc() {
   handle('rooms:delete', (roomId) => roomResult(() => rooms.deleteRoom(roomId)));
   handle('rooms:members', (roomId) => roomResult(() => rooms.listMembers(roomId)));
   handle('rooms:addMember', (roomId, userId, role) => roomResult(() => rooms.addMember(roomId, userId, role)));
-  handle('rooms:setMemberRole', (roomId, userId, role) => roomResult(() => rooms.setMemberRole(roomId, userId, role)));
-  handle('rooms:removeMember', (roomId, userId) => roomResult(() => rooms.removeMember(roomId, userId)));
+  // The database decides; then the call follows, so a removed person is taken off it and a new viewer goes quiet.
+  handle('rooms:setMemberRole', (roomId, userId, role) =>
+    roomResult(async () => {
+      const member = await rooms.setMemberRole(roomId, userId, role);
+      void syncCallParticipant(roomId, userId);
+      return member;
+    }),
+  );
+  handle('rooms:removeMember', (roomId, userId) =>
+    roomResult(async () => {
+      await rooms.removeMember(roomId, userId);
+      if (userId) void syncCallParticipant(roomId, userId); // without one you left: your client leaves the call itself
+    }),
+  );
   handle('rooms:attachRepository', (roomId, repositoryId) =>
     roomResult(async () => rooms.updateRoom(roomId, { repository: await originIdentity(repositoryId) })),
   );
@@ -275,12 +287,27 @@ export function registerIpc() {
   handle('record:sign', (roomId, decisionId, version) => roomResult(() => roomRecord.sign(roomId, decisionId, version)));
   handle('record:seen', (roomId) => roomResult(() => roomRecord.markSeen(roomId)));
   handle('record:call', (roomId, what) => roomResult(() => roomRecord.logCall(roomId, what)));
+  // Invitations: the token in a link is passed through to the database and never logged or kept here.
+  handle('invites:list', (roomId) => roomResult(() => invitations.list(roomId)));
+  handle('invites:send', (roomId, emails, role) => roomResult(() => invitations.send(roomId, emails, role)));
+  handle('invites:createLink', (roomId, settings) => roomResult(() => invitations.createLink(roomId, settings)));
+  handle('invites:revoke', (invitationId) => roomResult(() => invitations.revoke(invitationId)));
+  handle('invites:mine', () => roomResult(() => invitations.mine()));
+  handle('invites:resolve', (key) => roomResult(() => invitations.resolve(key)));
+  handle('invites:accept', (key) => roomResult(() => invitations.accept(key)));
   handle('rooms:join', (roomId) => connectRoom(requireString(roomId, 'Room id')));
   handle('rooms:leave', (roomId) => disconnectRoom(requireString(roomId, 'Room id')));
   // sendRoomEvent validates the type and payload against RoomEvents.
   handle('rooms:send', (roomId, type, payload) => sendRoomEvent(requireString(roomId, 'Room id'), type, payload));
+  handle('rooms:setCall', (roomId, call) =>
+    setRoomCall(requireString(roomId, 'Room id'), parse(z.object({ muted: z.boolean() }).strict().nullable(), call, 'Call')),
+  );
   handle('calls:access', (roomId) => getCallAccess(requireString(roomId, 'Room id')));
   handle('calls:requestMicrophone', () => requestMicrophone());
+  handle('calls:openMicrophoneSettings', async () => {
+    if (process.platform === 'darwin') await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+    else if (process.platform === 'win32') await shell.openExternal('ms-settings:privacy-microphone');
+  });
 
   onUserChange((user) => broadcast('auth:changed', user));
   claudeCodeActivity.on('event', (event) => broadcast('claudeCode:event', event));

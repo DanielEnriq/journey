@@ -30,6 +30,10 @@ export interface RoomSummary {
   repo: string | null;
   /** Who is in the room's call right now, you included once you join; empty when there is no call. */
   inCall: PersonRef[];
+  /** Who has the room open right now, in the call or not; absent where that isn't known (the demo). */
+  here?: PersonRef[];
+  /** Your role in the room; absent in the demo. Viewers read, comment and listen. */
+  role?: 'owner' | 'member' | 'viewer';
   /** What needs you here, in a few words; null when nothing does. The only amber in the list. */
   needs: string | null;
   /** The last thing that happened here, in words, and when (ISO 8601). */

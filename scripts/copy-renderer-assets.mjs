@@ -23,6 +23,16 @@ for (const weight of [400, 500]) {
   copy(`${fontsource}/jetbrains-mono-latin-${weight}-normal.woff2`, `${OUT}/fonts/jetbrains-mono-${weight}.woff2`);
 }
 
+// Development builds against a local LiveKit server (livekit-server --dev) may also reach it; release builds
+// never do: VOWE_LOCAL_LIVEKIT=1 pnpm build.
+if (process.env.VOWE_LOCAL_LIVEKIT === '1') {
+  const page = `${OUT}/vowe.html`;
+  const html = fs.readFileSync(page, 'utf8');
+  const local = html.replace("wss://*.livekit.cloud", "wss://*.livekit.cloud ws://127.0.0.1:7880 http://127.0.0.1:7880");
+  if (local === html) throw new Error('vowe.html no longer allows LiveKit Cloud the expected way');
+  fs.writeFileSync(page, local);
+}
+
 copy('node_modules/livekit-client/dist/livekit-client.esm.mjs', `${OUT}/vendor/livekit-client.js`);
 copy('node_modules/preact/dist/preact.module.js', `${OUT}/vendor/preact.js`);
 

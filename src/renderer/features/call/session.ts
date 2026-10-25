@@ -53,5 +53,10 @@ export class CallSession {
     this.store.setState({ status: 'dropped' });
   }
 
+  /** The real call's connection was lost for good: say so, and offer a rejoin. */
+  lost() {
+    if (this.state.status === 'connected') this.store.setState({ status: 'dropped' });
+  }
+
   dismissError() { if (this.state.status === 'failed') this.store.setState({ roomId: null, status: 'idle', error: null }); }
 }

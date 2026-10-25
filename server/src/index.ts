@@ -3,6 +3,7 @@
 //
 //   GET  /health                → 200 { status: 'ok', livekit, elevenlabs }   which integrations are configured
 //   POST /livekit/token         { roomId } → 200 { url, token }               see livekit.ts
+//   POST /livekit/sync          { roomId, userId } → 200 { applied }          owners only; see livekit.ts
 //   POST /elevenlabs/signed-url            → 200 { signedUrl }                see elevenlabs.ts
 //
 // Authenticated routes take the caller's Supabase session as `Authorization: Bearer <jwt>`.
@@ -11,13 +12,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { isElevenLabsConfigured, signedUrl } from './elevenlabs.js';
 import { HttpError, authenticate } from './http.js';
-import { isLiveKitConfigured, issueToken } from './livekit.js';
+import { isLiveKitConfigured, issueToken, syncParticipant } from './livekit.js';
 
 type Handler = (req: IncomingMessage) => Promise<object>;
 
 const routes: Record<string, Handler> = {
   'GET /health': async () => ({ status: 'ok', livekit: isLiveKitConfigured(), elevenlabs: isElevenLabsConfigured() }),
   'POST /livekit/token': async (req) => issueToken(await authenticate(req), await readJson(req)),
+  'POST /livekit/sync': async (req) => syncParticipant(await authenticate(req), await readJson(req)),
   'POST /elevenlabs/signed-url': async (req) => {
     await authenticate(req);
     return { signedUrl: await signedUrl() };
