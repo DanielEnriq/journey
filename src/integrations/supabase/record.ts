@@ -86,7 +86,7 @@ export function createRoomRecordService(client: () => Promise<Cloud>) {
         roomId: room,
         threads: threads.data!.map(toThread),
         decisions: decisions.data!.map(toDecision),
-        activity: activity.data!.map(toActivity),
+        activity: activity.data!.filter(isRoomActivity).map(toActivity),
         lastSeenAt: visit.data?.seen_at ?? null,
       };
     },
@@ -291,6 +291,8 @@ export function toDecision(row: DecisionRow): RoomDecision {
 }
 
 type ActivityRow = { id: string; kind: RoomActivityKind; subject: string | null; version: number | null; created_at: string; actor: AuthorRow };
+// The query asks only for these kinds; the guard keeps the type honest now the enum holds the Vowe room's too.
+const isRoomActivity = <R extends { kind: string }>(row: R): row is R & { kind: RoomActivityKind } => (ACTIVITY_KINDS as string[]).includes(row.kind);
 
 function toActivity(row: ActivityRow): RoomActivity {
   return {
