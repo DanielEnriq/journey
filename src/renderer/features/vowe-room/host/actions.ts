@@ -200,6 +200,10 @@ export function createDeskActions(d: HostDeps): DeskAct {
       openAttention(ui, r(), n);
       act.markDone([n.id]);
     },
+    renameAgent: (name) => {
+      if (!s.settings) { ui.setState({ toast: { text: 'Renaming the assistant isn’t available in this room yet.' } }); return; }
+      void run(s.settings.agentName(roomId, name)).then((ok) => { if (ok !== null) ui.setState({ toast: { text: name ? `The assistant is now called ${name} in this workspace.` : 'The assistant is called Vowe again.' } }); });
+    },
     sinceShow: () => {
       const parts = [...new Set((r().since?.items ?? []).flatMap((i) => i.parts ?? []))];
       d.light(parts);

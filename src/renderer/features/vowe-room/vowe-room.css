@@ -1055,3 +1055,11 @@ body.nx-resizing .room-screen .win{transition:none}
 @media (prefers-reduced-motion: reduce) {
   .nx-win *, .nx-win *::before, .nx-win *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
 }
+
+/* Journey integration: the assistant's name in the Focus rail, the comment being written on the canvas, and
+   the Desk while the record loads. */
+.room-screen .nx-fnav .nx-agentname{margin-top:auto;display:flex;align-items:center;gap:6px;padding:12px 10px 0;font-size:12px;color:var(--v-fg-2)}
+.room-screen .nx-fnav .nx-agentname + .nx-keys{margin-top:0}
+.room-screen .nx-agentname input{width:100%;min-width:0;font:inherit;color:var(--v-fg);background:var(--v-bg);border:1px solid var(--v-line-2);border-radius:6px;padding:2px 6px}
+.room-screen .nx-pending{padding:24px 20px}
+.room-screen .nx-fcall .nx-btn + .nx-btn{margin-left:4px}

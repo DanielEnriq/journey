@@ -111,6 +111,6 @@ export function FailureLine({ failure }: { failure: Result & { ok: false } }) {
 }
 
 /** The room's Share button in the chrome band. */
-export function ShareButton({ open, onClick }: { open: boolean; onClick(): void }) {
-  return <button type="button" data-share-anchor class={`vm-sharebtn${open ? ' vm-on' : ''}`} aria-expanded={open} onClick={onClick}>Share</button>;
+export function ShareButton({ open, onClick, label = 'Share' }: { open: boolean; onClick(): void; label?: string }) {
+  return <button type="button" data-share-anchor class={`vm-sharebtn${open ? ' vm-on' : ''}`} aria-expanded={open} onClick={onClick}>{label}</button>;
 }

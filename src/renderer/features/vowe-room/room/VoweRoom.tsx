@@ -67,6 +67,25 @@ export interface VoweRoomProps {
   size?: [number, number];
   /** Journey's light flag (RoomScreen passes the same to its .win). */
   light?: boolean;
+  /** Journey's Share control (button and ShareDialog); without it, Invite calls act.invite(). */
+  share?: ComponentChildren;
+  /** Drawn inside the window over everything: Journey's New room sheet and its toasts. */
+  windowOverlay?: ComponentChildren;
+  /** Whether the record has loaded. The canvas and the call never wait for it; the Desk says so. */
+  deskStatus?: DeskStatus;
+}
+
+export type DeskStatus = { state: 'ready' } | { state: 'loading' } | { state: 'failed'; error: string; retry(): void };
+
+/** The Desk while the record loads, or after it couldn't be read. */
+function DeskPending({ status }: { status: DeskStatus }) {
+  return (
+    <div class="desk-inner nx-pending">
+      {status.state === 'failed'
+        ? <p class="wnote">Couldn’t read this room’s record: {status.error} <button class="linkish" type="button" onClick={status.retry}>Try again</button></p>
+        : <p class="wnote"><span class="spinlet"></span>Reading the room…</p>}
+    </div>
+  );
 }
 
 /** One control: full screen in, full screen out. Everything between compact and wide is the divider. */
@@ -134,8 +153,9 @@ export function VoweRoom(p: VoweRoomProps) {
   return (
     <DirectoryContext.Provider value={dir}>
       <SemanticsContext.Provider value={p.semantics ?? NO_SEMANTICS}>
-        <div class="room-screen"><div style={style} class={cls}>
+        <div style={style} class={cls}>
           <Lights />
+          {p.windowOverlay}
           {p.nav ? (
             <div class="nx-navbtns" role="group" aria-label="History">
               <button type="button" class="panel-toggle" disabled={!p.nav.backLabel} aria-label="Back" title={p.nav.backLabel ? `Back to ${p.nav.backLabel} · ⌘[` : 'Back'} onClick={p.nav.back}>
@@ -147,7 +167,7 @@ export function VoweRoom(p: VoweRoomProps) {
             </div>
           ) : null}
           <Chrome side={u.side} desk={u.deskOpen} deskUnseen={!u.deskOpen && !!top} toggleSide={() => p.ui.setState({ side: !u.side })} toggleDesk={() => p.ui.setState(u.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' })}
-            onNewRoom={p.onNewRoom} actions={<><div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
+            onNewRoom={p.onNewRoom} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
           <RoomsPanel rooms={rooms} current={p.room.id} hidden={!u.side} onOpenRoom={p.onOpenRoom} />
           <main class="room">
             <div class="room-identity">
@@ -171,16 +191,19 @@ export function VoweRoom(p: VoweRoomProps) {
                     <span class="nx-fcall" role="group" aria-label="The call">
                       <span class="nx-live"></span>{p.callLine.text}
                       {p.callLine.quote ? <em>{p.callLine.quote}</em> : null}
-                      <button type="button" class={'nx-btn' + (p.call.muted ? '' : ' on')} onClick={p.call.micToggle} aria-pressed={!p.call.muted}>{p.call.muted ? 'Unmute' : 'Mute'}</button>
+                      <button type="button" class={'nx-btn' + (p.call.muted ? '' : ' on')} disabled={!!(p.call.voiceOff || p.call.micOff)} title={p.call.voiceOff ?? p.call.micOff ?? undefined}
+                        onClick={p.call.micToggle ?? p.call.micUp} aria-pressed={!p.call.muted}>{p.call.muted ? 'Unmute' : 'Mute'}</button>
+                      <button type="button" class="nx-btn" onClick={() => p.act.depth(exitDepth(u))} title="Back to the canvas · Esc">Canvas</button>
+                      <button type="button" class="nx-btn" disabled={p.call.leaving} onClick={p.call.leave}>{p.call.leaving ? 'Leaving…' : 'Leave'}</button>
                     </span>
                   ) : <span class="nx-fcall quiet">No call</span>}
                 </div>
               ) : null}
-              <Desk {...deskProps} />
+              {!p.deskStatus || p.deskStatus.state === 'ready' ? <Desk {...deskProps} /> : <DeskPending status={p.deskStatus} />}
             </div>
           </aside>
           {u.toast ? <div class="nx-toast" role="status"><span>{u.toast.text}</span>{u.toast.undo ? <button type="button" onClick={() => { u.toast!.undo!(); p.ui.setState({ toast: null }); }}>Undo</button> : null}</div> : null}
-        </div></div>
+        </div>
       </SemanticsContext.Provider>
     </DirectoryContext.Provider>
   );

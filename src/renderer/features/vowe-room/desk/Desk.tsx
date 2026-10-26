@@ -76,6 +76,8 @@ export interface DeskAct {
   focusAll(): void;
   sinceShow(): void;
   sinceFold(): void;
+  /** Rename the assistant for this workspace (owners). */
+  renameAgent(name: string): void;
 }
 
 export interface DeskProps {
@@ -313,6 +315,7 @@ function FullScreen(p: DeskProps) {
             <span>{SEC_LABEL[s]}</span>{dot[s] ? <i class="nx-tabdot" aria-label="needs you"></i> : null}<em>{counts[s] || ''}</em>
           </button>
         ))}
+        <AgentName p={p} />
         <span class="nx-keys"><span><b>⌥1–4</b> sections</span><span><b>⌘[</b> <b>⌘]</b> back, forward</span><span><b>Esc</b> leave</span></span>
       </nav>
       <div class="nx-flist" role="list">
@@ -328,6 +331,28 @@ function FullScreen(p: DeskProps) {
         {fsec === 'work' ? (w ? <div class="nx-inspector focus"><WorkView w={w} p={sp} /></div> : <FsEmpty text={rec.work.length ? 'Pick a piece of work to see its plan, run, pull requests and outcome.' : 'No work yet. Start it from the list, or from a signed decision.'} />) : null}
       </div>
     </div>
+  );
+}
+
+/** The assistant's displayed name. Owners rename it for the workspace; everyone else sees who renamed it to what. */
+function AgentName({ p }: { p: DeskProps }) {
+  const { agentName } = useNames();
+  const [editing, setEditing] = useState(false);
+  const owner = p.role === 'owner';
+  if (!p.rec.vowe) return null;
+  return (
+    <span class="nx-agentname">
+      <i class="nx-agentmark"></i>
+      {editing ? (
+        <input type="text" aria-label="Assistant name" maxLength={32} value={agentName()} autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { p.act.renameAgent(e.currentTarget.value.trim()); setEditing(false); }
+            if (e.key === 'Escape') setEditing(false);
+          }} onBlur={() => setEditing(false)} />
+      ) : owner ? (
+        <button type="button" class="nx-textbtn" title="Rename the assistant for this workspace" onClick={() => setEditing(true)}>{agentName()}</button>
+      ) : <span title="Only the room’s owner can rename the assistant">{agentName()}</span>}
+    </span>
   );
 }
 

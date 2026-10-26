@@ -29,6 +29,8 @@ import { ProposeDecision, RoomPanel } from './panel/index.js';
 import { deriveRoom } from './model.js';
 import { RoomPreview } from './preview/RoomPreview.js';
 import { Chrome, Lights, RoomsPanel, Who } from './shell.js';
+import type { VoweServices } from '../vowe-room/contracts/services.js';
+import { RealRoom } from '../vowe-room/host/RealRoom.js';
 import type { Chime } from './types.js';
 
 // A room, in one of two states. Outside the call it is a preview: what the room is for, who is in it and
@@ -63,6 +65,9 @@ export interface RoomScreenProps {
   membership?: MembershipSource;
   /** The room's voice call; absent in the demo, whose call is scripted. */
   voice?: CallService | null;
+  /** The Pass 3 room's services (decisions, plans, work, attention); absent in the demo. With them, a real
+   *  room's call opens the Vowe room: the semantic canvas and the Desk (Discuss, Decide, Work). */
+  vowe?: VoweServices;
 }
 
 /** Membership, as each state of the room draws it. */
@@ -436,7 +441,7 @@ function FreshCall(props: InnerProps) {
       ); })}
     </>
   );
-  const overlays = (
+  const notices = (
     <>
       {asker ? <CallCaptions ask={asker} cc={cc} /> : cc && <NoCaptions />}
       {voweOn && micMuted && !voweError && (
@@ -487,9 +492,21 @@ function FreshCall(props: InnerProps) {
         </div>
       ) : null}
       <Dropped session={session} onJoin={() => onJoin()} onLeave={onLeave} />
-      <CallBar c={call} />
     </>
   );
+  const overlays = <>{notices}<CallBar c={call} /></>;
+
+  if (board && record && props.vowe) {
+    const speaking = Object.keys(ring)[0] ?? null;
+    return (
+      <RealRoom roomId={roomId} room={summary ?? { id: roomId, name: 'Room', repo: null }} rooms={rooms} services={props.vowe} client={board} asker={asker}
+        agentReply={(threadId, body) => act(record.reply(roomId, threadId, body, 'vowe'))}
+        access={ui.access} role={summary?.role ?? ui.access?.members.find((m) => m.userId === ui.access?.viewerId)?.role ?? null} me={selfCloudId() ?? ''}
+        call={call} people={[me, ...others]} speaking={speaking} inCall={summary?.inCall.length ?? 1} overlays={notices}
+        share={ui.share} openShare={ui.openShare} light={light} windowOverlay={<>{props.overlay}{ui.toasts}</>}
+        onOpenRoom={onOpenRoom} onNewRoom={onNewRoom} onHome={props.onHome} />
+    );
+  }
 
   return (
     <div class={`win ${light ? 'light ' : ''}${side ? 'side-open ' : ''}${record && desk ? 'desk-open ' : ''}in-call`}>
@@ -617,7 +634,7 @@ export function RoomScreen(props: RoomScreenProps) {
   const ui: RoomUi = {
     access, note, toasts: <Toasts toasts={toasts} />,
     share: membership && access ? (
-      <ShareControl source={membership} access={access} open={shareOpen} setOpen={setShareOpen} onNote={note}
+      <ShareControl source={membership} access={access} open={shareOpen} setOpen={setShareOpen} onNote={note} label={inCall && props.vowe ? 'Invite' : undefined}
         onManage={() => { if (inCall) setPeople(true); else document.querySelector('.vm-lobby-people')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} />
     ) : null,
     openShare: () => setShareOpen(true),

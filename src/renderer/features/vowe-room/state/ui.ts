@@ -1,4 +1,5 @@
-import { Store, type CanvasRef, type PersonId } from '../journey.js';
+import { Store } from '../../../shared/store.js';
+import type { CanvasRef, PersonId } from '../journey.js';
 
 // Your own state in the room: tool, selection, the Desk's tab and size, what's open. Never shared, so
 // nobody else's layout moves when you open something; what others see of it goes through presence.

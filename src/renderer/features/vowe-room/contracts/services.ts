@@ -88,6 +88,13 @@ export interface AttentionService {
   markDone(roomId: string, ids: string[]): Promise<RoomResult<void>>;
 }
 
+/** Settings the room's people can change. */
+export interface SettingsService {
+  /** Rename the assistant for the room's workspace. permission: room owner (server-enforced). Empty: back to Vowe.
+   *  Only its displayed name changes; its identity (glyph, attribution, id 'vowe') never does. */
+  agentName(roomId: string, name: string): Promise<RoomResult<void>>;
+}
+
 /** NOT SUPPORTED in Journey: dispatching and steering an agent run from an authorized plan, unattended. */
 export interface RunService {
   /** Start a run bound to an approved plan version. permission: sign. */
@@ -122,6 +129,7 @@ export interface VoweServices {
   decisions: DecisionService;
   work: WorkService;
   attention: AttentionService;
+  settings: SettingsService | null;
   runs: RunService | null;
   github: GitHubService | null;
   notifications: NotificationService | null;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from '../journey.js';
+import { useEffect, useRef, useState } from '../../../vendor/preact-hooks.js';
 import type { VoweRecord } from '../contracts/model.js';
 import type { Attn } from '../state/attention.js';
 import type { Depth, Inspect, Tab, Ui, UiState } from '../state/ui.js';

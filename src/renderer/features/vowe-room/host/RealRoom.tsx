@@ -1,0 +1,184 @@
+import { h, Fragment, useEffect, useMemo, useState, useStore, Store, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary } from '../journey.js';
+import type { RoomAccess } from '../../membership/model.js';
+import type { AskVowe } from '../../canvas/AskVowe.js';
+import type { RoomRole, VoweRecord } from '../contracts/model.js';
+import { capabilitiesOf, type VoweServices } from '../contracts/services.js';
+import { names } from '../state/directory.js';
+import { directoryOf, EMPTY_RECORD, mentionsAgent } from './people.js';
+
+export { directoryOf, EMPTY_RECORD, mentionsAgent };
+import { makeUi } from '../state/ui.js';
+import { marksOf } from '../room/marks.js';
+import { Pins } from '../room/Pins.js';
+import { useDeskHistory, useDeskKeys, useToastTimeout } from '../room/navigation.js';
+import { VoweRoom, type DeskStatus } from '../room/VoweRoom.js';
+import { createDeskActions } from './actions.js';
+
+// The Pass 3 room on a real Journey room: the record comes from VoweServices (load + record:changed), the
+// canvas is the room's CanvasClient, the call is RoomScreen's LiveKit call, and people come from the room's
+// access. Nothing here is scripted: an empty room shows the Desk's empty states, and anything the services
+// can't do is null and shown as unavailable.
+
+
+export interface RealRoomProps {
+  roomId: string;
+  room: Pick<RoomSummary, 'id' | 'name' | 'repo'>;
+  rooms: RoomSummary[];
+  services: VoweServices;
+  client: CanvasClient;
+  /** Asking Vowe by text and voice (features/canvas/AskVowe.ts); null when there's no model sign-in path. */
+  asker: AskVowe | null;
+  /** Records Vowe's answer to a new comment as its reply (RoomRecordSource.reply with the agent's kind). */
+  agentReply(threadId: string, body: string): Promise<void>;
+  access: RoomAccess | null;
+  role: RoomRole | null;
+  /** You, as the record names you (your cloud user id). */
+  me: string;
+  call: CallControls;
+  /** Who's here and in the call, as the band draws them, and who's talking now (initials). */
+  people: PersonRef[];
+  speaking: string | null;
+  inCall: number;
+  /** Journey's call overlays: captions, Ask Vowe, notices, the call bar is drawn by the room. */
+  overlays: ComponentChildren;
+  /** Journey's Share control (button + ShareDialog), shown as Invite. */
+  share: ComponentChildren;
+  openShare(): void;
+  /** Journey's New room sheet and toasts, drawn over the window. */
+  windowOverlay?: ComponentChildren;
+  light: boolean;
+  onOpenRoom(id: string): void;
+  onNewRoom(): void;
+  onHome(): void;
+}
+
+/** The services, with Vowe answering threads that @mention it. Its answer is a separate, attributed write. */
+function withMentions(s: VoweServices, roomId: string, rec: () => VoweRecord, agentName: () => string, asker: AskVowe | null, agentReply: (threadId: string, body: string) => Promise<void>): VoweServices {
+  if (!asker) return s;
+  const ask = (threadId: string, body: string) => {
+    if (!rec().vowe || !mentionsAgent(body, agentName())) return;
+    const t = rec().threads.find((x) => x.id === threadId);
+    const on = t && t.about.kind === 'part' && t.about.id !== 'canvas' ? { component: t.about.id, name: t.about.name } : null;
+    asker.feedback(threadId, body, on, (said) => agentReply(threadId, said));
+  };
+  return {
+    ...s,
+    threads: {
+      ...s.threads,
+      create: async (r, t) => { const res = await s.threads.create(r, t); if (res.ok && r === roomId) ask(res.value.id, t.body); return res; },
+      reply: async (r, id, body) => { const res = await s.threads.reply(r, id, body); if (res.ok && r === roomId) ask(id, body); return res; },
+    },
+  };
+}
+
+/** The record, loaded and kept current; failures are kept so the Desk can say so and retry. */
+function useRecord(services: VoweServices, roomId: string) {
+  const store = useMemo(() => new Store<VoweRecord>(EMPTY_RECORD), [roomId]);
+  const [status, setStatus] = useState<{ state: 'loading' } | { state: 'ready' } | { state: 'failed'; error: string }>({ state: 'loading' });
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const load = async () => {
+      const res = await services.record.load(roomId);
+      if (!live) return;
+      if (res.ok) { store.setState(res.value); setStatus({ state: 'ready' }); }
+      else setStatus((s) => (s.state === 'ready' ? s : { state: 'failed', error: res.error.message || res.error.code }));
+    };
+    void load();
+    const off = services.record.subscribe(roomId, () => { void load(); });
+    return () => { live = false; off(); };
+  }, [services, roomId, tries]);
+  return { store, status, retry: () => { setStatus({ state: 'loading' }); setTries((n) => n + 1); } };
+}
+
+export function RealRoom(p: RealRoomProps) {
+  const ui = useMemo(makeUi, [p.roomId]);
+  const u = useStore(ui);
+  const { store: record, status, retry } = useRecord(p.services, p.roomId);
+  const rec = useStore(record);
+  const directory = useMemo(() => directoryOf(p.me, p.access, rec.agentName), [p.me, p.access, rec.agentName]);
+  const [lit, setLit] = useState<string[]>([]);
+  /** A comment placed on the canvas but not yet written. */
+  const [draft, setDraft] = useState<{ x: number; y: number; on: { component: string; name: string } | null } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  // Vowe joins a thread when someone @mentions it (by its displayed name or "vowe"): it answers in that
+  // thread on this person's model sign-in, attributed to the agent. Nothing else in the Desk calls the model.
+  const services = useMemo(() => withMentions(p.services, p.roomId, () => record.state, () => names(directoryOf(p.me, p.access, record.state.agentName)).agentName(), p.asker, p.agentReply), [p.services, p.roomId, p.asker]);
+  const act = useMemo(() => createDeskActions({
+    roomId: p.roomId, ui, record, services, names: names(directory), light: (parts) => setLit(parts ?? []),
+    invite: p.openShare,
+    // main/window.ts sends https window opens to the system browser.
+    openExternal: (url) => { window.open(url, '_blank', 'noopener'); },
+    selection: () => {
+      const sel = ui.state.sel;
+      if (sel.length !== 1 || 'step' in sel[0]) return null;
+      const id = sel[0].component;
+      return { id, name: p.client.state.doc.components[id]?.name ?? id };
+    },
+  }), [p.roomId, services, record, directory]);
+  const nav = useDeskHistory(ui, u, () => record.state);
+  useDeskKeys(ui, act, nav);
+  useToastTimeout(ui, u);
+  // Opening a thread lights what it's about on the canvas for a moment.
+  useEffect(() => {
+    if (!u.flash?.startsWith('thread:')) return;
+    const t = rec.threads.find((x) => x.id === u.flash!.slice(7));
+    if (t?.about.kind === 'part') { setLit([t.about.id]); const id = setTimeout(() => setLit([]), 1600); return () => clearTimeout(id); }
+  }, [u.flash]);
+
+  const saveDraft = async (body: string) => {
+    const d = draft;
+    const text = body.trim();
+    if (!d || !text) return;
+    const about = d.on ? { kind: 'part' as const, id: d.on.component, name: d.on.name } : { kind: 'part' as const, id: 'canvas', name: 'Canvas' };
+    const res = await p.services.threads.create(p.roomId, { about, body: text, at: { x: d.x, y: d.y } });
+    if (!res.ok) { setFailed(res.error.message || 'That comment wasn’t saved.'); return; }
+    setDraft(null);
+    setFailed(null);
+    // Vowe answers each new comment in its thread, on this person's model sign-in (as in Journey's call).
+    p.asker?.feedback(res.value.id, text, d.on, (said) => p.agentReply(res.value.id, said));
+  };
+
+  const pins = (place: (x: number, y: number) => { x: number; y: number }) => (
+    <>
+      <Pins rec={rec} place={place} hidden={u.sel.length > 0} open={(id) => act.thread(id)} />
+      {draft ? (() => { const q = place(draft.x, draft.y); return (
+        <div class="pin nx-draft-pin" style={`transform: translate(${q.x - 10}px, ${q.y - 20}px)`}>
+          <span class="head">{directory.people[p.me]?.initials ?? 'Y'}</span>
+          <label style="display:flex"><span class="sr">Comment{draft.on ? ` on ${draft.on.name}` : ''}</span>
+            <input type="text" autoFocus placeholder={draft.on ? `Comment on ${draft.on.name}, then Enter` : 'Add a comment, then Enter'}
+              onKeyDown={(e) => { if (e.key === 'Enter') void saveDraft((e.currentTarget as HTMLInputElement).value); if (e.key === 'Escape') setDraft(null); }} />
+          </label>
+          <button class="pin-x" type="button" aria-label="Discard comment" title="Discard" onClick={() => setDraft(null)}>×</button>
+        </div>
+      ); })() : null}
+    </>
+  );
+
+  const n = names(directory);
+  const speaker = p.speaking;
+  const callLine = { text: `In the call${p.inCall > 1 ? ` with ${p.inCall - 1} other${p.inCall > 2 ? 's' : ''}` : ''} · ${n.agentName()} ${p.call.voweOn ? 'is in the call' : 'is off'}` };
+  const here = p.access ? p.access.members.filter((m) => m.presence !== 'away').length : p.people.length;
+  const hereLine = `${here} here · ${p.inCall} on the call`;
+  const deskStatus: DeskStatus = status.state === 'ready' ? { state: 'ready' } : status.state === 'loading' ? { state: 'loading' } : { state: 'failed', error: status.error, retry };
+  const role: RoomRole = p.role ?? 'viewer';
+  const one = (comp: string) => ui.setState({ sel: [{ component: comp }], deskOpen: true, focusOn: true, tab: 'discuss', fsec: 'discuss', inspect: null });
+
+  return (
+    <VoweRoom room={p.room} rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={p.onNewRoom}
+      client={p.client} record={record} directory={directory} role={role} capabilities={capabilitiesOf(services)}
+      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} people={p.people} speaking={speaker} hereLine={hereLine} callLine={callLine} nav={nav}
+      light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay}
+      overlays={<>{p.overlays}{failed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>Not saved: {failed}</span><button class="mini ghost" type="button" onClick={() => setFailed(null)}>Dismiss</button></div> : null}</>}
+      pins={pins}
+      onAsk={(about) => p.asker?.open({ selected: about.components, circled: [], names: about.names })}
+      onScenario={(component, s) => { void p.client.run('show_view', s.view === 'concurrency' ? { view: 'concurrency', focus: component, instances: 2 } : { view: s.view, focus: component }); }}
+      onCopies={(count) => {
+        const focus = u.sel.length === 1 && !('step' in u.sel[0]) ? u.sel[0].component : undefined;
+        void p.client.run('show_view', count > 1 && focus ? { view: 'concurrency', focus, instances: count } : { view: 'architecture' });
+      }}
+      onComment={(x, y, on) => setDraft({ x, y, on })}
+      onMarks={one}
+    />
+  );
+}
