@@ -70,6 +70,8 @@ export interface CommandArgs {
   /** A view Vowe proposed becomes one the room keeps. */
   keep_view: { view: string };
   remove_view: { view: string };
+  /** Concurrency: how many copies of the focus run at once, changed on the view the room already has. */
+  set_instances: { view: string; instances: number };
   /** A person's pen: ink, or a circle around what they mean. */
   draw: { view: string; kind: 'ink' | 'circle'; d: string; refs?: CanvasRef[] };
   remove_annotation: { annotation: string };
@@ -82,7 +84,7 @@ export type CommandName = keyof CommandArgs;
 export const COMMAND_NAMES = [
   'load_system', 'add_component', 'update_component', 'remove_component', 'connect_components', 'highlight_component',
   'annotate_component', 'show_view', 'create_view', 'add_failure', 'propose_change', 'accept_proposal', 'reject_proposal',
-  'keep_view', 'remove_view', 'draw', 'remove_annotation', 'keep_note', 'undo',
+  'keep_view', 'remove_view', 'set_instances', 'draw', 'remove_annotation', 'keep_note', 'undo',
 ] as const satisfies readonly CommandName[];
 
 export type ProposalChange =
@@ -216,6 +218,7 @@ export function parseArgs<K extends CommandName>(name: K, raw: unknown): Command
     reject_proposal: () => { only(a, ['proposal'], 'args'); return { proposal: str(a.proposal, p('proposal'), 80) }; },
     keep_view: () => { only(a, ['view'], 'args'); return { view: id(a.view, p('view')) }; },
     remove_view: () => { only(a, ['view'], 'args'); return { view: id(a.view, p('view')) }; },
+    set_instances: () => { only(a, ['view', 'instances'], 'args'); return { view: id(a.view, p('view')), instances: int(a.instances, p('instances'), 2, 4) }; },
     draw: () => {
       only(a, ['view', 'kind', 'd', 'refs'], 'args');
       return {

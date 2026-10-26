@@ -43,7 +43,11 @@ export interface SceneNode {
 export interface SceneWire { c: string; x: number; y: number; w: number; h: number; d?: number }
 export interface SceneLabel { t: string; x: number; y: number }
 export interface SceneBound { x: number; y: number; w: number; h: number; label: string; component?: string }
-export interface SceneStep { id: string; n: string; title: string; sub: string; short: string; x: number; y: number; tone?: string; component: string }
+export interface SceneStep {
+  id: string; n: string; title: string; sub: string; short: string; x: number; y: number; tone?: string; component: string;
+  /** What happens at this step (the view spec's FlowStep.op), so a renderer can tell what each step reveals. */
+  op?: 'lease' | 'effect' | 'ack' | 'crash' | 'expire' | 'timeout' | 'note';
+}
 
 export interface Scene {
   view: string;
