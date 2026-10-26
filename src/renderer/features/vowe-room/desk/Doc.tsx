@@ -97,8 +97,8 @@ export function Sec({ id, title, note, children, action }: { id: string; title: 
 }
 
 /** Text that reads as prose and edits in place: click (or Enter when focused) to edit, Esc to cancel. */
-export function Prose({ text, can, onSave, placeholder, cls, light, onKey }: { text: string; can: boolean; onSave(t: string): void; placeholder?: string; cls?: string; light?(p: string[] | null): void; onKey?(e: KeyboardEvent): boolean }) {
-  const [ed, setEd] = useState(false);
+export function Prose({ text, can, onSave, placeholder, cls, light, onKey, editing }: { text: string; can: boolean; onSave(t: string): void; placeholder?: string; cls?: string; light?(p: string[] | null): void; onKey?(e: KeyboardEvent): boolean; editing?: boolean }) {
+  const [ed, setEd] = useState(!!editing && can);
   const [v, setV] = useState(text);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (!ed) setV(text); }, [text, ed]);

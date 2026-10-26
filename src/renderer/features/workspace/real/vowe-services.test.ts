@@ -19,7 +19,7 @@ function fake() {
       work: { plan: rec('plan', { version: 2 }), authorize: rec('authorize') },
     },
     record: { sign: rec('sign', { id: D }), reply: rec('reply', { id: 'c1' }), resolve: rec('resolve') },
-    rooms: { onEvent: (fn: (e: RoomEvent) => void) => { listener = fn; return () => { listener = null; }; } },
+    rooms: { send: rec('send'), onEvent: (fn: (e: RoomEvent) => void) => { listener = fn; return () => { listener = null; }; } },
   };
   return { calls, journey, emit: (e: Partial<RoomEvent>) => listener?.(e as RoomEvent) };
 }
@@ -35,7 +35,8 @@ describe('vowe services over IPC', () => {
     const f = fake();
     const s = createVoweServices(() => f.journey as never);
     assert.deepEqual(await s.decisions.sign('room', `${D}.v2`, 2), { ok: true, value: undefined });
-    assert.deepEqual(f.calls.at(-1), ['sign', 'room', D, 2]);
+    // Journey's sign doesn't notify from the database, so the room is told.
+    assert.deepEqual(f.calls.slice(-2), [['sign', 'room', D, 2], ['send', 'room', 'record:changed', { what: 'signature' }]]);
     const bad = await s.decisions.sign('room', 'nope', 1);
     assert.equal(!bad.ok && bad.error.code, 'invalid');
   });

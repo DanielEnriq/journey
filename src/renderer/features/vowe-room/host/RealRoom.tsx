@@ -1,6 +1,6 @@
 import { h, Fragment, useEffect, useMemo, useState, useStore, Store, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary } from '../journey.js';
 import type { RoomAccess } from '../../membership/model.js';
-import type { AskVowe } from '../../canvas/AskVowe.js';
+import type { AskState, AskVowe } from '../../canvas/AskVowe.js';
 import type { RoomRole, VoweRecord } from '../contracts/model.js';
 import { capabilitiesOf, type VoweServices } from '../contracts/services.js';
 import { names } from '../state/directory.js';
@@ -54,11 +54,16 @@ export interface RealRoomProps {
   onHome(): void;
 }
 
+/** Stands in for Ask Vowe's state when the room has no model sign-in path. */
+const NO_ASK = new Store<Pick<AskState, 'reviewing' | 'error' | 'open'>>({ reviewing: null, error: null, open: false });
+
 /** The services, with Vowe answering threads that @mention it. Its answer is a separate, attributed write. */
-function withMentions(s: VoweServices, roomId: string, rec: () => VoweRecord, agentName: () => string, asker: AskVowe | null, agentReply: (threadId: string, body: string) => Promise<void>): VoweServices {
-  if (!asker) return s;
+function withMentions(s: VoweServices, roomId: string, rec: () => VoweRecord, agentName: () => string, asker: AskVowe | null, agentReply: (threadId: string, body: string) => Promise<void>, notice: (text: string) => void): VoweServices {
   const ask = (threadId: string, body: string) => {
-    if (!rec().vowe || !mentionsAgent(body, agentName())) return;
+    if (!mentionsAgent(body, agentName())) return;
+    if (!rec().vowe) { notice(`${agentName()} is off in this room, so it won’t answer. Your message is saved.`); return; }
+    if (!asker) { notice(`${agentName()} can’t answer from this computer: there’s no model sign-in. Your message is saved.`); return; }
+    if (asker.busy) { notice(`${agentName()} is answering something else. Mention it again in a moment.`); return; }
     const t = rec().threads.find((x) => x.id === threadId);
     const on = t && t.about.kind === 'part' && t.about.id !== 'canvas' ? { component: t.about.id, name: t.about.name } : null;
     asker.feedback(threadId, body, on, (said) => agentReply(threadId, said));
@@ -74,7 +79,7 @@ function withMentions(s: VoweServices, roomId: string, rec: () => VoweRecord, ag
 }
 
 /** The record, loaded and kept current; failures are kept so the Desk can say so and retry. */
-function useRecord(services: VoweServices, roomId: string) {
+function useRecord(services: VoweServices, roomId: string, members: string) {
   const store = useMemo(() => new Store<VoweRecord>(EMPTY_RECORD), [roomId]);
   const [status, setStatus] = useState<{ state: 'loading' } | { state: 'ready' } | { state: 'failed'; error: string }>({ state: 'loading' });
   const [tries, setTries] = useState(0);
@@ -89,23 +94,34 @@ function useRecord(services: VoweServices, roomId: string) {
     void load();
     const off = services.record.subscribe(roomId, () => { void load(); });
     return () => { live = false; off(); };
-  }, [services, roomId, tries]);
+  // Joining, leaving and role changes are membership events, not record:changed: re-read on those too.
+  }, [services, roomId, tries, members]);
   return { store, status, retry: () => { setStatus({ state: 'loading' }); setTries((n) => n + 1); } };
 }
 
 export function RealRoom(p: RealRoomProps) {
   const ui = useMemo(makeUi, [p.roomId]);
   const u = useStore(ui);
-  const { store: record, status, retry } = useRecord(p.services, p.roomId);
+  const members = (p.access?.members ?? []).map((m) => `${m.userId}:${m.role}`).sort().join(',');
+  const { store: record, status, retry } = useRecord(p.services, p.roomId, members);
   const rec = useStore(record);
   const directory = useMemo(() => directoryOf(p.me, p.access, rec.agentName), [p.me, p.access, rec.agentName]);
   const [lit, setLit] = useState<string[]>([]);
   /** A comment placed on the canvas but not yet written. */
   const [draft, setDraft] = useState<{ x: number; y: number; on: { component: string; name: string } | null } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  // Vowe answering a thread runs out of sight (the Ask panel stays closed): say that it's replying, and
+  // if it couldn't, why, instead of leaving the mention unanswered.
+  const ask = useStore<Pick<AskState, 'reviewing' | 'error' | 'open'>>(p.asker?.store ?? NO_ASK);
+  const [wasReviewing, setWasReviewing] = useState(false);
+  const [askFailed, setAskFailed] = useState<string | null>(null);
+  useEffect(() => {
+    if (ask.reviewing) { setWasReviewing(true); setAskFailed(null); return; }
+    if (wasReviewing) { setWasReviewing(false); if (ask.error && !ask.open) setAskFailed(`${names(directory).agentName()} couldn’t answer: ${ask.error.message}`); }
+  }, [ask.reviewing, ask.error]);
   // Vowe joins a thread when someone @mentions it (by its displayed name or "vowe"): it answers in that
   // thread on this person's model sign-in, attributed to the agent. Nothing else in the Desk calls the model.
-  const services = useMemo(() => withMentions(p.services, p.roomId, () => record.state, () => names(directoryOf(p.me, p.access, record.state.agentName)).agentName(), p.asker, p.agentReply), [p.services, p.roomId, p.asker]);
+  const services = useMemo(() => withMentions(p.services, p.roomId, () => record.state, () => names(directoryOf(p.me, p.access, record.state.agentName)).agentName(), p.asker, p.agentReply, setAskFailed), [p.services, p.roomId, p.asker]);
   const act = useMemo(() => createDeskActions({
     roomId: p.roomId, ui, record, services, names: names(directory), light: (parts) => setLit(parts ?? []),
     invite: p.openShare,
@@ -173,7 +189,9 @@ export function RealRoom(p: RealRoomProps) {
       client={p.client} record={record} directory={directory} role={role} capabilities={capabilitiesOf(services)}
       ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} people={p.people} speaking={speaker} hereLine={hereLine} callLine={callLine} nav={nav}
       light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay} deskOverride={p.peoplePanel}
-      overlays={<>{p.overlays}{failed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>Not saved: {failed}</span><button class="mini ghost" type="button" onClick={() => setFailed(null)}>Dismiss</button></div> : null}</>}
+      overlays={<>{p.overlays}{ask.reviewing ? <div class="receipt" role="status"><span class="dot"></span><span>{n.agentName()} is replying in the thread…</span></div> : null}
+      {askFailed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>{askFailed}</span><button class="mini ghost" type="button" onClick={() => setAskFailed(null)}>Dismiss</button></div> : null}
+      {failed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>Not saved: {failed}</span><button class="mini ghost" type="button" onClick={() => setFailed(null)}>Dismiss</button></div> : null}</>}
       pins={pins}
       onAsk={(about) => p.asker?.open({ selected: about.components, circled: [], names: about.names })}
       onScenario={(component, s) => { void p.client.run('show_view', s.view === 'concurrency' ? { view: 'concurrency', focus: component, instances: 2 } : { view: s.view, focus: component }); }}

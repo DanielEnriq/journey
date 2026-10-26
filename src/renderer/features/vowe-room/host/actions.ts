@@ -120,10 +120,11 @@ export function createDeskActions(d: HostDeps): DeskAct {
     amend: (id) => void run(s.decisions.amend(roomId, id)).then((x) => { if (x) nav.inspect({ kind: 'decision', id: x.id }); }),
     editLine: (id, line, text) => void run(s.decisions.editLine(roomId, id, line, text)),
     editDoc: (id, field, text) => void run(s.decisions.editDoc(roomId, id, field, text)),
+    addLine: (id, kind, text) => void run(s.decisions.addLine(roomId, id, kind, text)),
     newDecision: (title, line) => void run(s.decisions.create(roomId, { title, line })).then((x) => { if (x) nav.inspect({ kind: 'decision', id: x.id }); }),
     draftFrom: (t) => {
       const th = r().threads.find((x) => x.id === t);
-      void run(s.decisions.create(roomId, { title: th ? `Decide: ${th.about.name}` : 'New decision', from: t, problem: th?.replies.at(-1)?.body })).then((x) => { if (x) nav.inspect({ kind: 'decision', id: x.id }); });
+      void run(s.decisions.create(roomId, { title: th ? `Decide: ${th.about.name}` : 'New decision', from: t, problem: th?.replies[0]?.body })).then((x) => { if (x) nav.inspect({ kind: 'decision', id: x.id }); });
     },
 
     // Work

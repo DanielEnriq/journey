@@ -185,6 +185,19 @@ export function scopeOf(x: Pick<Work, 'may'>): string {
   return [...x.may.filter((m) => /^Edit /.test(m)).map((m) => m.replace(/^Edit /, '')), 'draft PRs'].join(' · ');
 }
 
+/**
+ * What a new version lets the doer do that the approved one didn't: added “may” lines, and dropped “must not”
+ * or “asks first” lines. Shown before authorizing, so an edit can't quietly widen what was approved.
+ */
+export function widens(approved: Pick<PlanBody, 'may' | 'mayNot' | 'askWhen'>, next: Pick<PlanBody, 'may' | 'mayNot' | 'askWhen'>): string[] {
+  const gone = (a: string[], b: string[]) => a.filter((x) => !b.includes(x));
+  return [
+    ...gone(next.may, approved.may).map((x) => `may ${x.charAt(0).toLowerCase()}${x.slice(1)}`),
+    ...gone(approved.mayNot, next.mayNot).map((x) => `no longer “must not: ${x}”`),
+    ...gone(approved.askWhen, next.askWhen).map((x) => `no longer asks first when ${x.charAt(0).toLowerCase()}${x.slice(1)}`),
+  ];
+}
+
 /** Word-level diff, for showing a suggested edit in place. */
 export function wordDiff(a: string, b: string): { t: string; k: 'same' | 'del' | 'add' }[] {
   const A = a.split(/(\s+)/), B = b.split(/(\s+)/);

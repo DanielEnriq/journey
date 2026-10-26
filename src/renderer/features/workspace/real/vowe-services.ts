@@ -69,6 +69,7 @@ export function createVoweServices(journey: () => Journey = () => window.journey
     decisions: {
       create: (roomId, d) => write(roomId, () => j().vowe.decisions.create(roomId, d)),
       editLine: (roomId, id, lineId, text) => write(roomId, () => j().vowe.decisions.editLine(roomId, id, lineId, text)),
+      addLine: (roomId, id, kind, text) => write(roomId, () => j().vowe.decisions.addLine(roomId, id, kind, text)),
       editDoc: (roomId, id, field, text) => write(roomId, () => j().vowe.decisions.editDoc(roomId, id, field, text)),
       takeSuggestion: (roomId, id, lineId, accept) => write(roomId, () => j().vowe.decisions.takeSuggestion(roomId, id, lineId, accept)),
       requestSignatures: (roomId, id, who) => write(roomId, () => j().vowe.decisions.requestSignatures(roomId, id, who)),
@@ -76,7 +77,10 @@ export function createVoweServices(journey: () => Journey = () => window.journey
       async sign(roomId, id, version) {
         const d = parseDecisionVersionId(id);
         if (!d) return invalid('That decision id isn’t valid');
-        return write(roomId, async () => voidResult(await j().record.sign(roomId, d.decisionId, version)));
+        const res = await write(roomId, async () => voidResult(await j().record.sign(roomId, d.decisionId, version)));
+        // record.sign is Journey's write, which doesn't notify from the database: tell the room, as Journey does.
+        if (res.ok) j().rooms.send(roomId, 'record:changed', { what: 'signature' }).catch(() => {});
+        return res;
       },
       requestChanges: (roomId, id, version, text) => write(roomId, () => j().vowe.decisions.requestChanges(roomId, id, version, text)),
       amend: (roomId, id) => write(roomId, () => j().vowe.decisions.amend(roomId, id)),

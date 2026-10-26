@@ -1063,3 +1063,12 @@ body.nx-resizing .room-screen .win{transition:none}
 .room-screen .nx-agentname input{width:100%;min-width:0;font:inherit;color:var(--v-fg);background:var(--v-bg);border:1px solid var(--v-line-2);border-radius:6px;padding:2px 6px}
 .room-screen .nx-pending{padding:24px 20px}
 .room-screen .nx-fcall .nx-btn + .nx-btn{margin-left:4px}
+
+/* Adding a line to a draft decision */
+.nx-addline{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin:6px 0 2px}
+.nx-addline.editing{gap:10px}
+.nx-addline-f{flex:1;min-width:0;display:flex}
+.nx-addline-f input{flex:1;min-width:0;font:inherit;color:var(--v-fg);background:transparent;border:0;border-bottom:1px solid var(--v-line);padding:6px 0;outline:none}
+.nx-addline-f input:focus{border-bottom-color:var(--v-fg-3)}
+.nx-widens { margin: 0 0 8px; padding: 8px 10px; border-left: 2px solid var(--v-signal-line); background: var(--v-proposed-wash); color: var(--v-fg); font-size: 12.5px; line-height: 1.45; border-radius: 4px; }
+.nx-widens b { color: var(--v-signal-fg); font-weight: 600; }

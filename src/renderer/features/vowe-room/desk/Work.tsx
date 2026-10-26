@@ -19,6 +19,8 @@ const Chev = () => <svg width="10" height="10" viewBox="0 0 16 16" fill="none" s
 const Lock = () => <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" /><path d="M5.5 7V5a2.5 2.5 0 015 0v2" /></svg>;
 const Ext = () => <span class="nx-ext" aria-label="opens outside Vowe">↗</span>;
 
+const WORK_LABEL: Partial<Record<Work['state'], string>> = { running: 'Running', waiting: 'Waiting on you' };
+
 export function objectiveState(w: Work, rec: VoweRecord, me: string): { k: string; label: string } {
   if (w.state === 'resolved') return { k: 'resolved', label: 'Resolved' };
   if (w.state === 'closed') return { k: 'closed', label: 'Closed' };
@@ -27,10 +29,14 @@ export function objectiveState(w: Work, rec: VoweRecord, me: string): { k: strin
   if (openChanges(w).length) return { k: 'proposed', label: 'Planning · suggestions' };
   if (w.state === 'proposed') return { k: 'proposed', label: w.blocks ? 'Planned with ' + (rec.work.find((x) => x.id === w.blocks)?.title ?? '') : 'Planning' };
   if (w.state === 'review') return { k: 'review', label: w.prs.every((p) => p.state === 'merged' || p.state === 'closed') ? 'Ready to resolve' : 'In review' };
+  if (w.state === 'draft') return { k: 'proposed', label: 'Draft plan' };
   const run = w.runs[w.runs.length - 1];
   if (run?.state === 'stopped') return { k: 'review', label: 'In review' };
-  if (w.dependsOn && rec.work.find((x) => x.id === w.dependsOn)?.state !== 'resolved' && rec.work.find((x) => x.id === w.dependsOn)?.prs.every((p) => p.state !== 'merged')) return { k: 'running', label: 'Running · waits on schema' };
-  return { k: 'running', label: 'Running' };
+  const dep = w.dependsOn ? rec.work.find((x) => x.id === w.dependsOn) : undefined;
+  const waits = dep && dep.state !== 'resolved' && dep.prs.every((p) => p.state !== 'merged') ? ` · waits on ${dep.title}` : '';
+  // Only a run that's going is "running"; an authorized plan nobody has started says so.
+  if (!run || run.state === 'finished') return { k: 'proposed', label: (w.state === 'authorized' ? 'Authorized · not started' : WORK_LABEL[w.state] ?? 'Planned') + waits };
+  return { k: 'running', label: 'Running' + waits };
 }
 
 /** Where a PR stands, the way GitHub groups them. */
@@ -105,15 +111,15 @@ export function ObjectiveCard({ w, p, dim }: { w: Work; p: DeskProps; dim?: bool
           <span class="nx-ok">Plan</span>
           <span class="nx-ov">
             {oc.length ? <><b class="nx-vchip draft">v{w.version} draft</b>{rec.vowe ? `${agentName()} suggests` : 'Suggested:'} {oc.length} change{oc.length > 1 ? 's' : ''}</>
-              : ap && ap.version === w.version ? <><b class="nx-vchip ok"><Lock />v{ap.version}</b>approved by {ap.approved!.by === me ? 'you' : nameOf(ap.approved!.by)} · {done}/{w.plan.length} steps</>
+              : ap && ap.version === w.version ? <><b class="nx-vchip ok"><Lock />v{ap.version}</b>approved by {ap.approved!.by === me ? 'you' : nameOf(ap.approved!.by)} · {done}/{w.plan.length} step{w.plan.length === 1 ? "" : "s"}</>
               : ap ? <><b class="nx-vchip draft">v{w.version} draft</b>{w.doer?.name} still runs v{ap.version}</>
-              : <><b class="nx-vchip draft">v{w.version}{isDraft(w) ? ' draft' : ''}</b>{w.plan.length} steps · not authorized</>}
+              : <><b class="nx-vchip draft">v{w.version}{isDraft(w) ? ' draft' : ''}</b>{w.plan.length} step{w.plan.length === 1 ? "" : "s"} · not authorized</>}
           </span>
         </button>
         {run || w.doer?.kind === 'person' ? (
           <button type="button" class="nx-orow" onClick={() => open('run')}>
             <span class="nx-ok">Run</span>
-            <span class="nx-ov">{run ? <><span class={'nx-rdot ' + run.state}></span>{run.agent} · plan v{run.plan} · {run.state}{last && run.state !== 'finished' ? <em class="nx-olast"><BasisGlyph b="observed" />{last.text}</em> : null}</> : <>{w.doer?.name} · {w.state === 'proposed' ? 'not started' : 'working'}</>}</span>
+            <span class="nx-ov">{run ? <><span class={'nx-rdot ' + run.state}></span>{run.agent} · plan v{run.plan} · {run.state}{last && run.state !== 'finished' ? <em class="nx-olast"><BasisGlyph b="observed" />{last.text}</em> : null}</> : <>{w.doer?.name} · {w.state === 'proposed' || w.state === 'draft' || w.state === 'authorized' ? 'not started' : WORK_LABEL[w.state]?.toLowerCase() ?? w.state}</>}</span>
           </button>
         ) : null}
         {w.prs.length ? (

@@ -61,11 +61,13 @@ export function DecisionDoc({ d, p }: { d: Decision; p: DeskProps }) {
 
         <Sec id="decision" title="Decision" note="we will">
           <ol class="nx-dlines">{lines(['decide']).map((l) => <DLine key={l.id} l={l} d={d} p={p} can={can} base={base} on={lineId === l.id} />)}</ol>
+          {can ? <AddLine kinds={['decide']} first={!lines(['decide']).length} onAdd={(k, t) => act.addLine(d.id, k, t)} /> : null}
           {base ? base.lines.filter((l) => l.kind === 'decide' && !d.lines.some((x) => x.id === l.id)).map((l) => <p key={l.id} class="nx-was"><del>{l.text}</del></p>) : null}
         </Sec>
 
         <Sec id="why" title="Why">
           <ul class="nx-dlines plain">{lines(['because']).map((l) => <DLine key={l.id} l={l} d={d} p={p} can={can} base={base} on={lineId === l.id} />)}</ul>
+          {can ? <AddLine kinds={['because']} onAdd={(k, t) => act.addLine(d.id, k, t)} /> : null}
           {d.doc?.rationale ? <><Prose text={d.doc.rationale.text} can={can} light={act.light} onSave={(t) => act.editDoc(d.id, 'rationale', t)} /><By_ by={d.doc.rationale.by} /></> : null}
         </Sec>
 
@@ -89,6 +91,7 @@ export function DecisionDoc({ d, p }: { d: Decision; p: DeskProps }) {
 
         <Sec id="unknowns" title="Assumptions and open questions">
           <ul class="nx-dlines plain">{lines(['assume', 'open', 'scope']).map((l) => <DLine key={l.id} l={l} d={d} p={p} can={can} base={base} on={lineId === l.id} />)}</ul>
+          {can ? <AddLine kinds={['assume', 'open', 'scope']} onAdd={(k, t) => act.addLine(d.id, k, t)} /> : null}
         </Sec>
 
         <Sec id="verify" title="Verification" note="how we’ll know it holds">
@@ -107,6 +110,31 @@ export function DecisionDoc({ d, p }: { d: Decision; p: DeskProps }) {
         </Sec>
       </div>
     </DocLayout>
+  );
+}
+
+const ADD_LABEL: Record<Line['kind'], { add: string; hint: string }> = {
+  decide: { add: 'Add what we will do', hint: 'We will…' },
+  because: { add: 'Add a reason', hint: 'Because…' },
+  assume: { add: 'Assumption', hint: 'We’re assuming…' },
+  open: { add: 'Open question', hint: 'We don’t know yet…' },
+  scope: { add: 'Out of scope', hint: 'This doesn’t cover…' },
+};
+
+/** Writing a new line into a draft. Signed versions are amended instead, so this only shows on drafts. */
+function AddLine({ kinds, first, onAdd }: { kinds: Line['kind'][]; first?: boolean; onAdd(kind: Line['kind'], text: string): void }) {
+  const [kind, setKind] = useState<Line['kind'] | null>(first ? kinds[0] : null);
+  const [text, setText] = useState('');
+  const save = () => { const t = text.trim(); if (!t || !kind) return; onAdd(kind, t); setText(''); if (!first) setKind(null); };
+  if (!kind) return <span class="nx-addline">{kinds.map((k) => <button key={k} type="button" class="nx-textbtn add" onClick={() => setKind(k)}>+ {ADD_LABEL[k].add}</button>)}</span>;
+  return (
+    <span class="nx-addline editing">
+      <label class="nx-addline-f"><span class="sr">{ADD_LABEL[kind].add}</span>
+        <input type="text" placeholder={`${ADD_LABEL[kind].hint} (Enter to add)`} value={text} onInput={(e) => setText(e.currentTarget.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape' && !first) { setKind(null); setText(''); } }} />
+      </label>
+      {!first ? <button type="button" class="nx-textbtn" onClick={() => { setKind(null); setText(''); }}>Cancel</button> : null}
+    </span>
   );
 }
 

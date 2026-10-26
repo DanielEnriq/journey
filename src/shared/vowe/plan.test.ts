@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { decisionVersionId, parseDecisionVersionId } from './ids.js';
 import type { VoweRecord, Work } from './model.js';
-import { applyOp, approve, decide, scopeOf } from './plan.js';
+import { applyOp, approve, decide, scopeOf, widens } from './plan.js';
 
 const work = (over: Partial<Work> = {}): Work => ({
   id: 'w1', title: 'Retries', why: 'Stop timeouts', repo: 'acme/checkout', parts: [], owner: 'alice', doer: { kind: 'agent', name: 'Claude Code' },
@@ -55,6 +55,16 @@ describe('plan operations', () => {
 
   it('words an authorization’s scope', () => {
     assert.equal(scopeOf({ may: ['Edit a/**', 'Run tests', 'Edit b.ts'] }), 'a/** · b.ts · draft PRs');
+  });
+});
+
+describe('widening a plan', () => {
+  it('names what a new version allows that the approved one didn’t, and nothing else', () => {
+    const v1 = { may: ['Edit worker/retry.ts'], mayNot: ['Merge'], askWhen: ['A migration is needed'] };
+    assert.deepEqual(widens(v1, v1), []);
+    assert.deepEqual(widens(v1, { may: [], mayNot: ['Merge', 'Push'], askWhen: ['A migration is needed'] }), []);
+    assert.deepEqual(widens(v1, { may: ['Edit worker/retry.ts', 'Edit worker/charge.ts'], mayNot: [], askWhen: [] }),
+      ['may edit worker/charge.ts', 'no longer “must not: Merge”', 'no longer asks first when a migration is needed']);
   });
 });
 

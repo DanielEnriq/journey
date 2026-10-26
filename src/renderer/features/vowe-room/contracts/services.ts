@@ -1,6 +1,6 @@
 import type { RoomResult } from '../../../../shared/api.js';
 import type { PersonId } from '../journey.js';
-import type { About, PR, Run, VoweRecord, Work } from './model.js';
+import type { About, Line, PR, Run, VoweRecord, Work } from './model.js';
 import type { PlanOp } from '../state/plan.js';
 
 // The services the Vowe room needs, as the renderer calls them. Every method resolves with Journey's
@@ -47,6 +47,8 @@ export interface DecisionService {
   create(roomId: string, d: { title: string; line?: string; from?: string; problem?: string }): Promise<RoomResult<{ id: string }>>;
   /** permission: write. Rejected with `conflict` once the version has a signature: amend instead. */
   editLine(roomId: string, decisionId: string, lineId: string, text: string): Promise<RoomResult<void>>;
+  /** A new line on a draft (a commitment, a reason, an assumption…). permission: write. Rejected with `conflict` once signed. */
+  addLine(roomId: string, decisionId: string, kind: Line['kind'], text: string): Promise<RoomResult<{ id: string }>>;
   editDoc(roomId: string, decisionId: string, field: 'problem' | 'rationale', text: string): Promise<RoomResult<void>>;
   /** Take or reject a suggested line edit. permission: write. */
   takeSuggestion(roomId: string, decisionId: string, lineId: string, accept: boolean): Promise<RoomResult<void>>;

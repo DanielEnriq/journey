@@ -1,7 +1,7 @@
 import { h, Fragment, useState, Avatar } from '../journey.js';
 import { useEvidence } from '../state/semantics.js';
 import { BasisGlyph } from '../canvas/faces.js';
-import { AGENT, type RoomRole, type About, type Decision, type Notice, type PR, type Reply, type VoweRecord, type Thread, type Work } from '../contracts/model.js';
+import { AGENT, type RoomRole, type About, type Decision, type Line, type Notice, type PR, type Reply, type VoweRecord, type Thread, type Work } from '../contracts/model.js';
 import type { Inspect, Tab } from '../state/ui.js';
 import { actionable, attention, isSuggestion, tabMark, type Attn } from '../state/attention.js';
 import type { PlanOp } from '../state/plan.js';
@@ -61,6 +61,7 @@ export interface DeskAct {
   requestChanges(decision: string, text: string): void;
   amend(decision: string): void;
   editLine(decision: string, line: string, text: string): void;
+  addLine(decision: string, kind: Line['kind'], text: string): void;
   newDecision(title: string, line: string): void;
   askFor(decision: string, who: string[]): void;
   everywhere(on: boolean): void;
@@ -108,6 +109,9 @@ export interface DeskProps {
 }
 
 /* ---------------- shared pieces ---------------- */
+
+/** A component id as words, where the record names a part only by id (payment-worker → Payment worker). */
+const partLabel = (id: string) => { const t = id.replace(/[-_]+/g, ' ').trim(); return t ? t[0].toUpperCase() + t.slice(1) : id; };
 
 const ABOUT_WORD: Record<About['kind'], string> = { part: '', edge: 'wire', scenario: 'failure', decision: 'decision', line: 'decision line', work: 'work', step: 'plan step', pr: 'PR', check: 'check' };
 export function AboutGlyph({ a }: { a: About['kind'] }) {
@@ -624,7 +628,7 @@ function NewDecision({ p, done, from }: { p: DeskProps; done(): void; from?: Thr
 }
 
 function DecideEmpty({ p, write }: { p: DeskProps; write(): void }) {
-  const { nameOf, agentName } = useNames();
+  const { nameOf } = useNames();
   const { rec, act } = p;
   const threads = rec.threads.filter((t) => t.status === 'open' && (t.about.kind === 'part' || t.about.kind === 'scenario')).slice(0, 3);
   return (
@@ -636,7 +640,7 @@ function DecideEmpty({ p, write }: { p: DeskProps; write(): void }) {
       {threads.map((t) => (
         <div key={t.id} class="nx-empty2-row">
           <span><b>{t.about.name}</b> · {nameOf(t.replies[0].by)}: {t.replies[t.replies.length - 1].body.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1').slice(0, 64)}…</span>
-          <button type="button" class="nx-textbtn strong" onClick={() => act.draftFrom(t.id)}>{rec.vowe ? `Ask ${agentName()} to draft` : 'Start from this'}</button>
+          <button type="button" class="nx-textbtn strong" onClick={() => act.draftFrom(t.id)}>Start a draft from this</button>
         </div>
       ))}
     </div>
@@ -759,11 +763,11 @@ export function WorkCard({ w, p, dim, bare }: { w: Work; p: DeskProps; dim?: boo
       ) : null}
       {w.question && !w.question.answer ? (
         <div class={'nx-q' + (w.question.deferred ? ' nx-deferred' : '')}>
-          <span class="nx-q-h">{w.question.deferred ? 'Deferred' : `${w.doer?.name ?? 'The agent'} asks ${w.question.for === me ? 'you' : nameOf(w.question.for)}`} · about <button type="button" class="nx-inl" onClick={() => act.light([w.question!.about])}>{w.question.about === 'idempotency-keys' ? 'Idempotency keys' : w.question.about}</button></span>
+          <span class="nx-q-h">{w.question.deferred ? 'Deferred' : `${w.doer?.name ?? 'The agent'} asks ${w.question.for === me ? 'you' : nameOf(w.question.for)}`} · about <button type="button" class="nx-inl" onClick={() => act.light([w.question!.about])}>{partLabel(w.question.about)}</button></span>
           <p>{w.question.text}</p>
           <span class="nx-qopts">{w.question.options.map((o) => <button key={o} type="button" class="rp-mini" onClick={() => act.answer(w.id, o)}>{o}</button>)}</span>
           <label class="rp-cm-reply nx-q-in"><span class="rp-sr">Answer</span><input type="text" placeholder="Or answer in your own words…" value={ans} onInput={(e) => setAns(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ans.trim()) { act.answer(w.id, ans.trim()); setAns(''); } }} /></label>
-          <span class="nx-q-more"><button type="button" class="rp-link" onClick={() => act.discussQuestion(w.id)}>Discuss in a thread</button>{!w.question.deferred ? <button type="button" class="rp-link" onClick={() => act.defer(w.id)}>Defer; it can work on step 2 meanwhile</button> : null}</span>
+          <span class="nx-q-more"><button type="button" class="rp-link" onClick={() => act.discussQuestion(w.id)}>Discuss in a thread</button>{!w.question.deferred ? <button type="button" class="rp-link" onClick={() => act.defer(w.id)}>Defer; it can keep going on other steps</button> : null}</span>
         </div>
       ) : w.question?.answer ? <span class="nx-q-a"><Who id={w.question.answer.by} size={16} />Answered: {w.question.answer.text}</span> : null}
       {w.finding ? (

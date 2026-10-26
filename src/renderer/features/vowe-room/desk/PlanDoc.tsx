@@ -1,7 +1,7 @@
 import { h, Fragment, useEffect, useRef, useState } from '../journey.js';
 import { BasisGlyph } from '../canvas/faces.js';
 import { type Change, type PlanBody, type Step, type Thread, type Work } from '../contracts/model.js';
-import { approvedOf, blockedWhy, isDraft, openChanges, wordDiff } from '../state/plan.js';
+import { approvedOf, blockedWhy, isDraft, openChanges, widens, wordDiff } from '../state/plan.js';
 import { ThreadCard, Who, type DeskProps } from './Desk.js';
 import { By_, Diff, DocLayout, Ext, Lock, MentionHint, Prose, Proposed, Rich, Sec } from './Doc.js';
 import { objectiveState } from './Work.js';
@@ -297,7 +297,7 @@ function Bound({ w, p, list, label, can, source, base }: { w: Work; p: DeskProps
             </Proposed>
           </li>
         ))}
-        {adding ? <li><Prose text="" can onSave={(t) => { setAdding(false); if (t) p.act.plan(w.id, { op: 'list', list, index: items.length, text: t }); }} placeholder="Add a line…" /></li> : null}
+        {adding ? <li><Prose text="" can onSave={(t) => { setAdding(false); if (t) p.act.plan(w.id, { op: 'list', list, index: items.length, text: t }); }} placeholder="Add a line…" editing /></li> : null}
       </ul>
       {can && !adding ? <button type="button" class="nx-textbtn add" onClick={() => setAdding(true)}>+ Add</button> : null}
     </div>
@@ -328,6 +328,7 @@ function Execution({ w, p }: { w: Work; p: DeskProps }) {
   const dep = rec.work.find((x) => x.id === w.dependsOn && x.state === 'proposed');
   const why = blockedWhy(w, role);
   const live = !!ap && ap.version === w.version && !openChanges(w).length;
+  const wider = ap && !live ? widens(ap.body, w) : [];
   const [change, setChange] = useState(!w.doer && !live);
   const [peekSet, setPeek] = useState<boolean | null>(null);
   const peek = peekSet ?? (p.depth === 'focus' && !!w.doer && w.doer.kind === 'agent' && !live);
@@ -370,14 +371,15 @@ function Execution({ w, p }: { w: Work; p: DeskProps }) {
       ) : null}
       {live ? (
         <p class="nx-authd2"><Lock /> <span><b>v{ap!.version} authorized</b> by {ap!.approved!.by === me ? 'you' : nameOf(ap!.approved!.by)}, {ap!.approved!.ago} · {ap!.approved!.scope}{ap!.approved!.includes ? ` · included ${ap!.approved!.includes.join(', ')}` : ''}</span>{w.runs.length ? <button type="button" class="nx-textbtn" onClick={() => act.inspect({ kind: 'work', id: w.id, section: 'run' })}>See the run</button> : null}</p>
-      ) : w.state !== 'resolved' ? (
+      ) : w.state !== 'resolved' ? (<>
+        {wider.length ? <p class="nx-widens" role="note"><b>v{w.version} gives {w.doer?.name ?? 'whoever does it'} more room than v{ap!.version}:</b> {wider.join('; ')}. Authorize only if that’s intended.</p> : null}
         <div class="nx-authrow">
           <span class="nx-quiet">{why ?? (dep ? `Also authorizes ${dep.title} (v${dep.version}), which this plan waits for.` : ap ? `${w.doer?.name} switches from v${ap.version} to v${w.version} at its next step.` : w.doer?.kind === 'person' ? `${w.doer.name} gets v${w.version}; nothing runs by itself.` : p.caps.agentRuns ? `${w.doer?.name} starts in its worktree, inside these boundaries.` : `Records the approval and freezes v${w.version}.`)}{!why && w.doer?.kind === 'agent' && !p.caps.agentRuns ? ` This app can’t start ${w.doer.name} for you yet: start it yourself with the plan above.` : ''}</span>
           <button class="nx-btn primary" type="button" disabled={!!why} onClick={() => act.authorize(w.id)}>
-            {w.doer?.kind === 'person' ? `Hand v${w.version} to ${w.doer.name}` : p.caps.agentRuns ? `Authorize ${w.doer?.name ?? ''} to run v${w.version}` : `Approve v${w.version} for ${w.doer?.name ?? 'the agent'}`}
+            {!w.doer ? `Authorize v${w.version}` : w.doer.kind === 'person' ? `Hand v${w.version} to ${w.doer.name}` : p.caps.agentRuns ? `Authorize ${w.doer.name} to run v${w.version}` : `Approve v${w.version} for ${w.doer.name}`}
           </button>
         </div>
-      ) : null}
+      </>) : null}
     </Sec>
   );
 }
