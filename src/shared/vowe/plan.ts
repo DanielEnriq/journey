@@ -49,6 +49,8 @@ export type PlanOp =
   | { op: 'pr'; step: string; pr: string }
   | { op: 'revise' };
 
+const sameDoer = (a: Work['doer'], b: Work['doer']) => (a?.kind ?? null) === (b?.kind ?? null) && (a?.name ?? null) === (b?.name ?? null);
+
 const LIST_WORD = { may: 'what it may do', mayNot: 'what it must not do', askWhen: 'when it must ask', accept: 'verification' };
 
 export function applyOp(w: Work, op: PlanOp, who: string): Partial<Work> {
@@ -105,8 +107,10 @@ export function applyOp(w: Work, op: PlanOp, who: string): Partial<Work> {
       else cur[op.index] = op.text;
       return { ...touch(w, who, `Changed ${LIST_WORD[op.list]}`), [op.list]: cur } as Partial<Work>;
     }
-    case 'doer': return { doer: op.doer };
-    case 'prs': return { exec: { ...w.exec, prs: op.prs } };
+    // Who does it and how PRs are grouped are part of what gets authorized: changing either after an
+    // approval opens the next draft like any other edit, so an approved version never changes underneath.
+    case 'doer': return sameDoer(w.doer, op.doer) ? {} : { ...touch(w, who, op.doer ? `Chose ${op.doer.name} to do it` : 'Cleared who does it'), doer: op.doer };
+    case 'prs': return w.exec.prs === op.prs ? {} : { ...touch(w, who, op.prs === 'grouped' ? 'Grouped the PRs' : 'One PR per step'), exec: { ...w.exec, prs: op.prs } };
     case 'state': return { plan: w.plan.map((s) => s.id === op.step ? { ...s, state: op.state } : s) };
     case 'revise': return isDraft(w) ? {} : touch(w, who, `Started revising (v${Math.max(...w.versions.map((v) => v.version)) + 1})`);
     case 'pr': return { plan: w.plan.map((s) => s.id === op.step ? { ...s, pr: op.pr } : s) };
@@ -130,21 +134,22 @@ export function decide(r: VoweRecord, workId: string, changeId: string, accept: 
     if (c.kind === 'bound' && c.list) next = { ...next, ...touch(next, who, `Changed ${LIST_WORD[c.list]}`), [c.list]: [...next[c.list], c.text!] };
     if (c.kind === 'verify') next = { ...next, ...touch(next, who, 'Added a verification check'), accept: [...next.accept, c.text!] };
     if (c.kind === 'promote') {
-      const id = c.seed?.id ?? `${w.id}-${c.id}`;
+      // The server passes the new work item's id in the seed (a database uuid); uid() is only the optimistic copy's.
+      const id = c.seed?.id ?? uid('w');
       const at = w.plan.findIndex((s) => s.id === c.step) + 1;
       extra = {
         id, title: c.title!, why: c.seed?.why ?? c.note ?? '', decision: w.decision, thread: w.revision!.from, repo: w.repo,
         parts: c.seed?.parts ?? [], owner: w.owner, doer: w.doer, state: 'proposed', ago: 'now', blocks: w.id,
-        plan: [{ id: 'k1', text: c.text!, by, state: 'todo' }],
+        plan: [{ id: uid('s'), text: c.text!, by, state: 'todo' }],
         may: c.seed?.may ?? [], mayNot: c.seed?.mayNot ?? [...w.mayNot], askWhen: c.seed?.askWhen ?? [], accept: c.seed?.accept ?? [],
-        context: [{ id: 'y1', kind: 'work', label: w.title, sub: 'depends on this', target: w.id }, ...w.context.filter((x) => x.kind === 'decision')],
+        context: [{ id: uid('y'), kind: 'work', label: w.title, sub: 'depends on this', target: w.id }, ...w.context.filter((x) => x.kind === 'decision')],
         version: 1, versions: [{ version: 1, by: [w.revision!.by, who], ago: 'now', body: { objective: '', plan: [], may: [], mayNot: [], askWhen: [], accept: [] } }],
         exec: { where: w.exec.where, prs: 'per-step' }, log: [{ who, text: `Split from ${w.title}, step ${at}`, ago: 'now' }], runs: [], prs: [],
       };
       extra.versions[0].body = bodyOf(extra);
       const plan = [...next.plan];
-      plan.splice(idx(c.step), 0, { id: 's2a', text: c.title!, by, state: 'todo', promoted: id });
-      next = { ...next, ...touch(next, who, 'Split the schema into its own work item'), plan, dependsOn: id };
+      plan.splice(idx(c.step), 0, { id: uid('s'), text: c.title!, by, state: 'todo', promoted: id });
+      next = { ...next, ...touch(next, who, `Split “${c.title}” into its own work item`), plan, dependsOn: id };
     }
   }
   let threads = r.threads;
@@ -156,21 +161,28 @@ export function decide(r: VoweRecord, workId: string, changeId: string, accept: 
   return { threads, work: extra && !work.some((x) => x.id === extra!.id) ? [...work.slice(0, work.findIndex((x) => x.id === workId)), extra, ...work.slice(work.findIndex((x) => x.id === workId))] : work };
 }
 
-/** Authorize: freeze the working copy as an approved version (and any dependent proposed work it includes). */
+/**
+ * Authorize: freeze the working copy as an approved version (and any dependent proposed work it includes).
+ * Only freezes and records who authorized it: it never starts, invents or rebinds a run. Runs come from a
+ * real RunService (none today), so work that hadn't started moves to 'authorized' and nothing runs by itself.
+ */
 export function approve(r: VoweRecord, workId: string, who: string): Partial<VoweRecord> {
   const w = r.work.find((x) => x.id === workId);
   if (!w || !w.doer) return {};
   const dep = r.work.find((x) => x.id === w.dependsOn && x.state === 'proposed');
   const snap = (x: Work, includes?: string[]): Work => {
-    const scope = x.may.filter((m) => /^Edit /.test(m)).map((m) => m.replace(/^Edit /, '')).join(' · ') + ' · draft PRs';
-    const approved = { by: who, ago: 'now', doer: w.doer!.name, scope, includes };
+    const scope = scopeOf(x);
+    const approved = { by: who, ago: 'now', doer: w.doer!.name, scope, ...(includes ? { includes } : {}) };
     const versions = x.versions.some((v) => v.version === x.version) ? x.versions.map((v) => v.version === x.version ? { ...v, approved } : v) : [...x.versions, { version: x.version, by: [...new Set(x.log.map((l) => l.who))], ago: 'now', approved, body: bodyOf(x) }];
-    const runs = w.doer!.kind === 'person' ? x.runs : x.runs.length && x.runs[x.runs.length - 1].state !== 'finished'
-      ? x.runs.map((r0, k) => k === x.runs.length - 1 ? { ...r0, plan: x.version, events: [...r0.events, { text: `Now working from plan v${x.version}`, ago: 'now', kind: 'git' as const }] } : r0)
-      : [...x.runs, { id: 'run-' + x.id, agent: w.doer!.name, where: x.exec.where.replace(/ on .*/, ''), state: 'running' as const, plan: x.version, events: [{ text: `Started plan v${x.version} in ${x.exec.where.replace(/ on .*/, '')}`, ago: 'now', kind: 'git' as const }] }];
-    return { ...x, doer: x.doer ?? w.doer, versions, revision: undefined, state: x.state === 'proposed' || x.state === 'draft' ? 'running' : x.state, authorized: { by: who, ago: 'now', scope }, runs, log: [...x.log, { who, text: `Authorized ${w.doer!.name} to run v${x.version}`, ago: 'now' }] };
+    const state: Work['state'] = x.state === 'proposed' || x.state === 'draft' ? 'authorized' : x.state;
+    return { ...x, doer: x.doer ?? w.doer, versions, revision: undefined, state, authorized: { by: who, ago: 'now', scope }, log: [...x.log, { who, text: `Authorized ${w.doer!.name} to run v${x.version}`, ago: 'now' }] };
   };
   return { work: r.work.map((x) => x.id === workId ? snap(x, dep ? [dep.title] : undefined) : dep && x.id === dep.id ? snap(x) : x) };
+}
+
+/** What an authorization covers, in words: the paths it may edit, plus draft PRs. */
+export function scopeOf(x: Pick<Work, 'may'>): string {
+  return [...x.may.filter((m) => /^Edit /.test(m)).map((m) => m.replace(/^Edit /, '')), 'draft PRs'].join(' · ');
 }
 
 /** Word-level diff, for showing a suggested edit in place. */
