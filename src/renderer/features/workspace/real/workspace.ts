@@ -14,6 +14,7 @@ import type {
 import type { Person as PanelPerson, PersonTone, Stream } from '../../room/panel/types.js';
 import type { PersonRef, RoomSummary } from '../../room/types.js';
 import { toRoomWorkContext } from '../../work/adapter.js';
+import { createVoweServices } from './vowe-services.js';
 import type {
   AccessLost, InviteLink, InviteSource, Invitation, LinkExpiry, Member, MembershipError, MembershipSource, Result, RoomAccess, User,
 } from '../../membership/model.js';
@@ -834,5 +835,8 @@ export async function localWork(repos: Repository[]): Promise<{ repository: stri
   return all.flat().sort((a, b) => Date.parse(b.stream.lastActivityAt ?? '0') - Date.parse(a.stream.lastActivityAt ?? '0'));
 }
 
-export const realWorkspace = { room, call, work: workSource, record, membership, invites };
+/** The Vowe room's services (Desk), over IPC. */
+const vowe = createVoweServices();
+
+export const realWorkspace = { room, call, work: workSource, record, membership, invites, vowe };
 export type RealWorkspace = typeof realWorkspace;
