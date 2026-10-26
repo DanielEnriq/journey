@@ -396,7 +396,7 @@ const room: RoomDataSource = {
       attention.push({
         id: 'sign',
         text: `Decision v${d.version} needs your signature`,
-        detail: `${by.tone === 'me' ? 'You' : by.name} proposed: ${d.title} Verify: ${d.verify}. Sign it in the call, where the room can see it.`,
+        detail: `${by.tone === 'me' ? 'You' : by.name} proposed: ${d.title}.${d.verify.trim() ? ` Verify: ${d.verify.trim()}.` : ''} Sign it in the call, where the room can see it.`,
       });
     }
     return {
