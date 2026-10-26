@@ -200,7 +200,7 @@
 .surface .receipt ~ .nx-vowe-work{top:108px}
 .nx-ref{color:var(--v-info-fg);text-decoration:underline dotted 1px;text-underline-offset:3px;cursor:default}
 .words.nx-partial::after{content:"";display:inline-block;width:6px;height:6px;margin-left:5px;border-radius:50%;background:var(--v-fg-3);animation:nx-pulse 1s ease-in-out infinite}
-.pin.nx-pin{border:0;font:inherit;cursor:pointer;text-align:left}
+.pin.nx-pin{border:0;padding:0;background:none;font:inherit;cursor:pointer;text-align:left}
 
 /* ---------------------------------------------------------------- the Desk */
 
