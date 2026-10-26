@@ -13,7 +13,7 @@ import { Sheet } from '../../ui/pass2/common.js';
 import { HomeFirst } from '../../ui/pass2/home/HomeFirst.js';
 import { HomeReturning } from '../../ui/pass2/home/HomeReturning.js';
 import { InboxHome } from '../inbox/ui/InboxHome.js';
-import { YourRooms } from '../inbox/ui/YourRooms.js';
+import { RoomsQuiet, YourRooms } from '../inbox/ui/YourRooms.js';
 import { activeInbox, type InboxSource } from '../inbox/source.js';
 import { InvitationsIndex } from '../../ui/pass2/invites/InviteGate.js';
 import { FindRepositoriesSheet, ProjectsIndex } from '../../ui/pass2/projects/Projects.js';
@@ -243,6 +243,7 @@ export function Home(p: HomeProps) {
       repoCount={local?.length ?? 0} onAddRepo={addRepo} onFindRepos={findRepos} notice={notice} />;
   } else if (inbox) {
     page = <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
+      quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />}
       idle={(st) => <YourRooms rooms={p.rooms} now={st.now} needs={needsByRoom(st.view.needs)} scene={(id) => inbox.context(id).then((c) => c.scene)}
         onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} />} />;
   } else {

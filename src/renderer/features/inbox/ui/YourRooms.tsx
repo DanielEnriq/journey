@@ -39,6 +39,20 @@ function useScenes(ids: string[], load: (id: string) => Promise<Scene | null>) {
   return scenes;
 }
 
+/** In place of Needs you when nothing needs you: which room has a call on, and how the others stand. */
+export function RoomsQuiet({ rooms, now }: { rooms: RoomSummary[]; now: string }) {
+  const live = rooms.find((r) => r.inCall.length > 0);
+  const recent = rooms.filter((r) => r !== live && !(r.activityAt && Date.parse(now) - Date.parse(r.activityAt) > QUIET))
+    .sort((a, b) => ((a.activityAt ?? '') < (b.activityAt ?? '') ? 1 : -1)).slice(0, 2);
+  const state = (r: RoomSummary) => r.activity.replace(/\.$/, '').replace(/^(You|Nothing|No|A|An|The)\b/, (w) => w.toLowerCase());
+  return (
+    <p class="vi-quietline">
+      {live ? `${live.name} has a call on. ` : null}
+      {recent.length ? `${recent.map((r) => `${r.name}: ${state(r)}`).join('. ')}.` : live ? null : 'Your rooms are quiet.'}
+    </p>
+  );
+}
+
 export function YourRooms(p: YourRoomsProps) {
   const call = useStore(callPresence).call;
   const quiet = (r: RoomSummary) => !!r.activityAt && Date.parse(p.now) - Date.parse(r.activityAt) > QUIET;

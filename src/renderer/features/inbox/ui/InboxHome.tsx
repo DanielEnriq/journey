@@ -25,6 +25,8 @@ export interface InboxHomeProps {
   onOpenRoom(roomId: string): void;
   /** The reading page with nothing selected (Home: your rooms); without it, a hint to pick an item. */
   idle?(st: InboxState): ComponentChildren;
+  /** In place of Needs you when nothing needs you: a line on how your rooms stand. */
+  quiet?: ComponentChildren;
 }
 
 type Foot = null | 'done' | 'snoozed';
@@ -112,7 +114,8 @@ export function InboxHome(p: InboxHomeProps) {
         <header class="vi-head">
           <div class="vi-eyebrow">{dayLine(st.now)}</div>
           <h1 class="vi-hello">{partOfDay(st.now)}{p.firstName ? `, ${p.firstName}` : ''}.{v.needs.length ? null : <> <em>Nothing needs you.</em></>}</h1>
-          {v.away ? <p class="vi-away"><b>{v.away.label}:</b> {v.away.summary}</p> : null}
+          {v.away ? <p class="vi-away"><b>{v.away.label}:</b> {v.away.summary.replace(/\.?$/, '.')}</p>
+            : v.needs.length ? <p class="vi-away">{v.needs.length} {v.needs.length > 1 ? 'things need' : 'thing needs'} you{v.following.length ? ` · ${v.following.length} moved in what you follow` : ''}.</p> : null}
         </header>
         {st.status === 'failed' ? (
           <div class="vi-error" role="alert"><Icon name="warn" /><span>Couldn’t read your rooms{st.error ? `: ${st.error}` : ''}.{ids.length ? ' Showing what was read last.' : ''}</span>
@@ -132,14 +135,14 @@ export function InboxHome(p: InboxHomeProps) {
           </section>
         ) : (
           <div class="vi-secs" role="listbox" aria-label="Your Inbox" aria-activedescendant={sel ? `vi-row-${sel}` : undefined}>
-            <Section title="Needs you" note="addressed to you, waiting on you" items={v.needs} row={row} calm={<p class="vi-none is-calm"><Icon name="check" />Nothing is waiting on you.</p>} />
+            <Section title="Needs you" note="addressed to you, waiting on you" items={v.needs} row={row} calm={p.quiet ?? <p class="vi-none">Nothing is waiting on you.</p>} />
             <Section title="Following" note="what you’re part of" items={v.following} row={row} />
             <Section title="In your rooms" note="no action needed" items={v.activity} row={row} />
           </div>
         )}
         <footer class="vi-foot">
-          <button type="button" class="vi-footbtn" aria-pressed={foot === 'done'} onClick={() => setFoot(foot === 'done' ? null : 'done')}>Done today · {doneToday.length}</button>
-          <button type="button" class="vi-footbtn" aria-pressed={foot === 'snoozed'} onClick={() => setFoot(foot === 'snoozed' ? null : 'snoozed')}>Snoozed · {v.snoozed.length}</button>
+          <button type="button" class="vi-footbtn" aria-pressed={foot === 'done'} onClick={() => setFoot(foot === 'done' ? null : 'done')}>Done today{doneToday.length ? ` · ${doneToday.length}` : ''}</button>
+          <button type="button" class="vi-footbtn" aria-pressed={foot === 'snoozed'} onClick={() => setFoot(foot === 'snoozed' ? null : 'snoozed')}>Snoozed{v.snoozed.length ? ` · ${v.snoozed.length}` : ''}</button>
           {st.unavailable.length ? <span class="vi-unavail" title="These sources don’t feed the Inbox yet">Not in Journey yet: {st.unavailable.map((s) => SOURCE_LABEL[s].replace(/ · not in Journey yet$/, '')).join(', ')}</span> : null}
           {st.marksKept?.on === 'device' ? <span class="vi-unavail" title={st.marksKept.reason}>Seen, snoozed and muted are kept on this machine only</span> : null}
         </footer>
@@ -165,34 +168,33 @@ function Section({ title, note, items, row, calm }: { title: string; note: strin
   if (!items.length && !calm) return null;
   return (
     <section class={`vi-sec${title === 'Needs you' && items.length ? ' is-needs' : ''}`} aria-label={title}>
-      <div class="vi-sec-h" role="presentation"><span>{title}{items.length ? <b>{items.length}</b> : null}</span><em>{note}</em></div>
-      {items.length ? items.map(row) : calm}
+      {items.length ? <>
+        <div class="vi-sec-h" role="presentation"><span>{title}</span><b>{items.length}</b><em>{note}</em></div>
+        {items.map(row)}
+      </> : calm}
     </section>
   );
 }
 
 function Row({ it, st, selected, note, onSelect, onMenu, onOpen }: { it: InboxItem; st: InboxState; selected: boolean; note?: string; onSelect(): void; onMenu?(e: MouseEvent): void; onOpen(): void }) {
   const name = nameIn(st.people, st.me);
-  const verb = it.obligation ? OBLIGATION_VERB[it.obligation] : null;
-  const when = it.tier === 'needs' && it.waitingSince ? waiting(it.waitingSince, st.now) : ago(it.at, st.now);
+  const needs = it.tier === 'needs';
+  const verb = needs && it.obligation ? OBLIGATION_VERB[it.obligation] : null;
+  const when = needs && it.waitingSince ? waiting(it.waitingSince, st.now) : ago(it.at, st.now);
+  // The second line: where it is, then why it's yours (Needs you) or what it's on (the rest).
+  const meta = [it.room.name, note ?? (needs ? it.whyShort ?? it.why.split(' · ')[0] : it.path[1] ?? it.whyShort)].filter(Boolean) as string[];
+  const p = it.progress;
   return (
     <div id={`vi-row-${it.id}`} data-id={it.id} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
-      class={'vi-row' + (selected ? ' is-sel' : '') + (it.tier === 'needs' ? ' is-needs' : '') + (it.unseen ? ' is-new' : '')}
+      class={'vi-row' + (it.tier === 'activity' ? ' is-activity' : '') + (needs || it.unseen ? ' is-unread' : ' is-read')}
       onClick={onSelect} onDblClick={() => canOpen(it) && onOpen()} onContextMenu={onMenu} onFocus={() => !selected && onSelect()}>
       <span class="vi-face"><Face id={it.actor} people={st.people} /></span>
-      <span class="vi-main">
-        <span class="vi-l1">
-          <span class="vi-hl">{verb ? <b class="vi-verb">{verb}</b> : null}{it.headline}</span>
-          <span class="vi-t">{when}</span>
-        </span>
-        {it.raised && it.tier !== 'needs' ? <span class="vi-raised">{it.raised}</span> : null}
-        {it.excerpt ? <span class="vi-ex"><b>{name(it.excerpt.by)}:</b> {it.excerpt.text.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1')}</span> : null}
-        {it.progress ? <span class="vi-progress" aria-label={`${it.progress.done} of ${it.progress.of}`}>{Array.from({ length: it.progress.of }, (_, i) => <i key={i} class={i < it.progress!.done ? 'is-done' : ''} />)}</span> : null}
-        <span class="vi-meta">
-          <span>{it.room.name}</span>{it.whyShort || note ? <><i aria-hidden="true">·</i><span>{note ?? it.whyShort}</span></> : null}
-          {it.unseen && it.tier !== 'needs' ? <span class="vi-newn">{it.unseen} new</span> : null}
-        </span>
-      </span>
+      <span class="vi-t">{verb ? <span class="vi-verb">{verb}</span> : null}<span class="vi-hl">{it.headline}</span></span>
+      <span class="vi-r">{!needs && it.unseen > 1 ? <span class="vi-newn">{it.unseen} new</span> : null}{when}</span>
+      {it.raised ? <span class="vi-raised"><Icon name="raise" size={14} />{it.raised}</span> : null}
+      {it.excerpt && !needs ? <span class="vi-ex"><b>{name(it.excerpt.by)}:</b> {it.excerpt.text.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1')}</span> : null}
+      {p ? <span class="vi-progress" aria-label={`${p.done} of ${p.of} steps done`}>{Array.from({ length: p.of }, (_, i) => <i key={i} class={i < p.done ? 'is-done' : i === p.done && needs ? 'is-wait' : ''} />)}</span> : null}
+      <span class="vi-meta">{meta.map((m, i) => <Fragment key={i}>{i ? <i aria-hidden="true">·</i> : null}<span>{m}</span></Fragment>)}</span>
     </div>
   );
 }
