@@ -52,3 +52,22 @@ room's call asks first.
 | `features/room/call/CallControls.tsx` (+ css), `features/room/shell.tsx` (Chrome band) | UI |
 | `features/vowe-room/desk/Focus.tsx`, `Desk.tsx` (FullScreen only), `room/VoweRoom.tsx`, `state/ui.ts` | UI |
 | All stylesheets (motion, scrollbars, new component css), `vowe.html` | UI |
+
+## Where the Inbox's state lives
+
+- Seen, snoozed, followed and muted marks: `inbox_state` (one row per person, RLS: only you), with a local copy in
+  `localStorage` (`vowe.inbox.v1:<userId>`) for speed. The newest `updatedAt` wins; saves are debounced and flushed
+  on sign-out. A database without migration `20261031000000_inbox_state` keeps them on the machine only, and Home's
+  footer says so.
+- Done: `attention_done`, per room. Declining an invitation: `room_invitations.declined_at` via
+  `decline_room_invitation`; sending it again brings it back.
+- The rooms list is re-read when the window regains focus and every minute while visible, so a room someone adds
+  you to shows up without relaunching.
+
+## Checking it by hand against a local stack
+
+`scripts/home-e2e/launch.mjs` boots the real app (`dist/main/index.js`, as `pnpm start` does) with a throwaway
+userData folder and the mock GitHub, so you sign in with Continue with GitHub as a test account. After that account
+has signed in once, `scripts/home-e2e/seed.mjs <login>` has two other people do ordinary things through the app's own
+services (a decision to sign, a thread waiting on you, a plan's question, an invitation). It refuses anything but a
+local Supabase URL. The header of each script has the exact environment.

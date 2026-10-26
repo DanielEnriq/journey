@@ -8,7 +8,7 @@ import type { RoomSummary } from '../../room/types.js';
 import { ago } from './time.js';
 
 // Home's reading page with nothing selected: your rooms, the ongoing spaces the Inbox's items come from.
-// The room with your call (else one with a call on, else the one that moved last) is shown large with its
+// The room with your call (else one with a call on, else one that needs you, else the one that moved last) is shown large with its
 // canvas; the rest are rows with what's happening and the parts on their canvas. Everything is the room list
 // Home already has, plus each room's current canvas view.
 
@@ -44,7 +44,8 @@ export function YourRooms(p: YourRoomsProps) {
   const quiet = (r: RoomSummary) => !!r.activityAt && Date.parse(p.now) - Date.parse(r.activityAt) > QUIET;
   const at = (r: RoomSummary) => r.activityAt ?? '';
   const byRecent = [...p.rooms].sort((a, b) => (at(a) < at(b) ? 1 : -1));
-  const lead = byRecent.find((r) => r.id === call?.roomId) ?? byRecent.find((r) => r.inCall.length > 0) ?? byRecent.find((r) => !quiet(r)) ?? byRecent[0];
+  const lead = byRecent.find((r) => r.id === call?.roomId) ?? byRecent.find((r) => r.inCall.length > 0)
+    ?? byRecent.find((r) => (p.needs[r.id] ?? 0) > 0) ?? byRecent.find((r) => !quiet(r)) ?? byRecent[0];
   const rest = byRecent.filter((r) => r !== lead);
   const ordered = [...rest.filter((r) => !quiet(r)), ...rest.filter(quiet)];
   const scenes = useScenes(byRecent.map((r) => r.id), p.scene);

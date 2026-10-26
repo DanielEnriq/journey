@@ -189,6 +189,19 @@ async function refresh() {
   notify();
 }
 
+/**
+ * Someone else adding you to a room (or removing you) reaches no channel you're in, so the list is checked
+ * again when the window comes back and every minute while it's on screen. Only a changed list reads records.
+ */
+async function recheckList() {
+  if (!account.state.user || realStatus.state.state !== 'ready') return;
+  const rooms = await unwrap(api().rooms.list()).catch(() => null);
+  if (!rooms) return;
+  const ids = rooms.map((r) => r.id);
+  if (ids.length !== order.length || ids.some((id) => !order.includes(id))) await refresh();
+}
+const RECHECK_MS = 60_000;
+
 /** The view the room's canvas was last left on, as a still for the preview; null before anything is drawn. */
 async function lastViewOf(roomId: string, who: ReturnType<typeof peopleOf>): Promise<RoomPreview['lastView']> {
   const r = await roomScene(roomId).catch(() => null);
@@ -322,6 +335,8 @@ export function startRealWorkspace() {
     }
   });
   if (account.state.user) void refresh();
+  window.addEventListener('focus', () => { void recheckList(); });
+  setInterval(() => { if (document.visibilityState === 'visible') void recheckList(); }, RECHECK_MS);
 }
 
 /** Rooms are made in a workspace; your first room makes one for you. */
