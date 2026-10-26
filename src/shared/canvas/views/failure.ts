@@ -106,7 +106,7 @@ export function failureScene(spec: ViewSpec, sys: System): Scene {
   actors.forEach((a) => wires.push({ c: 'life', x: cx(a.id), y: 146, w: 0, h: end - 146 }));
 
   const sceneSteps: SceneStep[] = steps.map((s, k) => ({
-    id: s.id, n: String(k + 1), title: s.title, sub: s.sub, short: `step ${k + 1}`, tone: s.tone, component: s.actor,
+    id: s.id, n: String(k + 1), title: s.title, sub: s.sub, short: `step ${k + 1}`, tone: s.tone, component: s.actor, op: s.op,
     x: (rects[s.actor] ? cx(s.actor) : cx(c.focus.id)) - 110, y: STEP_TOP + k * STEP_GAP,
   }));
 

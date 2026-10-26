@@ -259,7 +259,7 @@ function createView(tx: Tx, a: CommandArgs['create_view']): ViewSpec {
   const f = cast?.focus, job = cast?.job;
   const question = a.question ?? (a.type === 'architecture' ? 'What is this system?'
     : a.type === 'failure-flow' ? `What if ${f!.short ?? 'the ' + f!.name.toLowerCase()} fails mid-job?`
-    : `What if ${countWord(a.instances ?? 2)} ${(f!.short ?? f!.name).replace(/^the /, '')}s take the same job?`);
+    : concurrencyQuestion(f!, a.instances ?? 2));
   const parent = a.parent ?? (a.type === 'concurrency'
     ? Object.values(tx.doc.views).find((v) => v.type === 'failure-flow' && v.focus === a.focus)?.id ?? ARCHITECTURE_VIEW
     : a.type === 'failure-flow' ? ARCHITECTURE_VIEW : undefined);
@@ -276,6 +276,9 @@ function createView(tx: Tx, a: CommandArgs['create_view']): ViewSpec {
   if (spec.status === 'proposed') tx.proposedSomething = true;
   return spec;
 }
+
+/** The question a Concurrency view asks when nobody wrote their own. */
+const concurrencyQuestion = (f: Component, n: number) => `What if ${countWord(n)} ${(f.short ?? f.name).replace(/^the /, '')}s take the same job?`;
 
 function removeView(tx: Tx, id: string) {
   if (id === ARCHITECTURE_VIEW) throw new CanvasError('forbidden', 'The Architecture view is the system itself; it can’t be removed', 'args.view');
@@ -440,6 +443,19 @@ const HANDLERS: { [K in CommandName]: Handler<K> } = {
     if (isAgent(tx.actor) && v.by.kind !== 'agent') throw new CanvasError('forbidden', 'Vowe can only remove views it drew', 'args.view');
     removeView(tx, a.view);
     return `Removed ${v.name}.`;
+  },
+
+  set_instances(tx, a) {
+    const v = tx.view(a.view);
+    if (v.type !== 'concurrency') throw new CanvasError('unsupported', `${v.name} isn’t a Concurrency view; only a Concurrency view runs copies`, 'args.view');
+    if (isAgent(tx.actor) && v.by.kind !== 'agent') throw new CanvasError('forbidden', 'Vowe can only change views it drew', 'args.view');
+    const was = v.instances ?? 2;
+    const f = v.focus ? tx.doc.components[v.focus] : undefined;
+    if (was === a.instances) return `${v.name} already runs ${countWord(was)} copies.`;
+    // A question someone wrote stays theirs; the one the engine wrote follows the count.
+    const question = f && v.question === concurrencyQuestion(f, was) ? concurrencyQuestion(f, a.instances) : v.question;
+    tx.set('views', v.id, { ...v, instances: a.instances, question });
+    return `${v.name} now runs ${countWord(a.instances)} copies of ${f?.name ?? v.focus ?? 'its focus'} at once.`;
   },
 
   draw(tx, a) {

@@ -113,6 +113,40 @@ describe('the payment system draws the design’s boards from meaning alone', ()
   });
 });
 
+describe('the Concurrency instrument changes copies on the view the room has', () => {
+  const doc = payment();
+  test('set_instances redraws the same view with more copies, and its author can undo it', () => {
+    let d = apply(doc, DAN, 'show_view', { view: 'concurrency', focus: 'payment-worker' }).doc;
+    const r = apply(d, DAN, 'set_instances', { view: 'concurrency', instances: 3 });
+    assert.equal(r.result.applied, 'applied');
+    assert.deepEqual(r.result.changed.views, ['concurrency']);
+    d = r.doc;
+    assert.deepEqual(Object.keys(d.views).filter((v) => d.views[v].type === 'concurrency'), ['concurrency']);
+    const s = buildScene(d, 'concurrency');
+    assert.equal(s.nodes.filter((n) => n.component === 'payment-worker').length, 3);
+    assert.equal(s.question, 'What if three workers take the same job?');
+    const back = apply(d, DAN, 'undo', {}).doc;
+    assert.equal(back.views.concurrency.instances, 2);
+    assert.equal(back.views.concurrency.question, 'What if two workers take the same job?');
+  });
+
+  test('a question someone wrote is kept; the same count is a no-op; other views refuse', () => {
+    let d = apply(doc, DAN, 'create_view', { type: 'concurrency', focus: 'payment-worker', question: 'Do two workers double charge?' }).doc;
+    d = apply(d, DAN, 'set_instances', { view: 'concurrency', instances: 4 }).doc;
+    assert.equal(d.views.concurrency.question, 'Do two workers double charge?');
+    assert.equal(apply(d, DAN, 'set_instances', { view: 'concurrency', instances: 4 }).result.applied, 'noop');
+    assert.equal(code(() => apply(d, DAN, 'set_instances', { view: 'architecture', instances: 2 })), 'unsupported');
+    assert.equal(code(() => parseCommand({ schema: 'vowe.canvas.command/1', id: 'cmd-set-9', name: 'set_instances', args: { view: 'concurrency', instances: 1 } })), 'invalid');
+    assert.equal(code(() => apply(d, VOWE, 'set_instances', { view: 'concurrency', instances: 2 })), 'forbidden');
+  });
+
+  test('Failure flow steps say what happens at each step', () => {
+    let d = apply(doc, DAN, 'show_view', { view: 'failure-flow', focus: 'payment-worker' }).doc;
+    d = apply(d, DAN, 'add_failure', { component: 'payment-worker', mode: 'crash' }).doc;
+    assert.deepEqual(buildScene(d, 'failure-flow').steps.map((st) => st.op), ['lease', 'effect', 'crash', 'expire', 'effect']);
+  });
+});
+
 describe('a different system draws with the same views', () => {
   test('Orders: architecture, failure and concurrency all come from its own names', () => {
     let d = apply(emptyDocument(), DAN, 'load_system', ORDERS_SYSTEM).doc;
