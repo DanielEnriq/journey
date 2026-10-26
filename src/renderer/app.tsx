@@ -13,6 +13,7 @@ import {
 } from './features/workspace/real/workspace.js';
 import type { LandingState, MembershipError } from './features/membership/model.js';
 import { Home, type HomePage } from './features/home/Home.js';
+import { bindInbox } from './features/inbox/real.js';
 import { LoginScreen, OpeningVowe } from './features/welcome/LoginScreen.js';
 import { CreateRoomSheet } from './ui/pass2/rooms/CreateRoom.js';
 import { InviteGate } from './ui/pass2/invites/InviteGate.js';
@@ -233,6 +234,9 @@ function App() {
   // Signing out, in the app or the preview, ends any call; so does crossing between the demo and your rooms.
   useEffect(() => { if (route.screen === 'login') { void demoSession.leave(); void realSession.leave(); setInvite(null); } }, [route.screen]);
   useEffect(() => { void (demo ? realSession : demoSession).leave(); }, [demo]);
+  // The Inbox follows the workspace on screen: the example rooms, your rooms, or none when signed out.
+  const inboxOf = signedOut || route.screen === 'login' ? null : demo ? 'demo' : 'real';
+  useEffect(() => { bindInbox(inboxOf); }, [inboxOf]);
   // Repositories added on this machine, for the room pickers.
   const loadRepos = () => { if (!PREVIEW && user) localRepos().then(setRepos, () => setRepos([])); };
   useEffect(loadRepos, [user, newRoom]);

@@ -303,3 +303,13 @@ describe('away summary', () => {
     assert.match(away.label, /^Since /);
   });
 });
+
+describe('Activity from written-out events (the example workspace)', () => {
+  it('shows a note verbatim, about the room, and digests several', () => {
+    const r = rec({ log: [ev('n2', 'note', null, 'bob', 2, 'Bob pinned the failure view.'), ev('n1', 'note', null, 'cat', 5, 'Cat joined the call.')] });
+    const [a] = derive(input([room(r)])).activity;
+    assert.equal(a!.subject.kind, 'room');
+    assert.equal(a!.events[0]!.text, 'Bob pinned the failure view.');
+    assert.equal(a!.headline, 'Payments: 2 updates');
+  });
+});

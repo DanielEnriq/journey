@@ -364,6 +364,8 @@ const DIGEST: Record<string, [string, string]> = {
   question: ['question', 'questions'], finding: ['finding', 'findings'], resolved: ['resolved', 'resolved'],
   joined: ['joined', 'joined'], left: ['left', 'left'], removed: ['removed', 'removed'], role: ['role change', 'role changes'], repository: ['repository change', 'repository changes'],
   'call-started': ['call', 'calls'], 'call-left': ['left a call', 'left a call'],
+  // A sentence already written in full (the demo's example events); shown verbatim, about the room.
+  note: ['update', 'updates'],
 };
 const VERB: Record<string, string> = {
   thread: 'started a thread:', reply: 'replied:', decision: 'drafted a decision:', amended: 'amended', review: 'asked for signatures on', agreed: 'Agreed:',
@@ -414,6 +416,7 @@ function activity(c: Ctx, out: InboxItem[], taken: Set<string>) {
     const who = top.by ? x.nameOf(top.by) : '';
     const text = (e: RecordEvent) => {
       const by = e.by ? `${x.nameOf(e.by)} ` : '';
+      if (e.kind === 'note') return short(plain(e.text), 120);
       return e.kind === 'agreed' ? `Agreed: ${e.text}` : `${by}${VERB[e.kind]}${e.text && !['joined', 'left', 'removed', 'role', 'repository', 'call-started', 'call-left'].includes(e.kind) ? ` ${short(plain(e.text), 80)}` : ''}`.trim();
     };
     out.push({
