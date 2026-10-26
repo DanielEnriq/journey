@@ -1,0 +1,65 @@
+import type { InboxItem } from '../model.js';
+
+// How the Inbox says time and moves through its list, as pure rules (tested in time.test.ts). Times are said
+// against the view's own `now`, so a row never disagrees with the derivation it came from.
+
+/** "now", "41m", "3h", "4:10 pm", "Yesterday", "Tue", "Oct 12". */
+export function ago(iso: string, now: string): string {
+  const t = Date.parse(iso), n = Date.parse(now);
+  if (!Number.isFinite(t) || !Number.isFinite(n)) return '';
+  const m = Math.round((n - t) / 60_000);
+  if (m < 1) return 'now';
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 12) return `${h}h`;
+  const day = new Date(t), today = new Date(n);
+  const days = Math.round((Date.parse(today.toDateString()) - Date.parse(day.toDateString())) / 86_400_000);
+  if (days === 0) return day.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return day.toLocaleDateString('en-US', { weekday: 'short' });
+  return day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** "waiting 41m", or "since Yesterday" once it's a day rather than a duration. */
+export function waiting(iso: string, now: string): string {
+  const a = ago(iso, now);
+  return /^\d/.test(a) ? `waiting ${a}` : a === 'now' ? 'just now' : `since ${a}`;
+}
+
+/** "Monday, October 26" and "Morning" / "Afternoon" / "Evening", for the Inbox's head. */
+export const dayLine = (iso: string) => new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+export const partOfDay = (iso: string) => { const h = new Date(iso).getHours(); return h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening'; };
+
+/** Tomorrow at 9:00 in local time, for "Until tomorrow, 9:00". */
+export function tomorrowAt9(now: string): string {
+  const d = new Date(Date.parse(now) + 86_400_000);
+  d.setHours(9, 0, 0, 0);
+  return d.toISOString();
+}
+
+/** The snooze choices, in the order the menu offers them. "Until something new happens" never expires on time. */
+export function snoozeChoices(now: string): { label: string; until: string }[] {
+  return [
+    { label: 'Until tomorrow, 9:00', until: tomorrowAt9(now) },
+    { label: 'Until something new happens', until: '9999-12-31T00:00:00.000Z' },
+    { label: 'Until after this call', until: new Date(Date.parse(now) + 3_600_000).toISOString() },
+  ];
+}
+
+/** The list's order: Needs you, then Following, then In your rooms. */
+export const inOrder = (v: { needs: InboxItem[]; following: InboxItem[]; activity: InboxItem[] }) => [...v.needs, ...v.following, ...v.activity];
+
+/** j/k: the next or previous item from the selected one (from the top or bottom when nothing is selected). */
+export function step(ids: string[], selected: string | null, d: 1 | -1): string | null {
+  if (!ids.length) return null;
+  const i = selected ? ids.indexOf(selected) : -1;
+  if (i < 0) return d > 0 ? ids[0] : ids[ids.length - 1];
+  return ids[Math.max(0, Math.min(ids.length - 1, i + d))];
+}
+
+/** After an item leaves the list (done, snoozed, answered), the one to select: the next, else the previous. */
+export function nextAfter(ids: string[], gone: string): string | null {
+  const i = ids.indexOf(gone);
+  if (i < 0) return null;
+  return ids[i + 1] ?? ids[i - 1] ?? null;
+}
