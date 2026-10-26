@@ -8,6 +8,8 @@ import type { PlanOp } from '../state/plan.js';
 import type { Step as PStep } from '../contracts/model.js';
 import { ObjectiveCard, WorkView, objectiveState } from './Work.js';
 import { DecisionDoc } from './DecisionDoc.js';
+import { Focus } from './Focus.js';
+import type { Scene } from '../../../../shared/canvas/index.js';
 
 import type { Depth } from '../state/ui.js';
 import { useNames, type Names } from '../state/directory.js';
@@ -70,7 +72,8 @@ export interface DeskAct {
   depth(d: Depth): void;
   newWork(title: string, objective: string): void;
   draftFrom(thread: string): void;
-  fsec(sec: 'foryou' | Tab): void;
+  /** Full screen: which section Focus shows. */
+  fsec(sec: Tab): void;
   markDone(ids: string[]): void;
   askFix(work: string, pr: string, check: string): void;
   stopRun(work: string): void;
@@ -103,9 +106,13 @@ export interface DeskProps {
   everywhere: boolean;
   depth: Depth;
   compare: number | null;
-  /** Full screen: the section in the rail, and whether we're inside the full-screen workspace. */
-  fsec: 'foryou' | Tab;
+  /** Full screen: the section Focus shows, and whether we're inside the full-screen workspace. */
+  fsec: Tab;
   shell?: boolean;
+  /** The room, for Focus's list head. */
+  room?: { name: string; repo: string | null };
+  /** The canvas's current view, for Focus's empty Discuss. */
+  scene?: Scene | null;
 }
 
 /* ---------------- shared pieces ---------------- */
@@ -181,7 +188,7 @@ export function Desk(p: DeskProps) {
     work: rec.work.filter((w) => w.state !== 'closed' && w.state !== 'resolved').length,
   };
   const items = attention(rec, names);
-  if (p.depth === 'focus') return <FullScreen {...p} />;
+  if (p.depth === 'focus') return <Focus {...p} />;
   if (p.inspect) return <Inspector {...p} />;
   return (
     <div class="rp-panel nx-desk2" aria-label="Where the room is">
@@ -211,14 +218,14 @@ export function Desk(p: DeskProps) {
 
 const KIND_WORD = { respond: 'Answer', approve: 'Approve', review: 'Review', info: 'FYI' };
 
-/** Coming back: one line for what changed while you were away. The details are in For you (full screen). */
+/** Coming back: one line for what changed while you were away. The details are in Home's Inbox. */
 function SinceLine({ items, p }: { items: Attn[]; p: DeskProps }) {
   const info = items.filter((x) => x.kind === 'info');
   if (!info.length) return null;
   return (
     <div class="nx-sinceline" role="status">
       <span><b>{p.rec.since ? `Since ${p.rec.since.lastHere.split(',')[0]}` : 'While you were away'}</b> · {info.length} change{info.length > 1 ? 's' : ''}: {info[0].text}{info.length > 1 ? '…' : ''}</span>
-      <button type="button" class="nx-textbtn" onClick={() => { p.act.depth('focus'); p.act.fsec('foryou'); }}>See all</button>
+      <button type="button" class="nx-textbtn" onClick={() => { location.hash = '#/home'; }}>See all</button>
       <button type="button" class="nx-textbtn" onClick={p.act.sinceShow}>On the canvas</button>
       <button type="button" class="nx-x2" aria-label="Dismiss" title="Dismiss" onClick={() => p.act.markDone(info.map((x) => x.id))}>×</button>
     </div>
@@ -286,60 +293,10 @@ function Suggested({ p }: { p: DeskProps }) {
     </div>
   );
 }
-/* ---------------- Full screen: every surface, navigable ---------------- */
-
-const SEC_LABEL = { foryou: 'For you', discuss: 'Discuss', decide: 'Decide', work: 'Work' } as const;
-
-/** The full-screen workspace: a section rail (For you, Discuss, Decide, Work), the section's list, and the open
- *  item. The same objects as the compact Desk, with room to read and write. ⌥1–4 switch sections. */
-function FullScreen(p: DeskProps) {
-  const { rec, act, fsec } = p;
-  const names = useNames();
-  const items = attention(rec, names);
-  const n = needsMe(rec, names);
-  const sp: DeskProps = { ...p, shell: true, narrow: false };
-  const [writing, setWriting] = useState<'decide' | 'work' | null>(null);
-  const threads = rec.threads.filter((t) => t.status === 'open');
-  const decisions = rec.decisions.filter((d) => d.state !== 'dismissed');
-  const t = fsec === 'discuss' ? rec.threads.find((x) => x.id === p.openThread) : undefined;
-  const d = p.inspect?.kind === 'decision' ? rec.decisions.find((x) => x.id === p.inspect!.id) : undefined;
-  const w = p.inspect?.kind === 'work' ? rec.work.find((x) => x.id === p.inspect!.id) : undefined;
-  const title = fsec === 'discuss' ? t?.about.name : fsec === 'decide' ? d?.title : fsec === 'work' ? w?.title : undefined;
-  const counts = { foryou: items.filter((x) => x.kind !== 'info').length, discuss: threads.length, decide: decisions.filter((x) => x.state !== 'superseded').length, work: rec.work.filter((x) => x.state !== 'resolved' && x.state !== 'closed').length };
-  const dot = { foryou: items.some(actionable), discuss: n.discuss, decide: n.decide, work: n.work };
-  return (
-    <div class="nx-fshell">
-      <div class="nx-ins-bar">
-        <button type="button" class="nx-back" onClick={() => (fsec === 'discuss' ? act.thread(null) : act.inspect(null))}>{SEC_LABEL[fsec]}</button>
-        {title ? <><i class="nx-crumbsep">/</i><span class="nx-ins-crumb">{title}</span></> : null}
-      </div>
-      <nav class="nx-fnav" aria-label="Sections">
-        {(['foryou', 'discuss', 'decide', 'work'] as const).map((s, i) => (
-          <button key={s} type="button" class={'nx-fnav-i' + (fsec === s ? ' on' : '')} aria-current={fsec === s} title={`${SEC_LABEL[s]} · ⌥${i + 1}`} onClick={() => act.fsec(s)}>
-            <span>{SEC_LABEL[s]}</span>{dot[s] ? <i class="nx-tabdot" aria-label="needs you"></i> : null}<em>{counts[s] || ''}</em>
-          </button>
-        ))}
-        <AgentName p={p} />
-        <span class="nx-keys"><span><b>⌥1–4</b> sections</span><span><b>⌘[</b> <b>⌘]</b> back, forward</span><span><b>Esc</b> leave</span></span>
-      </nav>
-      <div class="nx-flist" role="list">
-        {fsec === 'foryou' ? <FsForYou p={p} items={items} /> : null}
-        {fsec === 'discuss' ? <FsThreads p={p} threads={threads} /> : null}
-        {fsec === 'decide' ? <FsDecisions p={p} decisions={decisions} composing={writing === 'decide'} setComposing={(on) => setWriting(on ? 'decide' : null)} /> : null}
-        {fsec === 'work' ? <FsWork p={p} composing={writing === 'work'} setComposing={(on) => setWriting(on ? 'work' : null)} /> : null}
-      </div>
-      <div class="nx-fmain">
-        {fsec === 'foryou' ? <FsEmpty text="Pick an item: it opens here, in its own section." /> : null}
-        {fsec === 'discuss' ? (t ? <FsThread t={t} p={sp} /> : <FsEmpty text="Pick a conversation, or start one from the list." />) : null}
-        {fsec === 'decide' ? (d ? <div class="nx-inspector focus"><DecisionDoc d={d} p={sp} /></div> : decisions.length ? <FsEmpty text="Pick a decision to read, review or sign." /> : <div class="nx-fpad"><DecideEmpty p={sp} write={() => setWriting('decide')} /></div>) : null}
-        {fsec === 'work' ? (w ? <div class="nx-inspector focus"><WorkView w={w} p={sp} /></div> : <FsEmpty text={rec.work.length ? 'Pick a piece of work to see its plan, run, pull requests and outcome.' : 'No work yet. Start it from the list, or from a signed decision.'} />) : null}
-      </div>
-    </div>
-  );
-}
+/* ---------------- Full screen: Focus.tsx; the pieces it shares with the Desk ---------------- */
 
 /** The assistant's displayed name. Owners rename it for the workspace; everyone else sees who renamed it to what. */
-function AgentName({ p }: { p: DeskProps }) {
+export function AgentName({ p }: { p: DeskProps }) {
   const { agentName } = useNames();
   const [editing, setEditing] = useState(false);
   const owner = p.role === 'owner';
@@ -360,96 +317,8 @@ function AgentName({ p }: { p: DeskProps }) {
   );
 }
 
-const FsEmpty = ({ text }: { text: string }) => <div class="nx-fempty">{text}</div>;
-
-function FsForYou({ p, items }: { p: DeskProps; items: Attn[] }) {
-  const now = items.filter((x) => x.kind !== 'info' && !isSuggestion(x)), sug = items.filter(isSuggestion), info = items.filter((x) => x.kind === 'info');
-  const row = (n: Attn) => (
-    <button key={n.id} type="button" role="listitem" class={'nx-frow ' + n.kind} onClick={() => p.act.notice(n)}>
-      <span class="nx-fy-k">{KIND_WORD[n.kind]}{n.where ? ` · on ${n.where}` : ''}</span>
-      <b>{n.text}</b>
-      <span class="nx-frow-s">{n.why}{n.cta ? ` · ${n.cta} ›` : ''}</span>
-    </button>
-  );
-  return (
-    <>
-      <span class="nx-fl-h">Needs you<em>{now.length}</em></span>
-      {now.length ? now.map(row) : <p class="nx-quiet nx-fl-pad">Nothing needs you right now.</p>}
-      {sug.length ? <><span class="nx-fl-h">Suggested decisions<em>{sug.length}</em></span>{sug.map(row)}</> : null}
-      {info.length ? <><span class="nx-fl-h">{p.rec.since ? `Since ${p.rec.since.lastHere}` : 'Worth knowing'}<em>{info.length}</em></span>{info.map(row)}</> : null}
-    </>
-  );
-}
-
-function FsThreads({ p, threads }: { p: DeskProps; threads: Thread[] }) {
-  const { nameOf } = useNames();
-  const [draft, setDraft] = useState('');
-  const sys = threads.filter((t) => t.about.kind === 'part' || t.about.kind === 'edge' || t.about.kind === 'scenario');
-  const other = threads.filter((t) => !sys.includes(t));
-  const row = (t: Thread) => {
-    const last = t.replies[t.replies.length - 1];
-    return (
-      <button key={t.id} type="button" role="listitem" class={'nx-frow' + (p.openThread === t.id ? ' on' : '')} onClick={() => p.act.thread(t.id)} onPointerEnter={() => p.act.light(partsOf(t.about, p.rec))} onPointerLeave={() => p.act.light(null)}>
-        <span class="nx-fy-k">{ABOUT_WORD[t.about.kind] ? `on ${ABOUT_WORD[t.about.kind]}` : 'on the canvas'}{t.waiting === p.me ? ' · waiting on you' : ''}</span>
-        <b>{t.about.name}</b>
-        <span class="nx-frow-s">{nameOf(last.by)}: {last.body.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1').slice(0, 80)}{last.body.length > 80 ? '…' : ''}</span>
-      </button>
-    );
-  };
-  return (
-    <>
-      <label class="rp-cm-reply nx-compose nx-fl-pad"><Who id={p.me} /><span class="rp-sr">New thread</span>
-        <input type="text" placeholder="Start a thread about the system…" value={draft} onInput={(e) => setDraft(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) { p.act.newThread(draft.trim()); setDraft(''); } }} />
-      </label>
-      <span class="nx-fl-h">About the system<em>{sys.length}</em></span>
-      {sys.map(row)}
-      {other.length ? <><span class="nx-fl-h">On decisions, plans and PRs<em>{other.length}</em></span>{other.map(row)}</> : null}
-    </>
-  );
-}
-
-function FsDecisions({ p, decisions, composing, setComposing }: { p: DeskProps; decisions: Decision[]; composing: boolean; setComposing(on: boolean): void }) {
-  const live = decisions.filter((d) => d.state !== 'superseded'), old = decisions.filter((d) => d.state === 'superseded');
-  const row = (d: Decision) => {
-    const mine = d.approvers.find((a) => a.who === p.me);
-    const needs = d.state === 'review' && mine && mine.signed !== d.version && !mine.changes;
-    return (
-      <button key={d.id} type="button" role="listitem" class={'nx-frow' + (p.inspect?.id === d.id ? ' on' : '')} onClick={() => p.act.inspect({ kind: 'decision', id: d.id })} onPointerEnter={() => p.act.light(d.parts)} onPointerLeave={() => p.act.light(null)}>
-        <span class={'nx-st2 ' + (needs ? 'needs' : d.state)}>{needs ? 'Waiting on your signature' : `${DEC_STATE[d.state]} · v${d.version}`}</span>
-        <b>{d.title}</b>
-        <span class="nx-frow-s">{d.lines.filter((l) => l.kind === 'decide').map((l) => l.text).join(' · ')}</span>
-      </button>
-    );
-  };
-  return (
-    <>
-      {composing ? <div class="nx-fl-pad"><NewDecision p={p} done={() => setComposing(false)} /></div> : <button type="button" class="nx-textbtn add nx-fl-pad" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>+ Write a decision</button>}
-      {live.map(row)}
-      {old.length ? <><span class="nx-fl-h">Earlier versions<em>{old.length}</em></span>{old.map(row)}</> : null}
-    </>
-  );
-}
-
-function FsWork({ p, composing, setComposing }: { p: DeskProps; composing: boolean; setComposing(on: boolean): void }) {
-  return (
-    <>
-      {composing ? <div class="nx-fl-pad"><NewWork p={p} done={() => setComposing(false)} /></div> : <button type="button" class="nx-textbtn add nx-fl-pad" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>+ New work</button>}
-      {p.rec.work.map((w) => {
-        const st = objectiveState(w, p.rec, p.me);
-        return (
-          <button key={w.id} type="button" role="listitem" class={'nx-frow' + (p.inspect?.id === w.id ? ' on' : '')} onClick={() => p.act.inspect({ kind: 'work', id: w.id, section: 'plan' })} onPointerEnter={() => p.act.light(w.parts)} onPointerLeave={() => p.act.light(null)}>
-            <span class={'nx-st2 ' + st.k}>{st.label}</span>
-            <b>{w.title}</b>
-            <span class="nx-frow-s">{w.doer ? w.doer.name : 'Nobody yet'}{w.prs.length ? ` · ${w.prs.filter((x) => x.state !== 'closed').map((x) => '#' + x.num).join(' ')}` : ''}</span>
-          </button>
-        );
-      })}
-    </>
-  );
-}
-
 /** A conversation at full width: the thread, what it's about on the canvas, and what it led to. */
-function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
+export function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
   const { agentName } = useNames();
   const { rec, act } = p;
   const parts = partsOf(t.about, rec);
@@ -612,7 +481,7 @@ function DecideTab(p: DeskProps) {
   );
 }
 
-function NewDecision({ p, done, from }: { p: DeskProps; done(): void; from?: Thread }) {
+export function NewDecision({ p, done, from }: { p: DeskProps; done(): void; from?: Thread }) {
   const [t, setT] = useState('');
   const [l, setL] = useState('');
   const go = () => { if (!t.trim()) return; p.act.newDecision(t.trim(), l.trim()); done(); };
@@ -627,7 +496,7 @@ function NewDecision({ p, done, from }: { p: DeskProps; done(): void; from?: Thr
   );
 }
 
-function DecideEmpty({ p, write }: { p: DeskProps; write(): void }) {
+export function DecideEmpty({ p, write }: { p: DeskProps; write(): void }) {
   const { nameOf } = useNames();
   const { rec, act } = p;
   const threads = rec.threads.filter((t) => t.status === 'open' && (t.about.kind === 'part' || t.about.kind === 'scenario')).slice(0, 3);
@@ -703,7 +572,7 @@ function WorkTab(p: DeskProps) {
   );
 }
 
-function NewWork({ p, done }: { p: DeskProps; done(): void }) {
+export function NewWork({ p, done }: { p: DeskProps; done(): void }) {
   const [t, setT] = useState('');
   const [o, setO] = useState('');
   const go = () => { if (!t.trim()) return; p.act.newWork(t.trim(), o.trim()); done(); };

@@ -1,0 +1,66 @@
+/* Focus (desk/Focus.tsx): the room's Desk as a place to read and write. Three layers: the sidebar (sunken, the
+   window's own), the room's list (the ground), the page (raised paper). The selected row joins the page with
+   no rule between them. The list and the page scroll on their own; nothing scrolls inside something else in
+   the same direction. The only motion is the Desk's edge opening (nx-grow, 180ms, in vowe-room.css). */
+.room-screen .win.nx-fws .desk { background: var(--v-bg); }
+.nx-fo { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px minmax(0, 1fr); box-shadow: inset 0 1px 0 var(--v-line); }
+
+/* The list: the room's name, its sections, their items. */
+.nx-fo-list { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--v-bg); box-shadow: inset -1px 0 0 var(--v-line); }
+.nx-fo-head { flex: none; padding: 18px 20px 0 24px; }
+.nx-fo-name { font: 400 22px/1.15 var(--v-font-serif); letter-spacing: -.01em; color: var(--v-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-fo-repo { margin-top: 5px; font: 400 10.5px/1 var(--v-font-mono); letter-spacing: .04em; color: var(--v-fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-fo-tabs { display: flex; gap: 18px; margin-top: 16px; box-shadow: inset 0 -1px 0 var(--v-line); }
+.nx-fo-tab { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0; border: 0; background: transparent; color: var(--v-fg-3); font: 500 13px/1 var(--v-font-sans); cursor: pointer; }
+.nx-fo-tab:hover, .nx-fo-tab[aria-selected="true"] { color: var(--v-fg); }
+.nx-fo-tab[aria-selected="true"]::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.5px; background: var(--v-fg); }
+.nx-fo-tab:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); border-radius: 4px; }
+.nx-fo-n { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--v-fg-4); }
+.nx-fo-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--v-signal); }
+.nx-fo-items { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 8px 0 24px; }
+.nx-fo-row { position: relative; display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 11px 20px 12px 24px; border: 0; background: transparent; text-align: left; font: inherit; color: var(--v-fg-2); cursor: pointer; }
+.nx-fo-row:hover { background: var(--v-surface-hover); }
+.nx-fo-row:focus-visible { outline: 0; box-shadow: inset var(--v-focus-ring); }
+.nx-fo-row[aria-selected="true"] { background: var(--v-surface); }
+.nx-fo-row[aria-selected="true"]::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 1px; background: var(--v-fg); }
+.nx-fo-k { display: flex; align-items: center; gap: 6px; font: 500 10px/1.2 var(--v-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--v-fg-3); }
+.nx-fo-k.is-needs { color: var(--v-signal-fg); }
+.nx-fo-t { font-size: 13.5px; line-height: 1.4; color: var(--v-fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nx-fo-m { font-size: 12px; color: var(--v-fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nx-fo-h { display: block; padding: 18px 24px 6px; font: 500 10px/1 var(--v-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--v-fg-4); }
+.nx-fo-compose { margin: 6px 20px 8px 24px; }
+.nx-fo-add { display: block; margin: 6px 24px 8px; }
+.nx-fo-pad { padding: 6px 20px 10px 24px; }
+.nx-fo-foot { flex: none; padding: 10px 24px 14px; box-shadow: inset 0 1px 0 var(--v-line); }
+.nx-fo-foot:empty { display: none; }
+
+/* The page: raised paper, Journey's documents at a reading measure, their margin beside them. */
+.nx-fo-page { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--v-surface); }
+.nx-fo-page > * { flex: 1; min-height: 0; }
+.room-screen .nx-fo-page .nx-docl.shell { grid-template-columns: minmax(0, 1fr) 300px; background: transparent; }
+.room-screen .nx-fo-page .nx-docl.shell .nx-page > * { max-width: 680px; }
+.room-screen .nx-fo-page .nx-ins-main, .room-screen .nx-fo-page .nx-pe { background: transparent; }
+.nx-fo-thread { display: flex; flex-direction: column; }
+.room-screen .nx-fo-page .nx-fthread { flex: 1; min-height: 0; }
+.room-screen .nx-fo-page .nx-fthread-main { max-width: 776px; padding: 32px 48px 64px; box-sizing: border-box; }
+.room-screen .nx-fo-page .nx-fthread-main .rp-tg { background: transparent; box-shadow: none; padding: 0; }
+.nx-fo-empty { overflow-y: auto; }
+.nx-fo-empty > h3, .nx-fo-empty > p, .nx-fo-empty > figure { max-width: 560px; margin-left: auto; margin-right: auto; }
+.nx-fo-empty > h3 { margin-top: 72px; margin-bottom: 0; padding: 0 48px; font: 400 24px/1.2 var(--v-font-serif); color: var(--v-fg); }
+.nx-fo-empty > p { margin-top: 10px; margin-bottom: 0; padding: 0 48px; font-size: 14px; line-height: 1.6; color: var(--v-fg-2); }
+.nx-fo-empty > figure { margin-top: 24px; padding: 0 48px; }
+.nx-fo-empty > :not(h3):not(p):not(figure) { max-width: 560px; margin: 56px auto 0; padding: 0 48px; }
+
+/* Room / Section / Item, in the band. */
+.room-screen .nx-fo-crumbs { position: absolute; z-index: 34; top: 0; left: 226px; right: 46%; height: 40px; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; color: var(--v-fg-3); white-space: nowrap; }
+.room-screen .win.nx-small .nx-fo-crumbs { right: 40%; }
+.nx-fo-crumbs i { font-style: normal; color: var(--v-fg-4); }
+.nx-fo-crumb { flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; border: 0; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; background: transparent; font: inherit; color: var(--v-fg-2); }
+button.nx-fo-crumb { cursor: pointer; }
+button.nx-fo-crumb:hover { background: var(--v-surface-hover); color: var(--v-fg); }
+button.nx-fo-crumb:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); }
+.nx-fo-crumb.is-item { flex: 1 1 auto; max-width: none; min-width: 0; color: var(--v-fg); font-weight: 500; }
+
+/* Narrower windows: the list narrows; documents stack their margin under the page. */
+.room-screen .win.nx-fws.nx-small .nx-fo { grid-template-columns: 272px minmax(0, 1fr); }
+.room-screen .win.nx-fws.nx-small .nx-fo-page .nx-docl.shell { display: block; overflow-y: auto; }

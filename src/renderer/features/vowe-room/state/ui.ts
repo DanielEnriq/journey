@@ -56,8 +56,8 @@ export interface UiState {
   myView: string | null;
   /** Plan/decision document: compare with an earlier version. */
   compare: number | null;
-  /** Full screen: which section the rail shows (For you, or one of the three surfaces). */
-  fsec: 'foryou' | Tab;
+  /** Full screen: which section Focus shows (For you is Home's Inbox now). */
+  fsec: Tab;
 }
 
 export const initialUi = (): UiState => ({

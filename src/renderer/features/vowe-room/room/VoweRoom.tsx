@@ -4,6 +4,7 @@ import { SIDEBAR_W, shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui
 import { ShellSidebar } from '../../../ui/pass2/shell/Sidebar.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
+import { focusCrumbs } from '../desk/Focus.js';
 import type { Scenario, CanvasSemantics } from '../contracts/semantics.js';
 import { NO_SEMANTICS } from '../contracts/semantics.js';
 import type { RoomRole, VoweRecord } from '../contracts/model.js';
@@ -139,7 +140,9 @@ export function VoweRoom(p: VoweRoomProps) {
   const deskProps = {
     fsec: u.fsec, rec, me: dir.me, tab: u.tab, inspect: u.inspect, depth, compare: u.compare, openThread: u.thread, focus, focusOn: u.focusOn, hereLine: p.hereLine,
     flash: u.flash, noticesOpen: u.noticesOpen, sinceOpen: u.sinceOpen, act: p.act, role: p.role, caps, narrow: !wide || insW < 660, everywhere: u.everywhere,
+    room: { name: p.room.name, repo: p.room.repo }, scene: focusMode ? s.scenes[s.doc.activeView] ?? null : null,
   };
+  const crumbs = focusMode && (!p.deskStatus || p.deskStatus.state === 'ready') && !p.deskOverride ? focusCrumbs(deskProps) : null;
   const top = attention(rec, n).find(actionable);
   const rooms = p.rooms.map((r) => (r.id === p.room.id ? { ...r, needs: top ? top.text : null } : r));
   // The divider is the only way between compact and wide: drag it and the Desk follows the pointer; let go
@@ -193,6 +196,13 @@ export function VoweRoom(p: VoweRoomProps) {
             </Surface>
           </main>
           {wide && sheet ? <button type="button" class="nx-sheet-edge" aria-label="Back to the canvas" title="Back to the canvas · Esc" onClick={() => p.act.depth('compact')}><span>‹ Canvas</span></button> : null}
+          {crumbs ? (
+            <nav class="nx-fo-crumbs" aria-label="Where you are">
+              <button type="button" class="nx-fo-crumb" data-tip="Back to the canvas · Esc" onClick={() => p.act.depth(exitDepth(u))}>{p.room.name}</button>
+              <i aria-hidden="true">/</i><span class="nx-fo-crumb is-sec">{crumbs.section}</span>
+              {crumbs.item ? <><i aria-hidden="true">/</i><span class="nx-fo-crumb is-item" aria-current="page">{crumbs.item}</span></> : null}
+            </nav>
+          ) : null}
           <aside class="desk" aria-label="Where the room is" aria-hidden={!u.deskOpen}>
             {u.deskOpen && !sheet && !focusMode ? <div class="nx-split" role="separator" aria-orientation="vertical" aria-label="Resize the Desk" title="Drag to widen or narrow · double-click to switch" onPointerDown={startDrag} onDblClick={() => p.act.depth(depth === 'expanded' ? 'compact' : 'expanded')}><i></i></div> : null}
             <div class="desk-panel">
