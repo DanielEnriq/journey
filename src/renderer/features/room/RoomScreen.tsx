@@ -504,6 +504,11 @@ function FreshCall(props: InnerProps) {
         access={ui.access} role={summary?.role ?? ui.access?.members.find((m) => m.userId === ui.access?.viewerId)?.role ?? null} me={selfCloudId() ?? ''}
         call={call} people={[me, ...others]} speaking={speaking} inCall={summary?.inCall.length ?? 1} overlays={notices}
         share={ui.share} openShare={ui.openShare} light={light} windowOverlay={<>{props.overlay}{ui.toasts}</>}
+        peoplePanel={ui.people && membership && ui.access ? (
+          <div class="vm-desk-people">
+            <MembersPanel access={ui.access} source={membership} now={now} onBack={() => ui.setPeople(false)} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} />
+          </div>
+        ) : null}
         onOpenRoom={onOpenRoom} onNewRoom={onNewRoom} onHome={props.onHome} />
     );
   }

@@ -44,6 +44,8 @@ export interface RealRoomProps {
   /** Journey's Share control (button + ShareDialog), shown as Invite. */
   share: ComponentChildren;
   openShare(): void;
+  /** Journey's People drill-in (members and roles), shown in the Desk while it's open. */
+  peoplePanel?: ComponentChildren;
   /** Journey's New room sheet and toasts, drawn over the window. */
   windowOverlay?: ComponentChildren;
   light: boolean;
@@ -117,6 +119,8 @@ export function RealRoom(p: RealRoomProps) {
     },
   }), [p.roomId, services, record, directory]);
   const nav = useDeskHistory(ui, u, () => record.state);
+  // People opens in the Desk's column: make sure it's showing, and not under full screen.
+  useEffect(() => { if (p.peoplePanel) ui.setState({ deskOpen: true, depth: ui.state.depth === 'focus' ? 'compact' : ui.state.depth }); }, [!!p.peoplePanel]);
   useDeskKeys(ui, act, nav);
   useToastTimeout(ui, u);
   // Opening a thread lights what it's about on the canvas for a moment.
@@ -168,7 +172,7 @@ export function RealRoom(p: RealRoomProps) {
     <VoweRoom room={p.room} rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={p.onNewRoom}
       client={p.client} record={record} directory={directory} role={role} capabilities={capabilitiesOf(services)}
       ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} people={p.people} speaking={speaker} hereLine={hereLine} callLine={callLine} nav={nav}
-      light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay}
+      light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay} deskOverride={p.peoplePanel}
       overlays={<>{p.overlays}{failed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>Not saved: {failed}</span><button class="mini ghost" type="button" onClick={() => setFailed(null)}>Dismiss</button></div> : null}</>}
       pins={pins}
       onAsk={(about) => p.asker?.open({ selected: about.components, circled: [], names: about.names })}

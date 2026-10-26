@@ -71,6 +71,8 @@ export interface VoweRoomProps {
   share?: ComponentChildren;
   /** Drawn inside the window over everything: Journey's New room sheet and its toasts. */
   windowOverlay?: ComponentChildren;
+  /** Shown in the Desk instead of Discuss, Decide and Work while it's set: Journey's People drill-in. */
+  deskOverride?: ComponentChildren;
   /** Whether the record has loaded. The canvas and the call never wait for it; the Desk says so. */
   deskStatus?: DeskStatus;
 }
@@ -199,7 +201,7 @@ export function VoweRoom(p: VoweRoomProps) {
                   ) : <span class="nx-fcall quiet">No call</span>}
                 </div>
               ) : null}
-              {!p.deskStatus || p.deskStatus.state === 'ready' ? <Desk {...deskProps} /> : <DeskPending status={p.deskStatus} />}
+              {p.deskOverride ? p.deskOverride : !p.deskStatus || p.deskStatus.state === 'ready' ? <Desk {...deskProps} /> : <DeskPending status={p.deskStatus} />}
             </div>
           </aside>
           {u.toast ? <div class="nx-toast" role="status"><span>{u.toast.text}</span>{u.toast.undo ? <button type="button" onClick={() => { u.toast!.undo!(); p.ui.setState({ toast: null }); }}>Undo</button> : null}</div> : null}
