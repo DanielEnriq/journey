@@ -771,6 +771,7 @@ const membership: MembershipSource = {
 const invites: InviteSource = {
   async mine() { return unwrap(api().invites.mine()); },
   async resolve(key) { return unwrap(api().invites.resolve(key)); },
+  async decline(invitationId) { return unwrap(api().invites.decline(invitationId)); },
   async accept(key) {
     const r = await api().invites.accept(key);
     if (!r.ok) throw Object.assign(new RoomUnavailable(r.error.code, r.error.message), { reason: r.error.reason });
@@ -837,6 +838,12 @@ export async function localWork(repos: Repository[]): Promise<{ repository: stri
 
 /** The Vowe room's services (Desk), over IPC. */
 const vowe = createVoweServices();
+
+/** Your Inbox marks on your account (inbox_state). Failures keep the server's own words: they say what's missing. */
+export const inboxMarks = {
+  async get() { const r = await api().inbox.getState(); if (r.ok) return r.value; throw new RoomUnavailable(r.error.code, r.error.code === 'network' ? WORDS.network! : r.error.message); },
+  async save(marks: unknown) { const r = await api().inbox.saveState(marks); if (r.ok) return r.value; throw new RoomUnavailable(r.error.code, r.error.code === 'network' ? WORDS.network! : r.error.message); },
+};
 
 export const realWorkspace = { room, call, work: workSource, record, membership, invites, vowe };
 export type RealWorkspace = typeof realWorkspace;

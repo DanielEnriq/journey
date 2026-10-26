@@ -129,6 +129,13 @@ export function createInvitationService(client: () => Promise<Cloud>) {
       if (error) throw toRoomError(error);
     },
 
+    /** You decline an email invitation sent to you: it leaves your list until it's sent again. */
+    async decline(invitationId: string): Promise<void> {
+      const id = requireId(invitationId, 'Invitation');
+      const { error } = await (await signedIn()).rpc('decline_room_invitation', { invitation: id });
+      if (error) throw toRoomError(error);
+    },
+
     /** Email invitations sent to the address you're signed in with, still waiting. */
     async mine(): Promise<IncomingInvitation[]> {
       const { data, error } = await (await signedIn()).rpc('my_room_invitations');

@@ -141,6 +141,7 @@ export function InboxHome(p: InboxHomeProps) {
           <button type="button" class="vi-footbtn" aria-pressed={foot === 'done'} onClick={() => setFoot(foot === 'done' ? null : 'done')}>Done today · {doneToday.length}</button>
           <button type="button" class="vi-footbtn" aria-pressed={foot === 'snoozed'} onClick={() => setFoot(foot === 'snoozed' ? null : 'snoozed')}>Snoozed · {v.snoozed.length}</button>
           {st.unavailable.length ? <span class="vi-unavail" title="These sources don’t feed the Inbox yet">Not in Journey yet: {st.unavailable.map((s) => SOURCE_LABEL[s].replace(/ · not in Journey yet$/, '')).join(', ')}</span> : null}
+          {st.marksKept?.on === 'device' ? <span class="vi-unavail" title={st.marksKept.reason}>Seen, snoozed and muted are kept on this machine only</span> : null}
         </footer>
       </div>
       <div class="vi-page" aria-live="polite">

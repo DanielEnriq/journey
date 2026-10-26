@@ -2,6 +2,7 @@ import { Store } from '../../shared/store.js';
 import type { Scene } from '../../../shared/canvas/index.js';
 import type { VoweRecord } from '../vowe-room/contracts/model.js';
 import type { PersonId } from '../vowe-room/journey.js';
+import type { MarksKept } from './marks.js';
 import type { InboxItem, InboxView, Source } from './model.js';
 
 // CONTRACT (lead-owned): what Home's Inbox reads and what it can do. The systems side implements
@@ -26,6 +27,8 @@ export interface InboxState {
   needsCount: number;
   /** Sources Journey can't produce yet (shown as "not in Journey yet" where the design mentions them). */
   unavailable: Source[];
+  /** Where your marks (seen, snoozed, followed, muted) are kept: your account, or only this machine and why. */
+  marksKept?: MarksKept | null;
 }
 
 /** The record and canvas behind one item, for the reading page (Preview). Null while it loads or when unreadable. */

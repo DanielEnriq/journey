@@ -243,7 +243,7 @@ export function Home(p: HomeProps) {
       repoCount={local?.length ?? 0} onAddRepo={addRepo} onFindRepos={findRepos} notice={notice} />;
   } else if (inbox) {
     page = <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
-      idle={(st) => <YourRooms rooms={p.rooms} now={st.now} needs={needsByRoom(st.view.needs)} scene={(id) => roomScene(id).then((r) => r.scene)}
+      idle={(st) => <YourRooms rooms={p.rooms} now={st.now} needs={needsByRoom(st.view.needs)} scene={(id) => inbox.context(id).then((c) => c.scene)}
         onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} />} />;
   } else {
     page = <HomeReturning firstName={firstName(user)} rooms={cards} needs={needs} work={real ? work : null} decisions={decisions}

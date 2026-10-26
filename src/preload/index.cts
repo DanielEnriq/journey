@@ -93,8 +93,13 @@ const api: JourneyApi = {
     createLink: (roomId, settings) => invoke('invites:createLink', roomId, settings),
     revoke: (invitationId) => invoke('invites:revoke', invitationId),
     mine: () => invoke('invites:mine'),
+    decline: (invitationId) => invoke('invites:decline', invitationId),
     resolve: (key) => invoke('invites:resolve', key),
     accept: (key) => invoke('invites:accept', key),
+  },
+  inbox: {
+    getState: () => invoke('inbox:state:get'),
+    saveState: (marks) => invoke('inbox:state:save', marks),
   },
   record: {
     get: (roomId) => invoke('record:get', roomId),

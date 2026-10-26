@@ -1,4 +1,4 @@
-import { realWorkspace, roomScene, selfCloudId } from '../workspace/real/workspace.js';
+import { inboxMarks, realWorkspace, roomScene, selfCloudId } from '../workspace/real/workspace.js';
 import { createDemoInbox } from './demo.js';
 import { createInboxSource, NOT_IN_JOURNEY, trackPresence, type InboxController } from './records.js';
 import { activeInbox } from './source.js';
@@ -16,6 +16,7 @@ function realInbox(): InboxController {
     invites: realWorkspace.invites,
     me: selfCloudId,
     storage: storage(),
+    remoteMarks: inboxMarks,
     scene: async (roomId) => (await roomScene(roomId)).scene,
     onFocus: (fn) => { window.addEventListener('focus', fn); return () => window.removeEventListener('focus', fn); },
     unavailable: NOT_IN_JOURNEY,

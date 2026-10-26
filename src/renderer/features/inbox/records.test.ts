@@ -60,6 +60,7 @@ function harness(records: Record<string, VoweRecord | Error>, over: Partial<Inbo
     invites: {
       mine: async () => [{ id: 'inv1', roomId: 'r9', roomName: 'Growth', role: 'member', inviterName: 'Cat', sentAt: at(5) }] as never,
       accept: async (key) => { calls.push(['accept', key]); return 'r9'; },
+      decline: async (id) => { calls.push(['decline', id]); },
     },
     me: () => 'me',
     storage: null,
@@ -153,7 +154,7 @@ describe('Inbox source (records loader)', () => {
     h.src.dispose();
   });
 
-  it('accepts invitations on the server and declines them here', async () => {
+  it('accepts and declines invitations on the server', async () => {
     const h = harness({ r1: rec() });
     await h.settle();
     const inv = h.src.store.state.view.needs.find((i) => i.obligation === 'accept')!;
@@ -164,7 +165,37 @@ describe('Inbox source (records loader)', () => {
     const inv2 = h2.src.store.state.view.needs.find((i) => i.obligation === 'accept')!;
     assert.equal(await h2.src.acceptInvitation(inv2, false), null);
     assert.equal(h2.src.store.state.view.needs.some((i) => i.obligation === 'accept'), false);
+    assert.deepEqual(h2.calls.at(-1), ['decline', 'inv1']);
     h.src.dispose(); h2.src.dispose();
+  });
+
+  it('keeps a decline here, and says so, when the server can’t take it', async () => {
+    const h = harness({ r1: rec() }, { invites: {
+      mine: async () => [{ id: 'inv1', roomId: 'r9', roomName: 'Growth', role: 'member', inviterName: 'Cat', sentAt: at(5) }] as never,
+      accept: async () => 'r9',
+      decline: async () => { throw new Error('This database doesn’t know that yet'); },
+    } });
+    await h.settle();
+    const inv = h.src.store.state.view.needs.find((i) => i.obligation === 'accept')!;
+    await assert.rejects(h.src.acceptInvitation(inv, false), /Hidden on this machine only: This database/);
+    assert.equal(h.src.store.state.view.needs.some((i) => i.obligation === 'accept'), false);
+    h.src.dispose();
+  });
+
+  it('reads your marks from your account and says where they are kept', async () => {
+    const saved: unknown[] = [];
+    const remote = {
+      get: async () => ({ marks: { v: 1, seen: {}, done: {}, snoozed: {}, follow: {}, mutedRooms: ['r1'], declined: [], lastActive: null, updatedAt: at(1) }, updatedAt: at(1) }),
+      save: async (m: unknown) => { saved.push(m); return NOW; },
+    };
+    const h = harness({ r1: rec() }, { remoteMarks: remote });
+    await h.settle();
+    await new Promise((r) => setTimeout(r, 5));
+    assert.deepEqual(h.src.store.state.marksKept, { on: 'account' });
+    h.src.muteRoom('r1', false);
+    h.src.dispose(); // writes pending marks now
+    await new Promise((r) => setTimeout(r, 5));
+    assert.deepEqual((saved.at(-1) as { mutedRooms: string[] }).mutedRooms, []);
   });
 
   it('writes Done to the server after the undo window, and not at all if undone', async () => {

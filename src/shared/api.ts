@@ -680,6 +680,9 @@ export type RoomErrorCode =
   | 'network'
   | 'unknown';
 
+/** Your Inbox marks as the server keeps them (inbox_state): the renderer's own shape, opaque here. */
+export interface InboxStateRow { marks: unknown; updatedAt: string }
+
 export interface RoomFailure {
   code: RoomErrorCode;
   message: string;
@@ -1136,6 +1139,9 @@ export interface Channels {
     'invites:createLink': (roomId: string, settings: { role: RoomRole; expiry: LinkExpiry; domain: string | null }) => RoomResult<RoomLink>;
     'invites:revoke': (invitationId: string) => RoomResult<void>;
     'invites:mine': () => RoomResult<IncomingInvitation[]>;
+    'invites:decline': (invitationId: string) => RoomResult<void>;
+    'inbox:state:get': () => RoomResult<InboxStateRow | null>;
+    'inbox:state:save': (marks: unknown) => RoomResult<string>;
     'invites:resolve': (key: InviteKey) => RoomResult<InviteResolution>;
     /** Resolves with the room's id. */
     'invites:accept': (key: InviteKey) => RoomResult<string>;
@@ -1335,9 +1341,16 @@ export interface JourneyApi {
     revoke(invitationId: string): Promise<RoomResult<void>>;
     /** Email invitations waiting for the address you signed in with. */
     mine(): Promise<RoomResult<IncomingInvitation[]>>;
+    /** Declines one of those: it leaves your list until it's sent again. */
+    decline(invitationId: string): Promise<RoomResult<void>>;
     resolve(key: InviteKey): Promise<RoomResult<InviteResolution>>;
     /** Makes you a member; resolves with the room's id. */
     accept(key: InviteKey): Promise<RoomResult<string>>;
+  };
+  /** Home's Inbox: your own marks (seen, snoozed, followed, muted), kept on the server for every device. */
+  inbox: {
+    getState(): Promise<RoomResult<InboxStateRow | null>>;
+    saveState(marks: unknown): Promise<RoomResult<string>>;
   };
   /** A room's record: threads, replies, decisions and signatures, activity. Members only. */
   record: {

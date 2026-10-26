@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { EMPTY_MARKS, MarksStore, marksKey, parseMarks, serializeMarks, type StorageLike } from './marks.js';
+import { EMPTY_MARKS, MarksStore, marksKey, parseMarks, serializeMarks, type RemoteMarks, type StorageLike } from './marks.js';
 
 const NOW = '2026-11-02T12:00:00.000Z';
 const at = (days: number) => new Date(Date.parse(NOW) - days * 86_400_000).toISOString();
@@ -70,5 +70,62 @@ describe('Inbox marks (local)', () => {
     const none = new MarksStore('a', null, () => NOW);
     none.mute('r', true);
     assert.deepEqual(none.marks.mutedRooms, ['r']);
+  });
+});
+
+describe('Inbox marks (your account)', () => {
+  const remote = (row: { marks: unknown; updatedAt: string } | null, fail?: string) => {
+    const saved: unknown[] = [];
+    const r: RemoteMarks & { saved: unknown[] } = {
+      saved,
+      get: async () => { if (fail) throw new Error(fail); return row; },
+      save: async (m) => { if (fail) throw new Error(fail); saved.push(m); return NOW; },
+    };
+    return r;
+  };
+
+  it('takes your account’s copy when it is newer than this machine’s', async () => {
+    const s = memory();
+    const old = new MarksStore('a', s, () => at(3));
+    old.mute('r-old', true);
+    const acct = remote({ marks: { v: 1, mutedRooms: ['r-new'], follow: { t: true }, lastActive: at(1), updatedAt: at(1) }, updatedAt: at(1) });
+    const m = new MarksStore('a', s, () => NOW, acct);
+    await m.sync();
+    assert.deepEqual(m.marks.mutedRooms, ['r-new']);
+    assert.deepEqual(m.marks.follow, { t: true });
+    assert.equal(m.lastHere, at(1));
+    assert.deepEqual(m.kept.state.kept, { on: 'account' });
+    assert.deepEqual(parseMarks(s.data.get(marksKey('a'))!, NOW).mutedRooms, ['r-new']);
+    assert.equal(acct.saved.length, 0);
+  });
+
+  it('sends this machine’s copy when it is newer, or the account has none', async () => {
+    const s = memory();
+    new MarksStore('a', s, () => NOW).mute('r1', true);
+    const acct = remote(null);
+    const m = new MarksStore('a', s, () => NOW, acct);
+    await m.sync();
+    assert.deepEqual((acct.saved[0] as { mutedRooms: string[] }).mutedRooms, ['r1']);
+    assert.deepEqual(m.kept.state.kept, { on: 'account' });
+  });
+
+  it('writes changes back, and only after the account has been read', async () => {
+    const acct = remote(null);
+    const m = new MarksStore('a', memory(), () => NOW, acct);
+    m.follow('t', true);
+    await m.flush();
+    assert.equal(acct.saved.length, 0); // not read yet: never overwrite the account blind
+    await m.sync();
+    m.follow('t2', true);
+    await m.flush();
+    assert.deepEqual((acct.saved.at(-1) as { follow: Record<string, boolean> }).follow, { t: true, t2: true });
+  });
+
+  it('keeps working on this machine, and says why, when the account can’t be reached', async () => {
+    const m = new MarksStore('a', memory(), () => NOW, remote(null, 'This database doesn’t keep Inbox marks yet'));
+    await m.sync();
+    m.mute('r', true);
+    assert.deepEqual(m.marks.mutedRooms, ['r']);
+    assert.deepEqual(m.kept.state.kept, { on: 'device', reason: 'This database doesn’t keep Inbox marks yet' });
   });
 });

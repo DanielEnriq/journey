@@ -262,6 +262,32 @@ export type Database = {
           },
         ]
       }
+      inbox_state: {
+        Row: {
+          marks: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          marks?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          marks?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_state_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_changes: {
         Row: {
           after: string | null
@@ -806,6 +832,7 @@ export type Database = {
           accepted_at: string | null
           accepted_by: string | null
           created_at: string
+          declined_at: string | null
           domain: string | null
           email: string | null
           expires_at: string
@@ -825,6 +852,7 @@ export type Database = {
           accepted_at?: string | null
           accepted_by?: string | null
           created_at?: string
+          declined_at?: string | null
           domain?: string | null
           email?: string | null
           expires_at: string
@@ -844,6 +872,7 @@ export type Database = {
           accepted_at?: string | null
           accepted_by?: string | null
           created_at?: string
+          declined_at?: string | null
           domain?: string | null
           email?: string | null
           expires_at?: string
@@ -1816,6 +1845,10 @@ export type Database = {
           invitation_id: string
           token: string
         }[]
+      }
+      decline_room_invitation: {
+        Args: { invitation: string }
+        Returns: undefined
       }
       invite_to_room: {
         Args: {

@@ -31,7 +31,7 @@ import { getCloudUserId } from '../integrations/supabase/index.js';
 import { getCallAccess, syncCallParticipant } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent, setRoomCall } from '../integrations/supabase/realtime.js';
 import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
-import { createWorkspace, invitations, listWorkspaces, roomRecord, rooms, voweRecord } from '../integrations/supabase/workspaces.js';
+import { createWorkspace, inboxState, invitations, listWorkspaces, roomRecord, rooms, voweRecord } from '../integrations/supabase/workspaces.js';
 import { decisionVersionId } from '../shared/vowe/ids.js';
 import type { VoweRecord } from '../shared/vowe/model.js';
 import type {
@@ -437,6 +437,9 @@ export function registerIpc() {
   handle('invites:createLink', (roomId, settings) => roomResult(() => invitations.createLink(roomId, settings)));
   handle('invites:revoke', (invitationId) => roomResult(() => invitations.revoke(invitationId)));
   handle('invites:mine', () => roomResult(() => invitations.mine()));
+  handle('invites:decline', (invitationId) => roomResult(() => invitations.decline(invitationId)));
+  handle('inbox:state:get', () => roomResult(() => inboxState.get()));
+  handle('inbox:state:save', (marks) => roomResult(() => inboxState.save(marks)));
   handle('invites:resolve', (key) => roomResult(() => invitations.resolve(key)));
   handle('invites:accept', (key) => roomResult(() => invitations.accept(key)));
   // The canvas: every command, a person's or Vowe's, goes through the one hub (main/canvas.ts).

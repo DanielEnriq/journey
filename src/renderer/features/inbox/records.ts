@@ -6,7 +6,7 @@ import type { VoweServices } from '../vowe-room/contracts/services.js';
 import type { PersonId } from '../vowe-room/journey.js';
 import type { RoomSummary } from '../room/types.js';
 import { agentPerson, derive, doneKey, inviterPerson, SERVER_DONE_PREFIX, type InvitationInput, type RoomInput } from './derive.js';
-import { MarksStore, type StorageLike } from './marks.js';
+import { MarksStore, type RemoteMarks, type StorageLike } from './marks.js';
 import type { InboxItem, InboxMarks, InboxView, Source } from './model.js';
 import type { InboxPerson, InboxSource, InboxState, ItemContext } from './source.js';
 
@@ -18,11 +18,13 @@ import type { InboxPerson, InboxSource, InboxState, ItemContext } from './source
 export interface InboxDeps {
   services: Pick<VoweServices, 'record' | 'threads' | 'decisions' | 'work' | 'attention'>;
   rooms: { list(): RoomSummary[]; subscribe(fn: () => void): () => void };
-  invites: { mine(): Promise<IncomingInvitation[]>; accept(key: InviteKey): Promise<string> } | null;
+  invites: { mine(): Promise<IncomingInvitation[]>; accept(key: InviteKey): Promise<string>; decline?(invitationId: string): Promise<void> } | null;
   /** You, before any record says (the workspace's own idea of your cloud user id). */
   me(): PersonId | null;
   /** Where marks are kept; null keeps them in memory only. */
   storage: StorageLike | null;
+  /** Your account's copy of the marks, so they follow you between devices; null keeps them on this machine. */
+  remoteMarks?: RemoteMarks | null;
   now?: () => Date;
   scene?(roomId: string): Promise<Scene | null>;
   /** Window focus; the source re-reads on it. */
@@ -83,8 +85,11 @@ export function createInboxSource(deps: InboxDeps): InboxController {
     if (!me) return null;
     if (marks?.userId !== me) {
       offMarks?.();
-      marks = new MarksStore(me, deps.storage, iso);
-      offMarks = marks.store.subscribe(() => publish());
+      void marks?.flush();
+      const m = marks = new MarksStore(me, deps.storage, iso, deps.remoteMarks ?? null);
+      const offs = [m.store.subscribe(() => publish()), m.kept.subscribe(() => publish())];
+      offMarks = () => offs.forEach((off) => off());
+      void m.sync();
     }
     return marks;
   };
@@ -140,7 +145,7 @@ export function createInboxSource(deps: InboxDeps): InboxController {
     store.setState({
       status: allFailed && !first ? 'failed' : first && !rooms.length ? 'loading' : 'ready',
       error: failed.length ? `Couldn’t read ${failed.length === 1 ? `“${failed[0].name}”` : `${failed.length} of your rooms`}: ${cache.get(failed[0].id)!.error}` : null,
-      view, now: iso(), me, people: ppl, needsCount: view.needs.length,
+      view, now: iso(), me, people: ppl, needsCount: view.needs.length, marksKept: m?.kept.state.kept ?? null,
     });
   }
 
@@ -279,7 +284,16 @@ export function createInboxSource(deps: InboxDeps): InboxController {
     },
     async acceptInvitation(item, yes) {
       if (item.subject.kind !== 'invitation') throw new Error('That isn’t an invitation.');
-      if (!yes) { marks?.decline(item.subject.id); publish(); return null; }
+      if (!yes) {
+        marks?.decline(item.subject.id); // hidden at once; the server's list drops it too
+        publish();
+        if (deps.invites?.decline) {
+          try { await deps.invites.decline(item.subject.id); } catch (e) {
+            throw new Error(`Hidden on this machine only: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        return null;
+      }
       if (!deps.invites) throw new Error('Invitations aren’t available here.');
       const roomId = await deps.invites.accept({ invitationId: item.subject.id });
       invitations = invitations.filter((i) => i.id !== item.subject.id);
@@ -290,6 +304,7 @@ export function createInboxSource(deps: InboxDeps): InboxController {
     dispose() {
       disposed = true;
       for (const id of [...pendingDone.keys()]) flushDone(id);
+      void marks?.flush();
       offRooms(); offFocus(); offMarks?.(); clearInterval(tick);
       for (const off of subs.values()) off();
       subs.clear();

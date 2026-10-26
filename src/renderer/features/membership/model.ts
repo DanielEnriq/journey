@@ -132,6 +132,8 @@ export interface InviteSource {
   resolve(key: InviteKey): Promise<InviteResolution>;
   /** Makes you a member; resolves with the room's id. Never joins the call. */
   accept(key: InviteKey): Promise<string>;
+  /** Declines an email invitation sent to you: it leaves your list until it's sent again. */
+  decline?(invitationId: string): Promise<void>;
 }
 
 /* ---------- The permission matrix, in one place. Components ask can(); they never test roles. ---------- */
