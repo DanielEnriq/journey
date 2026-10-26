@@ -17,14 +17,14 @@
 }
 
 /* ------------------------------------------------------------------ shell */
-.vh-app { position: relative; height: 100%; min-height: 0; display: grid; grid-template-columns: var(--vh-side, 232px) minmax(0, 1fr); background: var(--v-bg); color: var(--v-fg); transition: grid-template-columns var(--v-dur-3) var(--v-ease); overflow: hidden; }
-.vh-app.is-rail { --vh-side: 60px; }
+.vh-app { position: relative; height: 100%; min-height: 0; display: grid; grid-template-columns: var(--vh-side, 236px) minmax(0, 1fr); background: var(--v-bg); color: var(--v-fg); transition: grid-template-columns var(--v-dur-3) var(--v-ease); overflow: hidden; }
 .vh-app.is-hidden { --vh-side: 0px; }
 .vh-band { position: absolute; z-index: 20; left: 0; right: 0; top: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 86px; pointer-events: none; }
 .vh-band > * { pointer-events: auto; }
 .vh-band-title { font-size: 13px; font-weight: 500; color: var(--v-fg-2); }
 .vh-band-r { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.vh-side { position: relative; min-width: 0; overflow: hidden; display: flex; flex-direction: column; padding-top: 48px; background: var(--v-bg-sunken); box-shadow: inset -1px 0 0 var(--v-line); }
+.vh-band-nav { display: inline-flex; gap: 2px; }
+.vh-side { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-top: 44px; background: var(--v-bg-sunken); box-shadow: inset -1px 0 0 var(--v-line); }
 .vh-side-nav { display: flex; flex-direction: column; gap: 1px; padding: 0 8px; }
 .vh-nav { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: var(--v-radius-sm); background: transparent; font-size: 13px; color: var(--v-fg-2); text-align: left; white-space: nowrap; transition: background var(--v-dur-1) ease, color var(--v-dur-1) ease; }
 .vh-nav .v-icon { flex: 0 0 auto; color: var(--v-fg-3); }
@@ -39,13 +39,11 @@
 .vh-acct b { display: block; font-size: 13px; font-weight: 500; color: var(--v-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vh-acct .v-meta { display: block; white-space: nowrap; }
 .vh-acct-main { flex: 1; min-width: 0; }
-.is-rail .vh-nav span, .is-rail .vh-nav-end, .is-rail .vh-side-h, .is-rail .vh-recent, .is-rail .vh-acct-main, .is-rail .vh-acct > .v-icon { display: none; }
-.is-rail .vh-nav { justify-content: center; padding: 0; }
-.is-rail .vh-acct { justify-content: center; padding: 0; }
 .vh-nav .v-count { position: static; }
-.is-rail .vh-nav { position: relative; }
-.is-rail .vh-nav-dot { position: absolute; top: 6px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
 .vh-main { position: relative; min-width: 0; min-height: 0; overflow: auto; }
+.vh-main.is-fixed { overflow: hidden; display: flex; flex-direction: column; }
+.vh-side > .vh-sb { min-width: 236px; }
+.vh-side .vh-sb-foot { padding: 6px 8px; }
 .vh-page { width: min(1080px, calc(100% - 80px)); margin: 0 auto; padding: 72px 0 56px; }
 
 /* --------------------------------------------------------------- account */
@@ -214,7 +212,6 @@
 .vh-local.is-missing { color: var(--v-fg-4); }
 /* ------------------------------------------------- shell, Journey pass */
 .vh-side-brand { position: absolute; top: 12px; right: 16px; color: var(--v-fg-2); }
-.is-rail .vh-side-brand { display: none; }
 .vh-recent { margin-top: 18px; min-height: 0; overflow: auto; }
 .vh-nav-room { height: 30px; font-size: 12.5px; }
 .vh-room-dot { width: 6px; height: 6px; flex: 0 0 6px; margin: 0 4px 0 5px; border-radius: 50%; background: var(--v-line-strong); }

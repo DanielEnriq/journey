@@ -1,5 +1,7 @@
 import { h, Fragment, useEffect, useState, useStore, Lights, Chrome, Who, CallBar, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary, type Store } from '../journey.js';
-import { RoomsPanel } from '../../room/shell.js';
+import { AccountFoot } from '../../../shared/components/Account.js';
+import { SIDEBAR_W, shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui/pass2/shell/prefs.js';
+import { ShellSidebar } from '../../../ui/pass2/shell/Sidebar.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
 import type { Scenario, CanvasSemantics } from '../contracts/semantics.js';
@@ -12,7 +14,7 @@ import { SemanticsContext } from '../state/semantics.js';
 import { exitDepth, type DeskNav } from './navigation.js';
 import type { Depth, Ui } from '../state/ui.js';
 
-// The room as Journey's call lays it out (FreshCall in RoomScreen.tsx): the band, the rooms panel, the
+// The room as Journey's call lays it out (FreshCall in RoomScreen.tsx): the band, the shared sidebar, the
 // room's name and who's here, the canvas with its tool rail and the call under it, and the Desk.
 // The Desk has three depths, reached by width alone: compact (Journey's 352px column), wider (drag the
 // divider; the canvas keeps at least 440px) and full screen (the one expand button). Width never changes
@@ -20,10 +22,11 @@ import type { Depth, Ui } from '../state/ui.js';
 
 export interface VoweRoomProps {
   room: Pick<RoomSummary, 'id' | 'name' | 'repo'>;
-  /** Journey's rooms list (RoomDataSource.list()) for the side panel. This room's `needs` is filled from attention. */
+  /** Journey's rooms list (RoomDataSource.list()) for the sidebar. This room's `needs` is filled from attention. */
   rooms: RoomSummary[];
   onOpenRoom(id: string): void;
-  onNewRoom(): void;
+  /** New room, in the repository whose + was pressed in the sidebar (null: none chosen). */
+  onNewRoom(repo: string | null): void;
   /** Journey's canvas client for this room (features/canvas/client.ts over ipcTransport). */
   client: CanvasClient;
   /** The room's record, kept current by the host from VoweServices.record (load + subscribe). */
@@ -57,7 +60,8 @@ export interface VoweRoomProps {
   speaking?: string | null;
   /** Under the room's name: "2 here · 2 on the call". */
   hereLine: string;
-  /** In full screen, the strip that keeps the call in view. Null with no call. */
+  /** No longer drawn: the band's call cluster (features/room/call/CallControls.tsx) keeps the call in view in
+      full screen too, from `callPresence`. Kept optional until the host stops passing it. */
   callLine?: { text: string; quote?: string } | null;
   /** History of what you've opened (room/navigation.ts useDeskHistory). */
   nav?: DeskNav;
@@ -111,6 +115,8 @@ function useWindowSize(): [number, number] {
 
 export function VoweRoom(p: VoweRoomProps) {
   const u = useStore(p.ui);
+  const side = useStore(shellPrefs).sidebar;
+  useSidebarKey();
   const rec = useStore(p.record);
   const s = useStore(p.client.store);
   const win = useWindowSize();
@@ -125,7 +131,7 @@ export function VoweRoom(p: VoweRoomProps) {
   // Sizes: the compact column, and the widened Desk, which never leaves the canvas less than 440px.
   // Below 1180px the widened Desk becomes a sheet over the canvas.
   const [W, H] = p.size ?? win;
-  const left = u.side ? 268 : 0;
+  const left = side ? SIDEBAR_W : 0;
   const compact = W < 1200 ? 320 : 352;
   const sheet = W < 1180;
   const maxW = Math.max(compact, W - left - 440);
@@ -152,7 +158,7 @@ export function VoweRoom(p: VoweRoomProps) {
   };
   const size = p.size ? `width:${W}px;height:${H}px;` : '';
   const style = `${size}${u.deskOpen ? `--right-column:${(wide || (focusMode && u.prevDepth === 'expanded')) && !sheet ? insW : compact}px;` : ''}--nx-ins-w:${sheet ? insW : Math.max(insW, 480)}px`;
-  const cls = `win ${p.light ? 'light ' : ''}${u.side ? 'side-open ' : ''}${u.deskOpen ? 'desk-open ' : ''}${wide ? 'nx-wide-desk ' : ''}${wide && sheet ? 'nx-sheet ' : ''}${focusMode ? 'nx-fws ' : ''}${rec.vowe ? '' : 'nx-novowe '}${W < 1300 ? 'nx-small ' : ''}in-call nx-win`;
+  const cls = `win ${p.light ? 'light ' : ''}${side ? 'side-open ' : ''}${u.deskOpen ? 'desk-open ' : ''}${wide ? 'nx-wide-desk ' : ''}${wide && sheet ? 'nx-sheet ' : ''}${focusMode ? 'nx-fws ' : ''}${rec.vowe ? '' : 'nx-novowe '}${W < 1300 ? 'nx-small ' : ''}in-call nx-win`;
   return (
     <DirectoryContext.Provider value={dir}>
       <SemanticsContext.Provider value={p.semantics ?? NO_SEMANTICS}>
@@ -169,9 +175,11 @@ export function VoweRoom(p: VoweRoomProps) {
               </button>
             </div>
           ) : null}
-          <Chrome side={u.side} desk={u.deskOpen} deskUnseen={!u.deskOpen && !!top} toggleSide={() => p.ui.setState({ side: !u.side })} toggleDesk={() => p.ui.setState(u.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' })}
-            onNewRoom={p.onNewRoom} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
-          <RoomsPanel rooms={rooms} current={p.room.id} hidden={!u.side} onOpenRoom={p.onOpenRoom} />
+          <Chrome side={side} sideName="sidebar" desk={u.deskOpen} deskUnseen={!u.deskOpen && !!top} toggleSide={toggleSidebar} toggleDesk={() => p.ui.setState(u.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' })}
+            onNewRoom={() => p.onNewRoom(null)} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
+          <aside class="sidebar vh-sb-host" aria-hidden={!side} inert={!side}>
+            <ShellSidebar place={null} rooms={rooms} current={p.room.id} onRoom={p.onOpenRoom} onNew={(repo) => p.onNewRoom(repo)} foot={<AccountFoot />} />
+          </aside>
           <main class="room">
             <div class="room-identity">
               <h1>{p.room.name}</h1>
@@ -188,20 +196,6 @@ export function VoweRoom(p: VoweRoomProps) {
           <aside class="desk" aria-label="Where the room is" aria-hidden={!u.deskOpen}>
             {u.deskOpen && !sheet && !focusMode ? <div class="nx-split" role="separator" aria-orientation="vertical" aria-label="Resize the Desk" title="Drag to widen or narrow · double-click to switch" onPointerDown={startDrag} onDblClick={() => p.act.depth(depth === 'expanded' ? 'compact' : 'expanded')}><i></i></div> : null}
             <div class="desk-panel">
-              {focusMode ? (
-                <div class="nx-fbar">
-                  {p.call && p.callLine ? (
-                    <span class="nx-fcall" role="group" aria-label="The call">
-                      <span class="nx-live"></span>{p.callLine.text}
-                      {p.callLine.quote ? <em>{p.callLine.quote}</em> : null}
-                      <button type="button" class={'nx-btn' + (p.call.muted ? '' : ' on')} disabled={!!(p.call.voiceOff || p.call.micOff)} title={p.call.voiceOff ?? p.call.micOff ?? undefined}
-                        onClick={p.call.micToggle ?? p.call.micUp} aria-pressed={!p.call.muted}>{p.call.muted ? 'Unmute' : 'Mute'}</button>
-                      <button type="button" class="nx-btn" onClick={() => p.act.depth(exitDepth(u))} title="Back to the canvas · Esc">Canvas</button>
-                      <button type="button" class="nx-btn" disabled={p.call.leaving} onClick={p.call.leave}>{p.call.leaving ? 'Leaving…' : 'Leave'}</button>
-                    </span>
-                  ) : <span class="nx-fcall quiet">No call</span>}
-                </div>
-              ) : null}
               {p.deskOverride ? p.deskOverride : !p.deskStatus || p.deskStatus.state === 'ready' ? <Desk {...deskProps} /> : <DeskPending status={p.deskStatus} />}
             </div>
           </aside>

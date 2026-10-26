@@ -1,123 +1,82 @@
 // Source: vowe-home-pass2.zip (approved Claude Design package, Pass 2), imports adapted to the vendored Preact.
+// Home/Inbox integration (step 03): the aside is the one Sidebar, shared with rooms; it is shown or gone
+// entirely (no icon rail), and the choice is the window's (shell/prefs.ts), not this page's.
 /**
  * The restrained shell around Home, Rooms, Projects and Invitations.
  *
- * - Full sidebar from 1100px, a 60px rail below that, hidden on request
- *   (Journey's sidebar toggle, "[").
- * - The window band leaves room for the macOS traffic lights; the app draws its
- *   own drag strip.
- * - Rooms stay one click away under the nav, as Journey's sidebar lists them
- *   today.
+ * - The window band leaves room for the macOS traffic lights; the app draws its own drag strip. It carries the
+ *   sidebar toggle, back and forward, the page's title, and the call cluster at its right end whenever you're
+ *   in a call.
  * - Pure presentation: routes are the app's (hash routes in Journey).
  */
-import { Fragment, h, type ComponentChildren } from '../../../vendor/preact.js';
-import { useEffect, useState } from '../../../vendor/preact-hooks.js';
+import { h, type ComponentChildren } from '../../../vendor/preact.js';
 
-import { Avatar, Count, IconButton } from '../../components.js';
-import { Icon, type IconName } from '../../icons.js';
-
+import { useStore } from '../../../shared/store.js';
+import { CallCluster } from '../../../features/room/call/CallControls.js';
+import type { RoomSummary } from '../../../features/room/types.js';
+import { Avatar, IconButton } from '../../components.js';
+import { Icon } from '../../icons.js';
 import type { AccountView } from '../types.js';
+import { shellPrefs, toggleSidebar, useSidebarKey } from './prefs.js';
+import { ShellSidebar } from './Sidebar.js';
 
 export type ShellRoute = 'home' | 'rooms' | 'projects' | 'invitations';
-
-export interface ShellRoomLink { id: string; name: string; needs: boolean; live: boolean }
 
 export interface AppShellProps {
   route: ShellRoute | 'room';
   onNavigate: (r: ShellRoute) => void;
   account: AccountView;
-  /** Invitations waiting for you (`invites.mine().length`). */
+  /** Invitations waiting for you (`invites.mine().length`); the sidebar shows a dot. */
   invitationCount: number;
-  /** Rooms for the sidebar, most recent first. */
-  rooms: ShellRoomLink[];
+  /** Your rooms; the sidebar groups them by repository. */
+  rooms: RoomSummary[];
   activeRoomId?: string;
   onOpenRoom: (id: string) => void;
-  onNewRoom: () => void;
+  /** New room, in the repository whose + was pressed (null: none chosen). */
+  onNewRoom: (repo: string | null) => void;
   onAccount: () => void;
   accountOpen?: boolean;
   /** The account popover and any sheet, rendered over the shell. */
   overlay?: ComponentChildren;
   /** Text for the window band (the current page). */
   title?: string;
-  /** Forces a layout (boards and tests); otherwise it follows the window width. */
-  layout?: 'full' | 'rail' | 'hidden';
+  /** The page lays out its own scrolling panes (the Inbox's list and reading page): main doesn't scroll. */
+  fixed?: boolean;
+  /** Forces the sidebar (boards and tests); otherwise it follows the window's choice. */
+  layout?: 'full' | 'hidden';
   children: ComponentChildren;
 }
 
-const NAV: { key: ShellRoute; label: string; icon: IconName }[] = [
-  { key: 'home', label: 'Home', icon: 'room' },
-  { key: 'rooms', label: 'Rooms', icon: 'people' },
-  { key: 'projects', label: 'Projects', icon: 'project' },
-  { key: 'invitations', label: 'Invitations', icon: 'mail' },
-];
-
-function useAutoLayout(forced?: AppShellProps['layout']): ['full' | 'rail' | 'hidden', (v: boolean) => void] {
-  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1100);
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    if (forced) return;
-    const on = () => setNarrow(window.innerWidth < 1100);
-    addEventListener('resize', on);
-    return () => removeEventListener('resize', on);
-  }, [forced]);
-  return [forced ?? (hidden ? 'hidden' : narrow ? 'rail' : 'full'), setHidden];
-}
-
 export function AppShell(p: AppShellProps) {
-  const [layout, setHidden] = useAutoLayout(p.layout);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (e.key === '[' && !e.metaKey && !e.ctrlKey && !/INPUT|TEXTAREA/.test(t.tagName) && !t.isContentEditable) setHidden(layout !== 'hidden');
-    };
-    addEventListener('keydown', key);
-    return () => removeEventListener('keydown', key);
-  }, [layout]);
+  const prefs = useStore(shellPrefs);
+  useSidebarKey();
+  const shown = p.layout ? p.layout === 'full' : prefs.sidebar;
+  const route = p.route === 'room' ? null : p.route;
   return (
-    <div class={`vh-app v-root${layout === 'rail' ? ' is-rail' : layout === 'hidden' ? ' is-hidden' : ''}`}>
+    <div class={`vh-app v-root${shown ? '' : ' is-hidden'}`}>
       <div class="vh-band">
-        <IconButton icon="sidebar" label={layout === 'hidden' ? 'Show sidebar ( [ )' : 'Hide sidebar ( [ )'} onClick={() => setHidden(layout !== 'hidden')} />
-        <IconButton icon="plus" label="New room" onClick={p.onNewRoom} />
+        <IconButton icon="sidebar" label={shown ? 'Hide sidebar' : 'Show sidebar'} tip={`${shown ? 'Hide' : 'Show'} sidebar · [`} aria-pressed={shown} onClick={toggleSidebar} />
+        <span class="vh-band-nav">
+          <IconButton icon="chevron-l" label="Back" tip="Back · ⌘[" onClick={() => history.back()} />
+          <IconButton icon="chevron-r" label="Forward" tip="Forward · ⌘]" onClick={() => history.forward()} />
+        </span>
         {p.title ? <span class="vh-band-title">{p.title}</span> : null}
+        <span class="vh-band-r"><CallCluster looking={null} /></span>
       </div>
 
-      <aside class="vh-side" aria-hidden={layout === 'hidden'} aria-label="Navigation">
-        <nav class="vh-side-nav">
-          {NAV.map((n) => (
-            <button key={n.key} type="button" class={`vh-nav${p.route === n.key ? ' is-on' : ''}`} aria-current={p.route === n.key ? 'page' : undefined} title={layout === 'rail' ? n.label : undefined} onClick={() => p.onNavigate(n.key)}>
-              <Icon name={n.icon} size={16} />
-              <span>{n.label}</span>
-              {n.key === 'invitations' && p.invitationCount > 0 ? (
-                <><span class="vh-nav-end"><Count n={p.invitationCount} label={`${p.invitationCount} invitations`} /></span><i class="vh-nav-dot" aria-hidden="true" /></>
-              ) : null}
+      <aside class="vh-side" aria-hidden={!shown} inert={!shown} aria-label="Navigation">
+        <ShellSidebar place={route} rooms={p.rooms} current={p.activeRoomId ?? null} invitations={p.invitationCount}
+          onPlace={p.onNavigate} onRoom={p.onOpenRoom} onNew={p.onNewRoom}
+          foot={
+            <button type="button" class="vh-acct" data-account-anchor aria-haspopup="dialog" aria-expanded={!!p.accountOpen} onClick={p.onAccount}>
+              <Avatar initials={p.account.initials} tone={p.account.tone} size={28} />
+              <span class="vh-acct-main"><b>{p.account.name}</b><span class="v-meta">Signed in with {p.account.provider === 'github' ? 'GitHub' : 'Google'}</span></span>
+              <Icon name="chevron" size={14} />
             </button>
-          ))}
-        </nav>
-
-        {p.rooms.length ? (
-          <div class="vh-recent">
-            <div class="vh-side-h v-label">Rooms</div>
-            <div class="vh-side-nav">
-              {p.rooms.slice(0, 8).map((r) => (
-                <button key={r.id} type="button" class={`vh-nav vh-nav-room${p.activeRoomId === r.id ? ' is-on' : ''}`} onClick={() => p.onOpenRoom(r.id)}>
-                  <i class={`vh-room-dot${r.needs ? ' is-needs' : r.live ? ' is-live' : ''}`} aria-hidden="true" />
-                  <span>{r.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div class="vh-side-foot">
-          <button type="button" class="vh-acct" data-account-anchor aria-haspopup="dialog" aria-expanded={!!p.accountOpen} onClick={p.onAccount} title={layout === 'rail' ? p.account.name : undefined}>
-            <Avatar initials={p.account.initials} tone={p.account.tone} size={28} />
-            <span class="vh-acct-main"><b>{p.account.name}</b><span class="v-meta">Signed in with {p.account.provider === 'github' ? 'GitHub' : 'Google'}</span></span>
-            <Icon name="chevron" size={14} />
-          </button>
-        </div>
+          } />
       </aside>
 
-      <main class="vh-main" id="vh-main">{p.children}</main>
+      <main class={`vh-main${p.fixed ? ' is-fixed' : ''}`} id="vh-main">{p.children}</main>
       {p.overlay}
     </div>
   );

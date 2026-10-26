@@ -46,7 +46,8 @@ export interface HomeProps {
   onOpenRoom(id: string): void;
   /** Makes the room and opens its preview; rejects with a message to show. Never starts a call. */
   onCreate(room: NewRoom): Promise<void>;
-  onNewRoom(): void;
+  /** New room, in the repository whose + was pressed in the sidebar (null: none chosen). */
+  onNewRoom(repo: string | null): void;
   /** Absent in the demo: its pages have no invitations or link field. */
   onOpenInvite?(key: InviteKey): void;
   /** The New room sheet, when open. */
@@ -218,7 +219,7 @@ export function Home(p: HomeProps) {
   let page: ComponentChildren;
   if (p.invite) page = p.invite;
   else if (p.page === 'rooms') {
-    page = <RoomsIndex rooms={cards} onOpen={p.onOpenRoom} onNewRoom={p.onNewRoom} onJoinLink={() => p.onNavigate('invitations')}
+    page = <RoomsIndex rooms={cards} onOpen={p.onOpenRoom} onNewRoom={() => p.onNewRoom(null)} onJoinLink={() => p.onNavigate('invitations')}
       error={real && status.state === 'failed' ? status.error : null} onRetry={real ? () => void retryRooms() : undefined} />;
   } else if (p.page === 'projects') {
     page = <ProjectsIndex repos={localViews} missing={missing} onAddRepo={addRepo} onFindRepos={findRepos} onOpenRoom={p.onOpenRoom}
@@ -231,7 +232,7 @@ export function Home(p: HomeProps) {
   } else {
     page = <HomeReturning firstName={firstName(user)} rooms={cards} needs={needs} work={real ? work : null} decisions={decisions}
       repos={real ? localViews : null} missing={missing} composer={composer} notice={notice} onOpenRoom={p.onOpenRoom} onOpenInvite={p.onOpenInvite}
-      onNewRoom={p.onNewRoom} onSeeRooms={() => p.onNavigate('rooms')} onSeeProjects={() => p.onNavigate('projects')} onAddRepo={addRepo} />;
+      onNewRoom={() => p.onNewRoom(null)} onSeeRooms={() => p.onNavigate('rooms')} onSeeProjects={() => p.onNavigate('projects')} onAddRepo={addRepo} />;
   }
 
   const overlay = (
@@ -259,8 +260,7 @@ export function Home(p: HomeProps) {
 
   return (
     <AppShell route={p.invite ? 'invitations' : p.page} onNavigate={p.onNavigate} account={me} invitationCount={invitations?.length ?? 0}
-      rooms={p.rooms.map((r) => ({ id: r.id, name: r.name, needs: !!r.needs, live: r.inCall.some((x) => x.tone !== 'me') }))}
-      onOpenRoom={p.onOpenRoom} onNewRoom={p.onNewRoom} onAccount={() => setMenu(!menu)} accountOpen={menu} overlay={overlay}>
+      rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={(repo) => p.onNewRoom(repo ?? null)} onAccount={() => setMenu(!menu)} accountOpen={menu} overlay={overlay}>
       {page}
     </AppShell>
   );

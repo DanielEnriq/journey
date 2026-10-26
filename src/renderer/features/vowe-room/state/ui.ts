@@ -37,8 +37,6 @@ export interface UiState {
   focusOn: boolean;
   /** Which thread is open in Discuss. */
   thread: string | null;
-  /** The rooms panel is open. */
-  side: boolean;
   flash: string | null;
   since: boolean;
   sinceOpen: boolean;
@@ -66,7 +64,7 @@ export const initialUi = (): UiState => ({
   tool: 'select', sel: [], open: null, openTab: 'ports', whatIf: null, reveal: 99, latency: 4, ask: null,
   vowe: 'listening', voweLine: 'Listening', said: [], cc: true, muted: false,
   deskOpen: true, tab: 'discuss', inspect: null, focusOn: true, thread: null,
-  side: false, flash: null, since: false, sinceOpen: true, noticesOpen: false, draft: null, note: null,
+  flash: null, since: false, sinceOpen: true, noticesOpen: false, draft: null, note: null,
   insW: 760, toast: null, everywhere: false, depth: 'compact', prevDepth: null, lens: 'call', myView: null, compare: null, fsec: 'discuss',
 });
 
