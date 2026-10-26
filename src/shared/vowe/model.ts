@@ -250,8 +250,8 @@ export interface VoweRecord {
   since?: { lastHere: string; items: { text: string; to: Notice['to']; tone: 'live' | 'needs' | 'quiet' | 'bad'; parts?: string[]; mark?: string }[] };
   /** No call is the normal state; this says whether one is on. */
   call: boolean;
-  /** Room membership (Journey's RoomRole). */
-  members: { who: PersonId; role: RoomRole }[];
+  /** Room membership (Journey's RoomRole), with the member's display name when the record carries it. */
+  members: { who: PersonId; role: RoomRole; name?: string }[];
   /** Attention items you've opened or acted on. */
   done: string[];
   /** Vowe is on in this room (off: no AI at all). */
@@ -260,6 +260,37 @@ export interface VoweRecord {
   agentName?: string;
   /** Is a coding agent reachable from this room at all. */
   agents: { name: string; status: 'connected' | 'not-connected'; note: string }[];
+  /** You, as this record names you (your cloud user id), when the reader is known. */
+  me?: PersonId;
+  /**
+   * When things happened, as ISO times, for readers that need real time rather than `ago` (the Inbox). Keys:
+   *   <thread id>                       thread started        <thread id>:<reply id>   a reply (the first reply's id is the thread's)
+   *   <decision version id>             version written       <dv>:review              signatures requested
+   *   <dv>:signed:<person>              that person signed this version              <dv>:agreed  agreed
+   *   <work id>                         work created          <work id>:plan           its current plan version written
+   *   <work id>:question                the shown question    <work id>:revision       the open suggestion set
+   *   <work id>:scope                   the open scope ask    <work id>:authorized     authorized
+   *   <work id>:resolved                resolved
+   */
+  times?: Record<string, string>;
+  /** The room's activity log, newest first (who did what to which subject, and when). */
+  log?: RecordEvent[];
+}
+
+/** One line of the room's activity log, as the database keeps it. */
+export interface RecordEvent {
+  id: string;
+  /** Who did it; null when the system did. */
+  by: PersonId | null;
+  /** The database's activity kind: thread, reply, decision, amended, signed, review, agreed, changes, work, plan,
+   *  authorized, scope, question, finding, resolved, joined, left, removed, role, repository, call-started, call-left. */
+  kind: string;
+  /** What it was about, in words (a title, or a message's text). */
+  text: string;
+  /** The subject's id: a thread id, a database decision id (not a version id), a work id; null for the room. */
+  subject: string | null;
+  version: number | null;
+  at: string;
 }
 
 /** The agent's person id in every record. Its displayed name comes from the Directory. */

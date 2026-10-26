@@ -23,6 +23,8 @@ export interface CreateRoomProps {
   /** Rejects with a message to show (RoomFailure.message). */
   onCreate: (room: { name: string; goal: string; repo: string | null }) => Promise<void>;
   onClose: () => void;
+  /** The repository to start on (New room from a project); null or absent: none chosen. */
+  initialRepo?: string | null;
 }
 
 export function CreateRoomSheet({ repos, repoNote, onAddRepo, onCreate, onClose }: CreateRoomProps) {

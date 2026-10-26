@@ -1,5 +1,5 @@
 import type {
-  About, By, Change, Decision, Line, Notice, PlanVersion, PR, Ref, Reply, Revision, RoomRole, Step, Thread, VoweRecord, Work,
+  About, By, Change, Decision, Line, Notice, PlanVersion, PR, RecordEvent, Ref, Reply, Revision, RoomRole, Step, Thread, VoweRecord, Work,
 } from '../../shared/vowe/model.js';
 import { AGENT } from '../../shared/vowe/model.js';
 import { decisionVersionId } from '../../shared/vowe/ids.js';
@@ -315,6 +315,53 @@ function sinceOf(raw: RawVoweRecord, names: Map<string, string>): VoweRecord['si
   return items.length ? { lastHere: lastHereOf(raw.seen_at), items: items.slice(0, 20) } : undefined;
 }
 
+/** Real times for what the record shows (VoweRecord.times): the Desk reads `ago`, the Inbox reads these. */
+export function timesOf(raw: RawVoweRecord): Record<string, string> {
+  const at: Record<string, string> = {};
+  const latest = (kind: string, subject: string, version?: number) => raw.activity
+    .filter((a) => a.kind === kind && a.subject_id === subject && (version === undefined || a.version === version))
+    .reduce<string | null>((m, a) => (m === null || Date.parse(a.created_at) > Date.parse(m) ? a.created_at : m), null);
+  for (const t of raw.threads) {
+    at[t.id] = t.created_at;
+    at[`${t.id}:${t.id}`] = t.created_at;
+    for (const c of t.replies) at[`${t.id}:${c.id}`] = c.created_at;
+    if (t.resolved_at) at[`${t.id}:resolved`] = t.resolved_at;
+  }
+  for (const d of raw.decisions) {
+    for (const v of d.versions) {
+      const id = decisionVersionId(d.id, v.version);
+      at[id] = v.created_at;
+      const review = latest('review', d.id, v.version);
+      if (review) at[`${id}:review`] = review;
+      const signed = v.signatures.filter((x) => x.version === v.version);
+      for (const x of signed) at[`${id}:signed:${x.user_id}`] = x.signed_at;
+      const agreed = latest('agreed', d.id, v.version)
+        ?? (v.state === 'agreed' || v.state === 'superseded' ? signed.map((x) => x.signed_at).sort().at(-1) ?? null : null);
+      if (agreed) at[`${id}:agreed`] = agreed;
+    }
+  }
+  for (const w of raw.work) {
+    at[w.id] = w.created_at;
+    const plan = w.versions.find((v) => v.version === w.version);
+    if (plan) at[`${w.id}:plan`] = plan.created_at;
+    const q = w.questions.filter((x) => x.answer === null).at(-1) ?? w.questions.at(-1);
+    if (q) at[`${w.id}:question`] = q.created_at;
+    if (w.revision) at[`${w.id}:revision`] = w.revision.created_at;
+    const ask = w.scope.filter((x) => x.state === 'open').at(-1);
+    if (ask) at[`${w.id}:scope`] = ask.created_at;
+    if (w.authorized_at) at[`${w.id}:authorized`] = w.authorized_at;
+    if (w.resolved_at) at[`${w.id}:resolved`] = w.resolved_at;
+  }
+  return at;
+}
+
+/** The activity log as the record carries it (VoweRecord.log), newest first. */
+export function logOf(raw: RawVoweRecord): RecordEvent[] {
+  return raw.activity
+    .map((a) => ({ id: a.id, by: a.actor_id, kind: a.kind, text: a.subject ?? '', subject: a.subject_id, version: a.version, at: a.created_at }))
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || (a.id < b.id ? -1 : 1));
+}
+
 export function toVoweRecord(raw: RawVoweRecord, opts: MapOptions = {}): VoweRecord {
   const now = opts.now ?? new Date();
   const names = new Map(raw.members.map((m) => [m.user_id, m.name || m.email || 'Someone']));
@@ -326,12 +373,15 @@ export function toVoweRecord(raw: RawVoweRecord, opts: MapOptions = {}): VoweRec
     work: raw.work.map((w) => workOf(w, now)),
     notices: [], // PASS3_BACKEND: no NotificationService; For you is derived in the renderer (state/attention.ts).
     call: false,
-    members: raw.members.map((m) => ({ who: m.user_id, role: m.role })),
+    members: raw.members.map((m) => (m.name || m.email ? { who: m.user_id, role: m.role, name: (m.name || m.email)! } : { who: m.user_id, role: m.role })),
     done: raw.done,
     vowe: raw.room.vowe,
     agentName: raw.room.agent_name || 'Vowe',
     agents: opts.agents ?? [],
+    times: timesOf(raw),
+    log: logOf(raw),
   };
+  if (raw.me) rec.me = raw.me;
   if (raw.room.goal) rec.goal = { text: raw.room.goal, by: raw.room.created_by };
   const since = sinceOf(raw, names);
   if (since) rec.since = since;

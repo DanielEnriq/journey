@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from '../../../vendor/preact-hooks.js';
+import { useShownRef } from '../../call/shown.js';
 import type { VoweRecord } from '../contracts/model.js';
 import type { Attn } from '../state/attention.js';
 import type { Depth, Inspect, Tab, Ui, UiState } from '../state/ui.js';
 import type { DeskAct } from '../desk/Desk.js';
+import type { Anchor } from '../../inbox/model.js';
 
 // Everything about moving around the room that touches only your own UI state: tabs, the open artifact,
 // depth, history and keys. The same in production and in the prototype; none of it writes the record.
@@ -66,6 +68,22 @@ export function openAttention(ui: Ui, rec: VoweRecord, a: Attn): void {
   ui.setState({ tab: a.to.tab, fsec: a.to.tab, flash: `${t ? 'thread' : kind}:${a.to.id}`, thread: t ? t.id : ui.state.thread, sel: a.part ? [{ component: a.part }] : [], inspect });
 }
 
+/**
+ * Where an anchor from outside the room (an Inbox item) puts the Desk: its tab, the open decision or plan,
+ * the thread, with the Desk showing (at the width it was; full screen moves to the anchor's section). Parts to light
+ * are the room's to do (they fade), and the first is selected so the canvas shows it.
+ */
+export function anchorPatch(a: Anchor, st: Pick<UiState, 'thread'>): Partial<UiState> {
+  const inspect = a.tab === 'discuss' ? null : a.inspect ?? null;
+  return {
+    deskOpen: true, tab: a.tab, fsec: a.tab, inspect,
+    thread: a.thread ?? (a.tab === 'discuss' ? null : st.thread),
+    compare: null,
+    flash: a.thread ? `thread:${a.thread}` : inspect ? `${inspect.kind}:${inspect.id}` : null,
+    sel: a.parts?.length ? [{ component: a.parts[0] }] : [],
+  };
+}
+
 /** A place in the Desk, as history keeps it. Width is not part of a place; only full screen is. */
 type Place = Pick<UiState, 'tab' | 'inspect' | 'depth' | 'thread' | 'compare' | 'fsec'>;
 export interface DeskNav { back(): void; fwd(): void; backLabel: string | null; fwdLabel: string | null }
@@ -113,12 +131,20 @@ export function useDeskHistory(ui: Ui, u: UiState, record: () => VoweRecord): De
 
 /** The Desk's keys. Ignored while typing. */
 export function useDeskKeys(ui: Ui, act: Pick<DeskAct, 'depth' | 'fsec' | 'inspect'>, nav: DeskNav): void {
+  // A room kept for its call while you're elsewhere doesn't answer keys.
+  const shown = useShownRef();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!shown.current) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       const st = ui.state, d = st.depth;
-      if ((e.metaKey || e.ctrlKey) && (e.code === 'BracketLeft' || e.code === 'BracketRight')) { e.preventDefault(); (e.code === 'BracketLeft' ? nav.back : nav.fwd)(); return; }
+      if ((e.metaKey || e.ctrlKey) && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+        // Only when the Desk has somewhere to go; otherwise the app's own back and forward take the key.
+        const back = e.code === 'BracketLeft';
+        if (back ? nav.backLabel : nav.fwdLabel) { e.preventDefault(); (back ? nav.back : nav.fwd)(); }
+        return;
+      }
       if (e.code === 'BracketRight' && e.shiftKey) { e.preventDefault(); act.depth(d === 'expanded' ? 'compact' : 'expanded'); }
       else if (e.code === 'BracketRight') { e.preventDefault(); ui.setState(st.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' }); }
       else if (e.key === 'F' && e.shiftKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); act.depth(d === 'focus' ? exitDepth(st) : 'focus'); }

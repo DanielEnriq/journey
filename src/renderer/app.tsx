@@ -1,6 +1,8 @@
 import { Fragment, h, render } from './vendor/preact.js';
 import { useEffect, useLayoutEffect, useRef, useState } from './vendor/preact-hooks.js';
+import { callLayout, joinPlan } from './features/call/continuity.js';
 import { CallSession } from './features/call/session.js';
+import { ConfirmDialog } from './features/membership/primitives.js';
 import { CanvasHarness } from './features/canvas/Harness.js';
 import { RoomPanelPreview } from './features/room/panel/RoomPanelPreview.js';
 import { RoomScreen } from './features/room/RoomScreen.js';
@@ -13,6 +15,8 @@ import {
 } from './features/workspace/real/workspace.js';
 import type { LandingState, MembershipError } from './features/membership/model.js';
 import { Home, type HomePage } from './features/home/Home.js';
+import { bindInbox } from './features/inbox/real.js';
+import { activeInbox } from './features/inbox/source.js';
 import { LoginScreen, OpeningVowe } from './features/welcome/LoginScreen.js';
 import { CreateRoomSheet } from './ui/pass2/rooms/CreateRoom.js';
 import { InviteGate } from './ui/pass2/invites/InviteGate.js';
@@ -33,7 +37,7 @@ import type { InviteKey, Theme } from '../shared/api.js';
 
 type Route =
   | { screen: 'login' }
-  | { screen: 'home'; demo: boolean; page?: HomePage }
+  | { screen: 'home'; demo: boolean; page?: HomePage; item?: string }
   | { screen: 'room'; id: string; call: boolean; demo: boolean }
   | { screen: 'reference'; sheet: Sheet }
   | { screen: 'room-panel' }
@@ -59,6 +63,7 @@ function parseRoute(hash: string): Route {
   const demo = PREVIEW || parts[0] === 'demo';
   if (parts[0] === 'demo') parts.shift();
   const [screen, a, b] = parts;
+  if (screen === 'home' && a === 'i' && b) return { screen: 'home', demo, item: decodeURIComponent(b) };
   if (PAGES.includes(screen as HomePage)) return { screen: 'home', demo, ...(screen === 'home' ? {} : { page: screen as HomePage }) };
   if (screen === 'room' && a) return { screen: 'room', id: decodeURIComponent(a), call: b === 'call', demo };
   if (screen === 'reference') return { screen: 'reference', sheet: a in SHEETS ? a as Sheet : 'Components' };
@@ -69,7 +74,7 @@ function parseRoute(hash: string): Route {
 
 function routeHash(r: Route) {
   const d = (r.screen === 'home' || r.screen === 'room') && r.demo && !PREVIEW ? '#/demo' : '#';
-  if (r.screen === 'home') return `${d}/${r.page ?? 'home'}`;
+  if (r.screen === 'home') return r.item && !r.page ? `${d}/home/i/${encodeURIComponent(r.item)}` : `${d}/${r.page ?? 'home'}`;
   if (r.screen === 'room') return `${d}/room/${encodeURIComponent(r.id)}` + (r.call ? '/call' : '');
   if (r.screen === 'reference') return `#/reference/${r.sheet}`;
   if (r.screen === 'room-panel') return '#/dev/room-panel';
@@ -209,7 +214,10 @@ function DevMenu({ route, go, onClose }: { route: Route; go(r: Route): void; onC
 function App() {
   const [route, go] = useRoute();
   const [dev, setDev] = useState(false);
-  const [newRoom, setNewRoom] = useState(false);
+  /** The New room sheet, open with the repository it starts on (null: none). */
+  const [newRoom, setNewRoom] = useState<{ repo: string | null } | null>(null);
+  /** Joining another room's call while you're in one asks first. */
+  const [switching, setSwitching] = useState<{ id: string; talk: boolean } | null>(null);
   const [repos, setRepos] = useState<RepoChoice[]>([]);
   /** An invite being opened; kept in memory only, never in the route or storage. */
   const [invite, setInvite] = useState<InviteKey | null>(null);
@@ -233,36 +241,89 @@ function App() {
   // Signing out, in the app or the preview, ends any call; so does crossing between the demo and your rooms.
   useEffect(() => { if (route.screen === 'login') { void demoSession.leave(); void realSession.leave(); setInvite(null); } }, [route.screen]);
   useEffect(() => { void (demo ? realSession : demoSession).leave(); }, [demo]);
+  // The Inbox follows the workspace on screen: the example rooms, your rooms, or none when signed out.
+  const inboxOf = signedOut || route.screen === 'login' ? null : demo ? 'demo' : 'real';
+  useEffect(() => { bindInbox(inboxOf); }, [inboxOf]);
   // Repositories added on this machine, for the room pickers.
   const loadRepos = () => { if (!PREVIEW && user) localRepos().then(setRepos, () => setRepos([])); };
-  useEffect(loadRepos, [user, newRoom]);
+  useEffect(loadRepos, [user, !!newRoom]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); setDev((d) => !d); }
+      // ⌘[ and ⌘]: back and forward through the app's screens, unless something on screen used the key
+      // (the Desk's own history goes first while it has somewhere to go).
+      else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+        const back = e.code === 'BracketLeft';
+        setTimeout(() => { if (!e.defaultPrevented) { if (back) history.back(); else history.forward(); } }, 0);
+      }
     };
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   }, []);
 
-  // A call route with no call behind it (a reload, a failed join) shows the room from outside.
+  // A call route with no call behind it (a reload, a failed join, hanging up) shows the room from outside.
   const inCall = route.screen === 'room' && route.call && session.inRoom(route.id);
   useEffect(() => {
     if (!signedOut && route.screen === 'room' && route.call && !inCall) go({ ...route, call: false });
   }, [route, inCall, cs.status]);
+  // The call outlives the screen: its room stays mounted (hidden) while you're Home or in another room.
+  const layout = callLayout(cs, signedOut || route.screen !== 'room' ? null : route.id);
 
-  /** Leaving a room leaves its call: the call belongs to the room. */
-  const leaveCallUnlessIn = (id: string | null) => { if (session.state.roomId && session.state.roomId !== id) void session.leave(); };
-  const home = () => { leaveCallUnlessIn(null); go({ screen: 'home', demo }); };
-  const openRoom = (id: string) => { leaveCallUnlessIn(id); go({ screen: 'room', id, call: false, demo }); };
+  // Going Home or to another room is navigation, never leaving the call.
+  const home = () => go({ screen: 'home', demo });
+  const openRoom = (id: string) => go({ screen: 'room', id, call: layout.keep === id, demo });
   const create = async (r: NewRoom) => {
     const made = await ws.room.create(r);
-    setNewRoom(false);
+    setNewRoom(null);
     openRoom(made.id);
   };
+  const join = async (id: string, talk: boolean) => {
+    // Out of a dropped call in another room first; a connected one is left by session.join.
+    if (session.state.roomId && session.state.roomId !== id) await session.leave();
+    if (!(await session.join(id))) return;
+    go({ screen: 'room', id, call: true, demo });
+    // Chose "Join and talk": that choice, not the join, opens the mic (and asks the OS the first time).
+    if (talk && !demo) void voice()?.setMicrophoneEnabled(true).catch(() => { /* the call bar says why */ });
+  };
+  const askJoin = (id: string, talk: boolean) => {
+    const plan = joinPlan(session.state, id);
+    if (plan === 'switch') setSwitching({ id, talk });
+    else if (plan === 'join') void join(id, talk);
+  };
+  const leave = async () => { await session.leave(); };
+  // The Inbox item the route selects; opening one marks it seen.
+  const inbox = useStore(activeInbox).source;
+  const selected = route.screen === 'home' ? route.item ?? null : null;
+  useEffect(() => {
+    if (!inbox || !selected) return;
+    // Waits for the item to load (a relaunch on #/home/i/…), then marks it seen once.
+    const mark = () => {
+      const v = inbox.store.state.view;
+      const item = [...v.needs, ...v.following, ...v.activity].find((i) => i.id === selected);
+      if (item) inbox.seen(item);
+      return !!item;
+    };
+    if (mark()) return;
+    const off = inbox.store.subscribe(() => { if (mark()) off(); });
+    return off;
+  }, [inbox, selected]);
   const choices = demo ? EXAMPLE_REPOS : repos;
   const repoNote = demo ? 'examples · this is the demo' : repos.length ? 'added on this machine · only its remote is shared' : 'none added on this machine yet';
   const addRepo = demo ? undefined : () => addLocalRepo().then((r) => { loadRepos(); return r; });
-  const overlay = newRoom ? <CreateRoomSheet repos={choices} repoNote={repoNote} onAddRepo={addRepo} onCreate={create} onClose={() => setNewRoom(false)} /> : null;
+  const overlay = newRoom ? <CreateRoomSheet repos={choices} repoNote={repoNote} onAddRepo={addRepo} onCreate={create} onClose={() => setNewRoom(null)} initialRepo={newRoom.repo} /> : null;
+  const onNewRoom = (repo?: string | null) => setNewRoom({ repo: repo ?? null });
+  const roomProps = (id: string) => ({
+    sources: ws, record: demo ? undefined : realWorkspace.record, roomId: id, session,
+    canvas: demo && id === 'payments' ? demoCanvas() : null, attachError: demo ? undefined : attachErrors.get(id), light,
+    onOpenRoom: openRoom, onNewRoom: () => onNewRoom(), onHome: home,
+    membership: demo ? undefined : realWorkspace.membership, voice: demo ? undefined : voice(), vowe: demo ? undefined : realWorkspace.vowe,
+    onJoin: (o?: { talk: boolean }) => askJoin(id, !!o?.talk), onLeave: leave,
+  });
+  // The room whose call you're in, mounted wherever you are; on screen only when the route shows it.
+  // Same key as the room's own screen, so joining or coming back moves it rather than remounting it.
+  const kept = layout.keep && !signedOut
+    ? <RoomScreen key={`${demo}:${layout.keep}`} {...roomProps(layout.keep)} inCall hidden={!layout.visible} overlay={layout.visible ? overlay : undefined} />
+    : null;
   const notice = !demo && real.state === 'failed' ? `Couldn’t read your rooms: ${real.error}` : null;
 
   let screen;
@@ -273,32 +334,29 @@ function App() {
     // Keyed by workspace: nothing Home read for your rooms carries over into the demo, or back.
     screen = <Home key={demo ? 'demo' : 'real'} page={page} demo={demo} rooms={rooms} repos={choices} repoNote={repoNote} onAddRepo={addRepo} notice={notice}
       onNavigate={(to) => { setInvite(null); go({ screen: 'home', demo, ...(to === 'home' ? {} : { page: to }) }); }}
-      onOpenRoom={(id) => { setInvite(null); openRoom(id); }} onCreate={create} onNewRoom={() => setNewRoom(true)}
+      onOpenRoom={(id) => { setInvite(null); openRoom(id); }} onCreate={create} onNewRoom={onNewRoom}
+      inbox={inbox} selected={selected} onSelect={(item) => go({ screen: 'home', demo, ...(item ? { item } : {}) })}
       onOpenInvite={demo ? undefined : setInvite} overlay={overlay}
       invite={invite && !demo ? <InviteScreen inviteKey={invite} onDone={() => setInvite(null)} onOpenRoom={(id) => { setInvite(null); openRoom(id); }} /> : undefined} />;
   } else if (route.screen === 'room') {
-    const id = route.id;
-    screen = (
-      <RoomScreen key={`${demo}:${id}`} sources={ws} record={demo ? undefined : realWorkspace.record} roomId={id} inCall={inCall} session={session}
-        canvas={demo && id === 'payments' ? demoCanvas() : null} attachError={demo ? undefined : attachErrors.get(id)} light={light} overlay={overlay}
-        onOpenRoom={openRoom} onNewRoom={() => setNewRoom(true)} onHome={home}
-        membership={demo ? undefined : realWorkspace.membership} voice={demo ? undefined : voice()} vowe={demo ? undefined : realWorkspace.vowe}
-        onJoin={async (o) => {
-          if (!(await session.join(id))) return;
-          go({ screen: 'room', id, call: true, demo });
-          // Chose "Join and talk": that choice, not the join, opens the mic (and asks the OS the first time).
-          if (o?.talk && !demo) void voice()?.setMicrophoneEnabled(true).catch(() => { /* the call bar says why */ });
-        }}
-        onLeave={async () => { await session.leave(); go({ screen: 'room', id, call: false, demo }); }} />
-    );
+    // The call's own room is the kept one, shown in place.
+    screen = layout.visible ? null : <RoomScreen key={`${demo}:${route.id}`} {...roomProps(route.id)} inCall={inCall} overlay={overlay} />;
   }
   else if (route.screen === 'room-panel') screen = <div class={'win panel-dev' + (light ? ' light' : '')}><RoomPanelPreview /></div>;
   else if (route.screen === 'canvas-dev') screen = <CanvasHarness key={route.room ?? ''} roomId={route.room} light={light} />;
   else screen = <ReferenceScreen sheet={route.sheet} go={(sheet) => go({ screen: 'reference', sheet })} onClose={home} />;
 
+  const callName = (id: string | null) => (id ? rooms.find((r) => r.id === id)?.name : null) ?? 'this room';
   return (
     <>
+      {kept}
       {screen}
+      {switching && (
+        <ConfirmDialog title={`Leave the call in ${callName(session.state.roomId)}?`} destructive={false} confirmLabel="Leave and join"
+          body={<>You can be in one call at a time. Joining {callName(switching.id)} ends your part in the call in {callName(session.state.roomId)}.</>}
+          onCancel={() => setSwitching(null)}
+          onConfirm={() => { const s = switching; setSwitching(null); void join(s.id, s.talk); }} />
+      )}
       {PREVIEW && !dev && <button class="devpill" type="button" title="Developer menu · Ctrl ⇧ D" onClick={() => setDev(true)}>Preview · mock data</button>}
       {!PREVIEW && demo && !signedOut && (
         <button class="devpill" type="button" title="Leave the demo for your own rooms" onClick={() => { void demoSession.leave(); go({ screen: 'home', demo: false }); }}>Demo · example data · Exit</button>

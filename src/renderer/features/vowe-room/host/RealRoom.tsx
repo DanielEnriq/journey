@@ -10,7 +10,8 @@ export { directoryOf, EMPTY_RECORD, mentionsAgent };
 import { makeUi } from '../state/ui.js';
 import { marksOf } from '../room/marks.js';
 import { Pins } from '../room/Pins.js';
-import { useDeskHistory, useDeskKeys, useToastTimeout } from '../room/navigation.js';
+import { anchorPatch, useDeskHistory, useDeskKeys, useToastTimeout } from '../room/navigation.js';
+import { pendingAnchor, takeAnchor } from '../../../shared/nav.js';
 import { VoweRoom, type DeskStatus } from '../room/VoweRoom.js';
 import { createDeskActions } from './actions.js';
 
@@ -138,6 +139,19 @@ export function RealRoom(p: RealRoomProps) {
   // People opens in the Desk's column: make sure it's showing, and not under full screen.
   useEffect(() => { if (p.peoplePanel) ui.setState({ deskOpen: true, depth: ui.state.depth === 'focus' ? 'compact' : ui.state.depth }); }, [!!p.peoplePanel]);
   useDeskKeys(ui, act, nav);
+  // Landing somewhere exact from outside the room (an Inbox item): applied once the record is here, and
+  // again whenever a new anchor for this room arrives, even while the room is kept hidden for its call.
+  const anchorNonce = useStore(pendingAnchor).nonce;
+  useEffect(() => {
+    if (status.state !== 'ready') return;
+    const a = takeAnchor(p.roomId);
+    if (!a) return;
+    ui.setState(anchorPatch(a, ui.state));
+    if (!a.parts?.length) return;
+    setLit(a.parts);
+    const t = setTimeout(() => setLit([]), 1600);
+    return () => clearTimeout(t);
+  }, [status.state, anchorNonce, p.roomId]);
   useToastTimeout(ui, u);
   // Opening a thread lights what it's about on the canvas for a moment.
   useEffect(() => {
