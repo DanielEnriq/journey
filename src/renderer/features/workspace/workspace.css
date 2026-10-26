@@ -34,6 +34,9 @@
   .cc-txt{display:flex;flex-direction:column;gap:3px;min-width:0}
   .cc-txt b{font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--ink-bright)}
   .cc-txt span{font-size:12px;line-height:1.45;color:var(--ink-6)}
+  .cc-txt .cc-anchor{margin-top:4px;color:var(--ink-4)}
+  .cc-txt .cc-anchor b{font-size:inherit;font-weight:600;letter-spacing:0;color:var(--ink-2)}
+  .cc-anchor .linkish{margin-left:10px;font-size:inherit;white-space:nowrap}
   .cc-act{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto}
   .cc-act .cta{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px}
   .cc-act .cta:disabled{opacity:.7;cursor:default}

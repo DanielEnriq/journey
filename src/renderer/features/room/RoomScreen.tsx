@@ -35,7 +35,10 @@ import { RoomPreview } from './preview/RoomPreview.js';
 import { Chrome, Lights, RoomsPanel, Who } from './shell.js';
 import type { VoweServices } from '../vowe-room/contracts/services.js';
 import { RealRoom } from '../vowe-room/host/RealRoom.js';
-import type { Chime } from './types.js';
+import { AccountFoot } from '../../shared/components/Account.js';
+import { shellPrefs, toggleSidebar, useSidebarKey } from '../../ui/pass2/shell/prefs.js';
+import { ShellSidebar } from '../../ui/pass2/shell/Sidebar.js';
+import type { Chime, RoomSummary } from './types.js';
 
 // A room, in one of two states. Outside the call it is a preview: what the room is for, who is in it and
 // in its call, what changed, the work behind it. Joining the call opens the shared canvas in the same
@@ -142,17 +145,21 @@ function Dropped({ session, onJoin, onLeave }: { session: CallSession; onJoin():
   );
 }
 
+/** The app's one sidebar, as the room's left column (the same one Home and a call show). */
+function RoomSidebar(p: { rooms: RoomSummary[]; current: string; side: boolean; onOpenRoom(id: string): void; onNewRoom(repo?: string | null): void }) {
+  return (
+    <aside class="sidebar vh-sb-host" aria-hidden={!p.side} inert={!p.side}>
+      <ShellSidebar place={null} rooms={p.rooms} current={p.current} onRoom={p.onOpenRoom} onNew={(repo) => p.onNewRoom(repo)} foot={<AccountFoot />} />
+    </aside>
+  );
+}
+
 function PreviewRoom(props: InnerProps) {
   const { sources, roomId, light, onOpenRoom, onNewRoom, onHome, canvas, session, onJoin, ui, membership } = props;
   const rooms = useRooms(sources.room);
-  const [side, setSide] = useState(true);
+  const side = useStore(shellPrefs).sidebar;
+  useSidebarKey();
   const summary = rooms.find((r) => r.id === roomId);
-  const shown = useShownRef();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (shown.current && !typing(e) && e.key === '[') { setSide((v) => !v); e.preventDefault(); } };
-    addEventListener('keydown', onKey);
-    return () => removeEventListener('keydown', onKey);
-  }, []);
   const others = summary?.inCall.filter((p) => p.tone !== 'me') ?? [];
   const access = ui.access;
   const joinSheet = membership && props.voice ? (close: () => void) => (
@@ -164,8 +171,8 @@ function PreviewRoom(props: InnerProps) {
       <Lights />
       {props.overlay}
       {ui.toasts}
-      <Chrome side={side} toggleSide={() => setSide(!side)} onNewRoom={onNewRoom} onHome={onHome} actions={ui.share} />
-      <RoomsPanel rooms={rooms} current={roomId} hidden={!side} onOpenRoom={onOpenRoom} />
+      <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} onNewRoom={() => onNewRoom(null)} onHome={onHome} actions={ui.share} />
+      <RoomSidebar rooms={rooms} current={roomId} side={side} onOpenRoom={onOpenRoom} onNewRoom={onNewRoom} />
       <main class="room">
         <div class="room-identity">
           <h1>{summary?.name ?? 'Room'}</h1>
@@ -275,7 +282,8 @@ function FreshCall(props: InnerProps) {
   const cs = useStore(session.store);
   const summary = rooms.find((r) => r.id === roomId);
   const me = sources.room.me();
-  const [side, setSide] = useState(false);
+  const side = useStore(shellPrefs).sidebar;
+  useSidebarKey();
   const [desk, setDesk] = useState(!!record);
   const [tool, setTool] = useState<FreshTool>('select');
   const [ink, setInk] = useState<string[]>([]);
@@ -322,7 +330,6 @@ function FreshCall(props: InnerProps) {
       if (!shown.current || typing(e)) return;
       const tools: Record<string, FreshTool> = { v: 'select', p: 'draw', c: 'comment' };
       if (tools[e.key]) { setTool(tools[e.key]); e.preventDefault(); }
-      else if (e.key === '[') { setSide((v) => !v); e.preventDefault(); }
       else if (e.key === ']' && record) { setDesk((v) => !v); e.preventDefault(); }
       else if (e.key === 'Escape') setPartOpen(false);
     };
@@ -563,8 +570,8 @@ function FreshCall(props: InnerProps) {
       <Lights />
       {props.overlay}
       {ui.toasts}
-      <Chrome side={side} desk={record ? desk : null} toggleSide={() => setSide(!side)} toggleDesk={() => setDesk(!desk)} onNewRoom={onNewRoom} actions={ui.share} />
-      <RoomsPanel rooms={rooms} current={roomId} hidden={!side} onOpenRoom={onOpenRoom} />
+      <Chrome side={side} sideName="sidebar" desk={record ? desk : null} toggleSide={toggleSidebar} toggleDesk={() => setDesk(!desk)} onNewRoom={() => onNewRoom(null)} actions={ui.share} />
+      <RoomSidebar rooms={rooms} current={roomId} side={side} onOpenRoom={onOpenRoom} onNewRoom={onNewRoom} />
       <main class="room">
         <div class="room-identity">
           <h1>{summary?.name ?? 'Room'}</h1>

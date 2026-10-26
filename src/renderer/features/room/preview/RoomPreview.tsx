@@ -10,6 +10,7 @@ import { listNames, Who } from '../shell.js';
 import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 import { Glimpse } from './Glimpse.js';
 import { WorkContext } from './WorkContext.js';
+import { pendingAnchor } from '../../../shared/nav.js';
 
 // A room from outside its call: what it is for, who is talking in it, what changed, what waits on
 // someone, and the coding work behind it. It answers "do I want to join?"; the canvas itself only
@@ -28,12 +29,15 @@ function EventRow({ e }: { e: RoomEvent }) {
   );
 }
 
-function CallCard({ p, session, onJoin, sheet }: { p: Preview; session: CallSession; onJoin(): void; sheet?: ComponentChildren }) {
+function CallCard({ p, roomId, session, onJoin, sheet }: { p: Preview; roomId: string; session: CallSession; onJoin(): void; sheet?: ComponentChildren }) {
   const cs = useStore(session.store);
   const mine = cs.roomId === p.room.id;
   const connecting = mine && cs.status === 'connecting', failed = mine && cs.status === 'failed';
   const others = p.room.inCall.filter((x) => x.tone !== 'me');
   const live = others.length > 0;
+  // Where an Inbox item asked to land: the Desk only exists in a call, so it waits here until you join.
+  const pending = useStore(pendingAnchor).anchor;
+  const anchor = pending?.roomId === roomId ? pending : null;
   return (
     <div class={'callcard' + (live ? ' live' : '')}>
       <div class="cc-who">
@@ -41,6 +45,10 @@ function CallCard({ p, session, onJoin, sheet }: { p: Preview; session: CallSess
         <div class="cc-txt">
           <b>{live ? `${listNames(others.map((x) => x.name))} in the call` : 'No one is in the call'}</b>
           <span>{live ? 'Vowe is with them. Join to see the canvas and talk it through.' : 'Start one to open the canvas. Vowe joins every call.'}</span>
+          {anchor ? (
+            <span class="cc-anchor">Joining opens <b>{anchor.label}</b>
+              <button class="linkish" type="button" onClick={() => pendingAnchor.setState({ anchor: null })}>Not now</button></span>
+          ) : null}
         </div>
       </div>
       <div class="cc-act vm-prejoin-anchor">
@@ -105,7 +113,7 @@ export function RoomPreview({ sources, roomId, session, canvas, attachError, onJ
             )}
           </div>
 
-          <CallCard p={p} session={session} onJoin={sheetOpen ? () => setSheetOpen(false) : onJoin} sheet={sheetOpen && joinSheet ? joinSheet(() => setSheetOpen(false)) : undefined} />
+          <CallCard p={p} roomId={roomId} session={session} onJoin={sheetOpen ? () => setSheetOpen(false) : onJoin} sheet={sheetOpen && joinSheet ? joinSheet(() => setSheetOpen(false)) : undefined} />
 
           {sinceShown && p.since.length > 0 && (
             <div class="since" role="status">

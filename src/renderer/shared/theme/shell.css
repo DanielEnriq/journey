@@ -1,7 +1,7 @@
 /* ---- Tokens: Pass 1's Ink, Paper & Signal (ui/styles/tokens.css), reached through shared/theme/bridge.css. */
 .win{--left-column:0px;--right-column:0px}
 .win.side-open{--left-column:268px}
-.win.side-open.nx-win{--left-column:236px}
+.win.side-open:has(> .vh-sb-host){--left-column:236px}
 .win.desk-open{--right-column:352px}
 
 /* ---- Shell: one grid, the band drawn over panels that run to the roof. */
