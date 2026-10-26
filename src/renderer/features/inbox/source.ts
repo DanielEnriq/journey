@@ -1,4 +1,4 @@
-import type { Store } from '../../shared/store.js';
+import { Store } from '../../shared/store.js';
 import type { Scene } from '../../../shared/canvas/index.js';
 import type { VoweRecord } from '../vowe-room/contracts/model.js';
 import type { PersonId } from '../vowe-room/journey.js';
@@ -59,3 +59,10 @@ export interface InboxSource {
   /** An invitation item: accept returns the room id to open; decline removes it. */
   acceptInvitation(item: InboxItem, yes: boolean): Promise<string | null>;
 }
+
+/**
+ * The Inbox of the workspace on screen (your real rooms, or the demo's), set by the app when the workspace
+ * changes. Screens that only need the count or the source (the sidebar in a room, Home) read it from here,
+ * so no screen has to be handed it through every layer.
+ */
+export const activeInbox = new Store<{ source: InboxSource | null }>({ source: null });
