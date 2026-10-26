@@ -166,6 +166,47 @@ describe('CallVoice', () => {
     await v.stop();
   });
 
+  it('chimes in at pauses: what you say, unasked, becomes one turn once you pause', async () => {
+    const b = bridge();
+    const c = fakeCall();
+    const overheard: string[] = [];
+    const v = new CallVoice({
+      api: b.api, roomId: ROOM, localUser: DANIEL, canvas: () => canvas, call: c.call, microphone: () => null,
+      answers: () => 'pauses', onOverheard: (q) => overheard.push(q), pauseMs: 20,
+    });
+    await v.start();
+    b.hear('The worker charges first.');
+    b.hear('then it', false); // still talking: no turn yet
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(b.turns.length, 0);
+    b.hear('Then it writes the ledger.');
+    await new Promise((r) => setTimeout(r, 40));
+    assert.deepEqual([b.turns.length, b.turns[0]?.question, overheard], [1, 'The worker charges first. Then it writes the ledger.', ['The worker charges first. Then it writes the ledger.']]);
+    await v.stop();
+  });
+
+  it('waits for someone else to finish before chiming in, and only answers by name when asked', async () => {
+    const b = bridge();
+    const c = fakeCall();
+    let mode: 'pauses' | 'asked' = 'pauses';
+    const v = new CallVoice({ api: b.api, roomId: ROOM, localUser: DANIEL, canvas: () => canvas, call: c.call, microphone: () => null, answers: () => mode, pauseMs: 20 });
+    await v.start();
+    c.set({ participants: [person(DANIEL.userId, { isLocal: true }), person('u-john', { isSpeaking: true })] });
+    b.hear('Does it retry?');
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(b.turns.length, 0);
+    c.set({ participants: [person(DANIEL.userId, { isLocal: true }), person('u-john')] });
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(b.turns[0]?.question, 'Does it retry?');
+
+    mode = 'asked';
+    b.agentEvent({ type: 'turn.completed', turnId: 't1', reply: b.reply('t1') });
+    b.hear('Just thinking out loud.');
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(b.turns.length, 1);
+    await v.stop();
+  });
+
   it('lets go when main takes Vowe out of the call', async () => {
     const b = bridge();
     const c = fakeCall();

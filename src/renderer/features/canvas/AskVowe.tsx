@@ -78,10 +78,22 @@ export class AskVowe {
     this.store.setState({ open: true, question, answer: '', status: 'thinking', error: null, approval: null, canvas: [] });
   }
 
-  /** A voice turn's events: the answer as it's spoken, approvals it waits on, what the canvas did. */
+  /**
+   * What you said in the call that your Vowe chimed in on, unasked: followed like heard(), but the panel
+   * stays shut, so the captions keep showing the conversation.
+   */
+  overheard(question: string) {
+    this.store.setState({ question, answer: '', status: 'thinking', error: null, approval: null, canvas: [] });
+  }
+
+  /**
+   * A voice turn's events: the answer as it's spoken, approvals it waits on, what the canvas did. One
+   * that needs you (an approval) or failed opens the panel, so it's never waiting or failing out of sight.
+   */
   follow(e: AgentEvent) {
     if (this.store.state.reviewing) return;
     this.on(e, this.store.state.question ?? '', this.me().name);
+    if (e.type === 'approval.requested' || e.type === 'turn.failed') this.store.setState({ open: true });
   }
 
   /**

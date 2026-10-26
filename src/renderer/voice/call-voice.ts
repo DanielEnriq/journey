@@ -1,4 +1,4 @@
-import type { AgentEvent, CanvasSnapshot, JourneyApi, VoiceStatus } from '../../shared/api.js';
+import type { AgentEvent, CanvasSnapshot, HeardSpeech, JourneyApi, VoiceStatus } from '../../shared/api.js';
 import type { CallSnapshot } from '../calls/service.js';
 import { VoiceAdapter, agentOverIpc, isVoweVoice, type VoiceOutput } from '../shared/vowe-voice.js';
 import { tapMicrophone, type MicrophoneTap, type TapMicrophone } from './microphone.js';
@@ -29,11 +29,23 @@ export interface CallVoiceOptions {
    * keeping the Room, then `room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack`.
    */
   microphone(): MediaStreamTrack | null | undefined;
+  /**
+   * When your Vowe answers: 'asked' only when you say "Vowe, …"; 'pauses' also whatever you say, once
+   * you pause and nobody else is talking. Read as each thing you say ends. Defaults to 'asked'.
+   */
+  answers?(): 'pauses' | 'asked';
+  /** You said something your Vowe is answering without being asked by name ('pauses'). */
+  onOverheard?(question: string): void;
   /** Every event of every turn: captions, approvals, canvas commands, errors (show those to you only). */
   onEvent?(event: AgentEvent): void;
   /** For tests. */
   tap?: TapMicrophone;
+  /** For tests: how long a pause is before Vowe chimes in. */
+  pauseMs?: number;
 }
+
+/** After the recognizer ends a sentence (itself ~0.6 s of silence), how much longer before Vowe chimes in. */
+export const CHIME_PAUSE_MS = 1000;
 
 export class CallVoice {
   private adapter: VoiceAdapter | null = null;
@@ -42,6 +54,8 @@ export class CallVoice {
   private voweSpeaking = false;
   private talking = new Set<string>();
   private microphone: { track: MediaStreamTrack; tap: Promise<MicrophoneTap | null> } | null = null;
+  /** What you've said since you last paused, while chiming in at pauses. */
+  private said: { speech: HeardSpeech; text: string; timer: ReturnType<typeof setTimeout> | null } | null = null;
 
   constructor(private readonly o: CallVoiceOptions) {}
 
@@ -68,7 +82,7 @@ export class CallVoice {
       },
     });
     this.subscriptions.push(
-      api.voice.onSpeech((update) => update.roomId === roomId && this.adapter?.hear(update.speech)),
+      api.voice.onSpeech((update) => update.roomId === roomId && this.heard(update.speech)),
       api.voice.onStatus((s) => {
         this.voweSpeaking = s.state === 'speaking';
         if (s.status === 'off' || s.status === 'failed') this.release(); // main took it out of the call
@@ -85,11 +99,57 @@ export class CallVoice {
   }
 
   private release() {
+    this.unsay();
     this.adapter?.stop();
     this.adapter = null;
     this.turnId = null;
     for (const unsubscribe of this.subscriptions.splice(0)) unsubscribe();
     this.untap();
+  }
+
+  /**
+   * Your speech, to the adapter. Asked by name, it's a turn as it is. Chiming in at pauses, the rest is
+   * held until you pause, then becomes one turn; partials still pass, so talking stops Vowe as before.
+   */
+  private heard(speech: HeardSpeech) {
+    if (!this.adapter) return;
+    if (speech.addressed || this.o.answers?.() !== 'pauses') {
+      if (speech.final) this.unsay();
+      this.adapter.hear(speech);
+      return;
+    }
+    const text = speech.text.trim();
+    if (!speech.final) {
+      // Still talking: wait for the next pause.
+      if (text && text !== '…' && this.said?.timer) {
+        clearTimeout(this.said.timer);
+        this.said.timer = null;
+      }
+      this.adapter.hear(speech);
+      return;
+    }
+    if (!text) return;
+    if (this.said?.timer) clearTimeout(this.said.timer);
+    this.said = { speech, text: this.said ? `${this.said.text} ${text}` : text, timer: null };
+    this.wait();
+  }
+
+  private wait() {
+    const said = this.said;
+    if (!said) return;
+    said.timer = setTimeout(() => {
+      if (this.said !== said || !this.adapter) return;
+      // Someone else has the floor: chime in once they stop.
+      if (this.talking.size) return this.wait();
+      this.said = null;
+      this.o.onOverheard?.(said.text);
+      this.adapter.hear({ ...said.speech, text: said.text, final: true, addressed: true });
+    }, this.o.pauseMs ?? CHIME_PAUSE_MS);
+  }
+
+  private unsay() {
+    if (this.said?.timer) clearTimeout(this.said.timer);
+    this.said = null;
   }
 
   private follow(snapshot: CallSnapshot) {

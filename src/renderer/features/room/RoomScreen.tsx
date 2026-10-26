@@ -26,6 +26,7 @@ import { agentNameOf } from '../workspace/real/vowe-services.js';
 import type { CallControls } from './call/CallBar.js';
 import { CallBar } from './call/CallBar.js';
 import { Surface } from './canvas/Surface.js';
+import { Captions, captionText, type CaptionLine } from './captions.js';
 import type { RoomController } from './controller.js';
 import type { CallDataSource, RoomDataSource, RoomRecordSource, WorkstreamDataSource } from './data/sources.js';
 import { Desk } from './intent/Desk.js';
@@ -104,13 +105,32 @@ const typing = (e: KeyboardEvent) => {
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) || e.metaKey || e.ctrlKey || e.altKey;
 };
 
-/** The call dropped: say so on the canvas, and let you rejoin or step back out to the room. */
-const NoCaptions = () => <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">Captions are on. Nothing has been said yet.</span></div></div>;
+/**
+ * What you and your Vowe say (captions.ts). Your speech is only recognized while your Vowe is in the
+ * call (`hearing`), so until then it says how to get captions instead.
+ */
+function CaptionsPanel({ captions, hearing }: { captions: Captions; hearing: boolean }) {
+  const { prev, cur } = useStore(captions.store);
+  if (!cur) {
+    const note = hearing ? 'Captions are on. Nothing has been said yet.' : 'Captions are on. Bring Vowe into the call from the orb to caption what you say.';
+    return <div class="captions" aria-live="polite"><div class="curline"><span class="words" style="color:var(--ink-7)">{note}</span></div></div>;
+  }
+  const who = (line: CaptionLine) => (line.who === 'vowe' ? 'Vowe' : 'You');
+  return (
+    <div class="captions" aria-live="polite">
+      {prev && <div class="prevline">{who(prev)} · {captionText(prev.text)}</div>}
+      <div class="curline">
+        <span class="spk">{who(cur)}</span>
+        <span class="words" style={cur.live ? 'color:var(--ink-5)' : undefined}>{captionText(cur.text)}</span>
+      </div>
+    </div>
+  );
+}
 
 /** The captions panel: asking Vowe takes it over while open. */
-function CallCaptions({ ask, cc }: { ask: AskVowe; cc: boolean }) {
+function CallCaptions({ ask, cc, captions, hearing }: { ask: AskVowe; cc: boolean; captions: Captions; hearing: boolean }) {
   const open = useStore(ask.store).open;
-  return open ? <AskVowePanel ask={ask} /> : cc ? <NoCaptions /> : null;
+  return open ? <AskVowePanel ask={ask} /> : cc ? <CaptionsPanel captions={captions} hearing={hearing} /> : null;
 }
 
 /** A real room's canvas with nothing on it yet: the fresh call's empty state, told what works now. */
@@ -132,6 +152,7 @@ function LiveEmpty({ client, onAsk }: { client: CanvasClient; onAsk?(): void }) 
   );
 }
 
+/** The call dropped: say so on the canvas, and let you rejoin or step back out to the room. */
 function Dropped({ session, onJoin, onLeave }: { session: CallSession; onJoin(): void; onLeave(): void }) {
   const cs = useStore(session.store);
   if (cs.status !== 'dropped') return null;
@@ -298,6 +319,9 @@ function FreshCall(props: InnerProps) {
   useEffect(() => { if (window.journey) agentNameOf(roomId).then(setAgentName, () => { /* keeps Vowe */ }); }, [roomId]);
   const [partOpen, setPartOpen] = useState(false);
   const [chime, setChime] = useState<Chime>('pauses');
+  // Read by your Vowe as you finish each thing you say: whether it chimes in, or waits to be asked.
+  const chimeNow = useRef(chime);
+  chimeNow.current = chime;
   const [drafting, setDrafting] = useState<'new' | 'amend' | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [lit, setLit] = useState<string | null>(null);
@@ -389,6 +413,8 @@ function FreshCall(props: InnerProps) {
       canvas: () => snapshotOf(board.store.state.doc, { selected: [], circled: [] }),
       call: voice,
       microphone: () => voice.microphoneTrack(),
+      answers: () => chimeNow.current,
+      onOverheard: (question) => asker.overheard(question),
       onEvent: (event) => asker.follow(event),
     });
   }, [live, board, asker, voice, roomId]);
@@ -405,6 +431,15 @@ function FreshCall(props: InnerProps) {
     });
     return () => { offStatus(); offSpeech(); };
   }, [roomId, asker]);
+  // Captions: your speech while your Vowe hears you, and what it says back.
+  const captions = useMemo(() => new Captions(), [roomId]);
+  useEffect(() => {
+    const api = window.journey?.voice;
+    if (!api) return;
+    const offSpeech = api.onSpeech(({ roomId: r, speech }) => { if (r === roomId) captions.heard(speech); });
+    const offSaid = api.onSaid(({ roomId: r, turnId, text }) => { if (r === roomId) captions.said(turnId, text); });
+    return () => { offSpeech(); offSaid(); };
+  }, [roomId, captions]);
   const mine = vowe?.roomId === roomId ? vowe : null;
   const voweOn = mine?.status === 'on' || mine?.status === 'joining';
   const voweState = !mine || !voweOn ? null : mine.status === 'joining' ? 'thinking' : mine.state;
@@ -426,7 +461,7 @@ function FreshCall(props: InnerProps) {
   const call: CallControls = {
     voweCls: callVoice ? 'vowe-btn' + (voweState ? ' ' + voweState : '') : 'vowe-btn' + (voiceOff || agentOff ? '' : ' listening'),
     agentLabel: callVoice
-      ? (mine?.status === 'joining' ? 'joining the call…' : voweState === 'listening' && micMuted ? 'in the call · unmute so it can hear you' : voweState ? { listening: 'Listening · say “Vowe, …”', thinking: 'Thinking', speaking: 'Speaking' }[voweState] : 'not in this call')
+      ? (mine?.status === 'joining' ? 'joining the call…' : voweState === 'listening' && micMuted ? 'in the call · unmute so it can hear you' : voweState ? { listening: chime === 'pauses' ? 'Listening · chimes in when you pause' : 'Listening · say “Vowe, …”', thinking: 'Thinking', speaking: 'Speaking' }[voweState] : 'not in this call')
       : voiceOff || agentOff ? 'not in this call' : 'Listening',
     partOpen, chime,
     toggleVowe: callVoice ? toggleVowe : undefined, voweOn,
@@ -495,7 +530,7 @@ function FreshCall(props: InnerProps) {
   );
   const notices = (
     <>
-      {asker ? <CallCaptions ask={asker} cc={cc} /> : cc && <NoCaptions />}
+      {asker ? <CallCaptions ask={asker} cc={cc} captions={captions} hearing={mine?.status === 'on'} /> : cc && <CaptionsPanel captions={captions} hearing={mine?.status === 'on'} />}
       {voweOn && micMuted && !voweError && (
         <div class="receipt" role="status">
           <span class="dot"></span><span>Vowe is in the call. Unmute to talk to it: say “Vowe, …” and your question.</span>
