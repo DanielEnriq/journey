@@ -23,6 +23,8 @@ export interface InboxHomeProps {
   selected?: string | null;
   onSelect?(id: string | null): void;
   onOpenRoom(roomId: string): void;
+  /** The reading page with nothing selected (Home: your rooms); without it, a hint to pick an item. */
+  idle?(st: InboxState): ComponentChildren;
 }
 
 type Foot = null | 'done' | 'snoozed';
@@ -138,12 +140,12 @@ export function InboxHome(p: InboxHomeProps) {
         <footer class="vi-foot">
           <button type="button" class="vi-footbtn" aria-pressed={foot === 'done'} onClick={() => setFoot(foot === 'done' ? null : 'done')}>Done today · {doneToday.length}</button>
           <button type="button" class="vi-footbtn" aria-pressed={foot === 'snoozed'} onClick={() => setFoot(foot === 'snoozed' ? null : 'snoozed')}>Snoozed · {v.snoozed.length}</button>
-          {st.unavailable.length ? <span class="vi-unavail" title="These sources don’t feed the Inbox yet">Not in Journey yet: {st.unavailable.map((s) => SOURCE_LABEL[s]).join(', ')}</span> : null}
+          {st.unavailable.length ? <span class="vi-unavail" title="These sources don’t feed the Inbox yet">Not in Journey yet: {st.unavailable.map((s) => SOURCE_LABEL[s].replace(/ · not in Journey yet$/, '')).join(', ')}</span> : null}
         </footer>
       </div>
       <div class="vi-page" aria-live="polite">
         {it ? <Preview key={it.id} it={it} source={p.source} now={st.now} me={st.me} people={st.people} acts={acts} resolvedHow={resolved?.how}
-          onJoined={(roomId) => p.onOpenRoom(roomId)} /> : (
+          onJoined={(roomId) => p.onOpenRoom(roomId)} /> : p.idle ? p.idle(st) : (
           <div class="vi-empty">
             <p>{v.needs.length ? `${v.needs.length} thing${v.needs.length > 1 ? 's' : ''} ${v.needs.length > 1 ? 'are' : 'is'} waiting on you. Pick one to read it here.` : 'Nothing needs you. Pick anything to read it here.'}</p>
             <p class="vi-keys"><kbd class="v-kbd">J</kbd><kbd class="v-kbd">K</kbd> move · <kbd class="v-kbd">↵</kbd> open in room · <kbd class="v-kbd">E</kbd> done</p>
@@ -161,7 +163,7 @@ export function InboxHome(p: InboxHomeProps) {
 function Section({ title, note, items, row, calm }: { title: string; note: string; items: InboxItem[]; row(x: InboxItem): ComponentChildren; calm?: ComponentChildren }) {
   if (!items.length && !calm) return null;
   return (
-    <section class="vi-sec" aria-label={title}>
+    <section class={`vi-sec${title === 'Needs you' && items.length ? ' is-needs' : ''}`} aria-label={title}>
       <div class="vi-sec-h" role="presentation"><span>{title}{items.length ? <b>{items.length}</b> : null}</span><em>{note}</em></div>
       {items.length ? items.map(row) : calm}
     </section>

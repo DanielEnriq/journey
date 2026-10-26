@@ -336,6 +336,7 @@ function App() {
       onNavigate={(to) => { setInvite(null); go({ screen: 'home', demo, ...(to === 'home' ? {} : { page: to }) }); }}
       onOpenRoom={(id) => { setInvite(null); openRoom(id); }} onCreate={create} onNewRoom={onNewRoom}
       inbox={inbox} selected={selected} onSelect={(item) => go({ screen: 'home', demo, ...(item ? { item } : {}) })}
+      onJoinCall={(id) => { openRoom(id); askJoin(id, false); }}
       onOpenInvite={demo ? undefined : setInvite} overlay={overlay}
       invite={invite && !demo ? <InviteScreen inviteKey={invite} onDone={() => setInvite(null)} onOpenRoom={(id) => { setInvite(null); openRoom(id); }} /> : undefined} />;
   } else if (route.screen === 'room') {

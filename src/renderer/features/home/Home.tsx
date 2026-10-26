@@ -13,6 +13,7 @@ import { Sheet } from '../../ui/pass2/common.js';
 import { HomeFirst } from '../../ui/pass2/home/HomeFirst.js';
 import { HomeReturning } from '../../ui/pass2/home/HomeReturning.js';
 import { InboxHome } from '../inbox/ui/InboxHome.js';
+import { YourRooms } from '../inbox/ui/YourRooms.js';
 import { activeInbox, type InboxSource } from '../inbox/source.js';
 import { InvitationsIndex } from '../../ui/pass2/invites/InviteGate.js';
 import { FindRepositoriesSheet, ProjectsIndex } from '../../ui/pass2/projects/Projects.js';
@@ -50,6 +51,8 @@ export interface HomeProps {
   onCreate(room: NewRoom): Promise<void>;
   /** New room, in the repository whose + was pressed in the sidebar (null: none chosen). */
   onNewRoom(repo?: string | null): void;
+  /** Joins a room's call (asking first if you're in another); absent: opening the room offers it. */
+  onJoinCall?(id: string): void;
   /** Absent in the demo: its pages have no invitations or link field. */
   onOpenInvite?(key: InviteKey): void;
   /** The New room sheet, when open. */
@@ -239,7 +242,9 @@ export function Home(p: HomeProps) {
     page = <HomeFirst firstName={firstName(user)} composer={composer} invitations={invitations ?? []} onOpenInvite={p.onOpenInvite}
       repoCount={local?.length ?? 0} onAddRepo={addRepo} onFindRepos={findRepos} notice={notice} />;
   } else if (inbox) {
-    page = <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom} />;
+    page = <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
+      idle={(st) => <YourRooms rooms={p.rooms} now={st.now} needs={needsByRoom(st.view.needs)} scene={(id) => roomScene(id).then((r) => r.scene)}
+        onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} />} />;
   } else {
     page = <HomeReturning firstName={firstName(user)} rooms={cards} needs={needs} work={real ? work : null} decisions={decisions}
       repos={real ? localViews : null} missing={missing} composer={composer} notice={notice} onOpenRoom={p.onOpenRoom} onOpenInvite={p.onOpenInvite}
@@ -276,4 +281,11 @@ export function Home(p: HomeProps) {
       {page}
     </AppShell>
   );
+}
+
+/** How many Needs-you items each room has. */
+function needsByRoom(items: { room: { id: string } }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const it of items) out[it.room.id] = (out[it.room.id] ?? 0) + 1;
+  return out;
 }
