@@ -23,14 +23,14 @@ export interface CreateRoomProps {
   /** Rejects with a message to show (RoomFailure.message). */
   onCreate: (room: { name: string; goal: string; repo: string | null }) => Promise<void>;
   onClose: () => void;
-  /** The repository to start on (New room from a project); null or absent: none chosen. */
+  /** The repository to start with chosen (the sidebar's + on a repository). The person can still change it. */
   initialRepo?: string | null;
 }
 
-export function CreateRoomSheet({ repos, repoNote, onAddRepo, onCreate, onClose }: CreateRoomProps) {
+export function CreateRoomSheet({ repos, repoNote, onAddRepo, onCreate, onClose, initialRepo = null }: CreateRoomProps) {
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
-  const [repo, setRepo] = useState<string | null>(null);
+  const [repo, setRepo] = useState<string | null>(initialRepo);
   const [extra, setExtra] = useState<RepoOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

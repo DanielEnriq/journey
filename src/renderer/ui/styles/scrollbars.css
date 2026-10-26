@@ -1,0 +1,10 @@
+/*
+ * Scrollbars: thin, quiet until you're in the pane, and native.
+ * Every pane keeps its own scroll; a bar shows only while the pointer or focus is inside its pane, in the
+ * theme's strong line colour. With macOS set to show scroll bars "when scrolling" (the default for
+ * trackpads), Chromium draws the system's overlay bars and these rules change nothing, which is the point:
+ * the OS preference wins. color-scheme (set by the theme) keeps any native bar in the right palette.
+ * A pane whose width must not move when its content starts to scroll adds `scrollbar-gutter: stable`.
+ */
+.v-root * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.v-root *:hover, .v-root *:focus-within { scrollbar-color: var(--v-line-strong) transparent; }

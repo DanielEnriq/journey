@@ -12,6 +12,8 @@ import { SessionSplash } from '../../ui/pass2/auth/SessionSplash.js';
 import { Sheet } from '../../ui/pass2/common.js';
 import { HomeFirst } from '../../ui/pass2/home/HomeFirst.js';
 import { HomeReturning } from '../../ui/pass2/home/HomeReturning.js';
+import { InboxHome } from '../inbox/ui/InboxHome.js';
+import { activeInbox, type InboxSource } from '../inbox/source.js';
 import { InvitationsIndex } from '../../ui/pass2/invites/InviteGate.js';
 import { FindRepositoriesSheet, ProjectsIndex } from '../../ui/pass2/projects/Projects.js';
 import { RoomsIndex } from '../../ui/pass2/rooms/RoomsIndex.js';
@@ -20,7 +22,6 @@ import type { AccountView, CanvasPreview, CanvasSketch, DecisionItem, LocalRepoV
 import type { NewRoom, RepoChoice } from '../room/data/sources.js';
 import type { PersonRef, RoomSummary } from '../room/types.js';
 import { acrossRooms, localWork, realStatus, realWorkspace, repositories, retryRooms, roomCheckouts, roomScene } from '../workspace/real/workspace.js';
-import type { InboxSource } from '../inbox/source.js';
 
 // Home, Rooms, Projects and Invitations (Design Pass 2), inside the Pass 2 shell. The components in
 // ui/pass2 never fetch: this reads what they show from the real workspace (rooms and their records,
@@ -47,7 +48,7 @@ export interface HomeProps {
   onOpenRoom(id: string): void;
   /** Makes the room and opens its preview; rejects with a message to show. Never starts a call. */
   onCreate(room: NewRoom): Promise<void>;
-  /** Opens the New room sheet; with a repository, the sheet starts on it. */
+  /** New room, in the repository whose + was pressed in the sidebar (null: none chosen). */
   onNewRoom(repo?: string | null): void;
   /** Absent in the demo: its pages have no invitations or link field. */
   onOpenInvite?(key: InviteKey): void;
@@ -55,11 +56,10 @@ export interface HomeProps {
   overlay?: ComponentChildren;
   /** An invite being opened: shown in place of the page. */
   invite?: ComponentChildren;
-  /** The workspace's Inbox (activeInbox's source); null while there is none. */
+  /** The workspace's Inbox; when absent, the one in `activeInbox`. With neither, Home shows its rooms instead. */
   inbox?: InboxSource | null;
-  /** The Inbox item the route selects (#/home/i/<id>), or null. */
+  /** The Inbox item selected (from the route, `#/home/i/<id>`); undefined keeps it inside Home. */
   selected?: string | null;
-  /** Selects an Inbox item (a history entry, so back and forward walk them); null clears it. */
   onSelect?(id: string | null): void;
 }
 
@@ -134,6 +134,8 @@ export function Home(p: HomeProps) {
   const gpt = useStore(chatgpt);
   const methods = useStore(signInMethods);
   const [menu, setMenu] = useState(false);
+  const { source: active } = useStore(activeInbox);
+  const inbox = p.inbox !== undefined ? p.inbox : active;
   const [sheet, setSheet] = useState<null | 'methods' | 'model' | 'find'>(null);
   const [leaving, setLeaving] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -162,7 +164,7 @@ export function Home(p: HomeProps) {
   }, [real, local]);
 
   // A canvas read per card that's on screen: Home shows six, the Rooms page all of them.
-  const shown = p.page === 'rooms' ? p.rooms : p.page === 'home' ? p.rooms.slice(0, 6) : [];
+  const shown = p.page === 'rooms' ? p.rooms : p.page === 'home' && !inbox ? p.rooms.slice(0, 6) : [];
   const stills = useStills(shown.map((r) => r.id), real);
 
   const cards: RoomCard[] | null = real && status.state === 'loading' && !p.rooms.length ? null : p.rooms.map((r) => {
@@ -226,7 +228,7 @@ export function Home(p: HomeProps) {
   let page: ComponentChildren;
   if (p.invite) page = p.invite;
   else if (p.page === 'rooms') {
-    page = <RoomsIndex rooms={cards} onOpen={p.onOpenRoom} onNewRoom={p.onNewRoom} onJoinLink={() => p.onNavigate('invitations')}
+    page = <RoomsIndex rooms={cards} onOpen={p.onOpenRoom} onNewRoom={() => p.onNewRoom(null)} onJoinLink={() => p.onNavigate('invitations')}
       error={real && status.state === 'failed' ? status.error : null} onRetry={real ? () => void retryRooms() : undefined} />;
   } else if (p.page === 'projects') {
     page = <ProjectsIndex repos={localViews} missing={missing} onAddRepo={addRepo} onFindRepos={findRepos} onOpenRoom={p.onOpenRoom}
@@ -236,10 +238,12 @@ export function Home(p: HomeProps) {
   } else if (cards && !cards.length) {
     page = <HomeFirst firstName={firstName(user)} composer={composer} invitations={invitations ?? []} onOpenInvite={p.onOpenInvite}
       repoCount={local?.length ?? 0} onAddRepo={addRepo} onFindRepos={findRepos} notice={notice} />;
+  } else if (inbox) {
+    page = <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom} />;
   } else {
     page = <HomeReturning firstName={firstName(user)} rooms={cards} needs={needs} work={real ? work : null} decisions={decisions}
       repos={real ? localViews : null} missing={missing} composer={composer} notice={notice} onOpenRoom={p.onOpenRoom} onOpenInvite={p.onOpenInvite}
-      onNewRoom={p.onNewRoom} onSeeRooms={() => p.onNavigate('rooms')} onSeeProjects={() => p.onNavigate('projects')} onAddRepo={addRepo} />;
+      onNewRoom={() => p.onNewRoom(null)} onSeeRooms={() => p.onNavigate('rooms')} onSeeProjects={() => p.onNavigate('projects')} onAddRepo={addRepo} />;
   }
 
   const overlay = (
@@ -267,8 +271,8 @@ export function Home(p: HomeProps) {
 
   return (
     <AppShell route={p.invite ? 'invitations' : p.page} onNavigate={p.onNavigate} account={me} invitationCount={invitations?.length ?? 0}
-      rooms={p.rooms.map((r) => ({ id: r.id, name: r.name, needs: !!r.needs, live: r.inCall.some((x) => x.tone !== 'me') }))}
-      onOpenRoom={p.onOpenRoom} onNewRoom={p.onNewRoom} onAccount={() => setMenu(!menu)} accountOpen={menu} overlay={overlay}>
+      rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={(repo) => p.onNewRoom(repo ?? null)} onAccount={() => setMenu(!menu)} accountOpen={menu} overlay={overlay}
+      fixed={p.page === 'home' && !p.invite && !!inbox && !(cards && !cards.length)}>
       {page}
     </AppShell>
   );

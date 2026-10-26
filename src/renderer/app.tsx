@@ -315,7 +315,7 @@ function App() {
   const roomProps = (id: string) => ({
     sources: ws, record: demo ? undefined : realWorkspace.record, roomId: id, session,
     canvas: demo && id === 'payments' ? demoCanvas() : null, attachError: demo ? undefined : attachErrors.get(id), light,
-    onOpenRoom: openRoom, onNewRoom: () => onNewRoom(), onHome: home,
+    onOpenRoom: openRoom, onNewRoom, onHome: home,
     membership: demo ? undefined : realWorkspace.membership, voice: demo ? undefined : voice(), vowe: demo ? undefined : realWorkspace.vowe,
     onJoin: (o?: { talk: boolean }) => askJoin(id, !!o?.talk), onLeave: leave,
   });

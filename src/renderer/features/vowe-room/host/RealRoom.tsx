@@ -51,7 +51,7 @@ export interface RealRoomProps {
   windowOverlay?: ComponentChildren;
   light: boolean;
   onOpenRoom(id: string): void;
-  onNewRoom(): void;
+  onNewRoom(repo?: string | null): void;
   onHome(): void;
 }
 
@@ -191,7 +191,6 @@ export function RealRoom(p: RealRoomProps) {
 
   const n = names(directory);
   const speaker = p.speaking;
-  const callLine = { text: `In the call${p.inCall > 1 ? ` with ${p.inCall - 1} other${p.inCall > 2 ? 's' : ''}` : ''} · ${n.agentName()} ${p.call.voweOn ? 'is in the call' : 'is off'}` };
   const here = p.access ? p.access.members.filter((m) => m.presence !== 'away').length : p.people.length;
   const hereLine = `${here} here · ${p.inCall} on the call`;
   const deskStatus: DeskStatus = status.state === 'ready' ? { state: 'ready' } : status.state === 'loading' ? { state: 'loading' } : { state: 'failed', error: status.error, retry };
@@ -201,7 +200,7 @@ export function RealRoom(p: RealRoomProps) {
   return (
     <VoweRoom room={p.room} rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={p.onNewRoom}
       client={p.client} record={record} directory={directory} role={role} capabilities={capabilitiesOf(services)}
-      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} people={p.people} speaking={speaker} hereLine={hereLine} callLine={callLine} nav={nav}
+      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} people={p.people} speaking={speaker} hereLine={hereLine} nav={nav}
       light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay} deskOverride={p.peoplePanel}
       overlays={<>{p.overlays}{ask.reviewing ? <div class="receipt" role="status"><span class="dot"></span><span>{n.agentName()} is replying in the thread…</span></div> : null}
       {askFailed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>{askFailed}</span><button class="mini ghost" type="button" onClick={() => setAskFailed(null)}>Dismiss</button></div> : null}

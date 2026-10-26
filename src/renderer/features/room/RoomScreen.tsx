@@ -22,6 +22,7 @@ import { PreJoinSheet } from '../membership/PreJoinSheet.js';
 import { Toasts, useToasts } from '../membership/primitives.js';
 import { useLoaded, useRooms } from '../workspace/hooks.js';
 import { selfCloudId, VOWE } from '../workspace/real/workspace.js';
+import { agentNameOf } from '../workspace/real/vowe-services.js';
 import type { CallControls } from './call/CallBar.js';
 import { CallBar } from './call/CallBar.js';
 import { Surface } from './canvas/Surface.js';
@@ -57,7 +58,7 @@ export interface RoomScreenProps {
   attachError?: string;
   light: boolean;
   onOpenRoom(id: string): void;
-  onNewRoom(): void;
+  onNewRoom(repo?: string | null): void;
   onHome(): void;
   /** Joins the call: muted, unless you chose to talk (which is what asks for the microphone). */
   onJoin(opts?: { talk: boolean }): void;
@@ -284,6 +285,9 @@ function FreshCall(props: InnerProps) {
   const [stroke, setStroke] = useState<string | null>(null);
   const [muted, setMuted] = useState(true);
   const [cc, setCc] = useState(false);
+  // What this room calls its agent (renamed by an owner), for the call cluster on other screens.
+  const [agentName, setAgentName] = useState('Vowe');
+  useEffect(() => { if (window.journey) agentNameOf(roomId).then(setAgentName, () => { /* keeps Vowe */ }); }, [roomId]);
   const [partOpen, setPartOpen] = useState(false);
   const [chime, setChime] = useState<Chime>('pauses');
   const [drafting, setDrafting] = useState<'new' | 'amend' | null>(null);
@@ -443,7 +447,7 @@ function FreshCall(props: InnerProps) {
   const presence: CallPresence | null = link ? {
     roomId, roomName: summary?.name ?? 'Room', link,
     muted: micMuted || !!cantTalk, micOff: cantTalk,
-    vowe: callVoice ? voweOn : false, agentName: 'Vowe',
+    vowe: callVoice ? voweOn : false, agentName,
     people: [me, ...others],
     speaking: meSpeaking ? 'me' : Object.keys(ring).find((i) => i !== me.initials) ?? null,
     act: {

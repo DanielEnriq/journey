@@ -8,7 +8,11 @@ import type { PartDef } from '../room/types.js';
 // (room/preview/Glimpse.tsx), drawn from a saved canvas's scene. Nothing to press, no camera, no
 // cursors: the canvas itself is in the call.
 
-export function SceneGlimpse({ scene }: { scene: Scene }) {
+/**
+ * `lit`: the parts something is about; they're drawn lit and the rest step back (the Inbox's "Where it lives").
+ * `height`: the most the still may take (300px of drawing by default).
+ */
+export function SceneGlimpse({ scene, lit, height }: { scene: Scene; lit?: string[]; height?: number }) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
@@ -18,7 +22,8 @@ export function SceneGlimpse({ scene }: { scene: Scene }) {
     return () => ro.disconnect();
   }, []);
   const vb = scene.viewBox;
-  const pad = 28, k = width ? Math.min(1, (width - pad * 2) / vb[0], 300 / vb[1]) : 0;
+  const pad = 28, k = width ? Math.min(1, (width - pad * 2) / vb[0], (height ? Math.max(40, height - pad * 2) : 300) / vb[1]) : 0;
+  const on = new Set(lit ?? []);
 
   return (
     <div class="glimpse-view" ref={box} aria-hidden="true" style={`height:${Math.round(vb[1] * k + pad * 2)}px`}>
@@ -35,7 +40,7 @@ export function SceneGlimpse({ scene }: { scene: Scene }) {
               </div>
             ))}
             {scene.nodes.map((n) => (
-              <div key={n.key} class="node" style={`transform: translate(${n.rect[0]}px, ${n.rect[1]}px); width: ${n.rect[2]}px`}>
+              <div key={n.key} class={'node' + (on.size ? (on.has(n.component) ? ' is-lit' : ' is-dim') : '')} style={`transform: translate(${n.rect[0]}px, ${n.rect[1]}px); width: ${n.rect[2]}px`}>
                 <div class={'part kind-' + n.kind + (n.proposed ? ' proposed' : '')} style={`height: ${n.rect[3]}px`}>
                   <span class="face"><span class="pname">{n.name}</span><span class="ptech">{n.tech}</span></span>
                   <Inside n={{ part: { smart: n.smart } as PartDef, ...n.state }} />

@@ -2,6 +2,7 @@ import { h, type ComponentChildren } from '../../vendor/preact.js';
 import { Compose, Home, PanelLeft, PanelRight } from '../../shared/components/icons.js';
 import { AccountFoot } from '../../shared/components/Account.js';
 import type { PersonRef, RoomSummary } from './types.js';
+import { CallCluster } from './call/CallControls.js';
 
 // The window around every room screen, in the call or not: the band with its toggles, the rooms panel,
 // and how a room's presence is drawn.
@@ -27,10 +28,15 @@ export interface ChromeProps {
   toggleDesk?(): void;
   /** On the band's right, before the desk toggle: the room's Share. */
   actions?: ComponentChildren;
+  /** What the left toggle shows and hides: Journey's rooms panel (default) or the shared sidebar. */
+  sideName?: 'rooms' | 'sidebar';
+  /** Draws the call cluster first in the band's right end (Vowe rooms). `looking` is this room; with its canvas
+      on screen, its CallBar is too, so the cluster in the call's own room shows presence only. */
+  call?: { looking: string; canvasShown: boolean };
 }
 
-export function Chrome({ side, desk = null, deskUnseen, toggleSide, toggleDesk, onNewRoom, onHome, actions }: ChromeProps) {
-  const sideLabel = side ? 'Hide rooms' : 'Show rooms', deskLabel = desk ? 'Hide where we are' : 'Show where we are';
+export function Chrome({ side, desk = null, deskUnseen, toggleSide, toggleDesk, onNewRoom, onHome, actions, sideName = 'rooms', call }: ChromeProps) {
+  const sideLabel = `${side ? 'Hide' : 'Show'} ${sideName}`, deskLabel = desk ? 'Hide where we are' : 'Show where we are';
   return (
     <header class="top-chrome">
       <div class="chrome-controls">
@@ -38,8 +44,9 @@ export function Chrome({ side, desk = null, deskUnseen, toggleSide, toggleDesk, 
         <button class="panel-toggle" type="button" aria-label="New room" title="New room" onClick={onNewRoom}><Compose /></button>
         {onHome && <button class="panel-toggle" type="button" aria-label="Home" title="Back to your rooms" onClick={onHome}><Home /></button>}
       </div>
-      {(desk !== null || actions) && (
+      {(desk !== null || actions || call) && (
         <div class="chrome-actions">
+          {call ? <CallCluster looking={call.looking} canvasShown={call.canvasShown} /> : null}
           {actions}
           {desk !== null && <button class={'panel-toggle' + (desk ? ' open' : '')} type="button" aria-label={deskLabel} title={`${deskLabel} · ]`} aria-expanded={desk} onClick={toggleDesk}>
             <PanelRight />

@@ -37,7 +37,7 @@ export function uiActions(ui: Ui, light: (parts: string[] | null) => void): UiAc
     fsec: (sec) => {
       const cur = ui.state.inspect;
       const keep = cur && (sec === 'decide' || sec === 'work') && (cur.kind === 'decision') === (sec === 'decide');
-      set({ fsec: sec, ...(sec !== 'foryou' ? { tab: sec } : {}), inspect: keep ? cur : null });
+      set({ fsec: sec, tab: sec, inspect: keep ? cur : null });
     },
     everywhere: (on) => set({ everywhere: on }),
     compare: (v) => set({ compare: v }),
@@ -111,7 +111,6 @@ export function useDeskHistory(ui: Ui, u: UiState, record: () => VoweRecord): De
       const sec = x.inspect.section && x.inspect.section !== 'plan' ? ` · ${({ run: 'Run', prs: 'Pull requests', outcome: 'Outcome' } as Record<string, string>)[x.inspect.section]}` : ' · Plan';
       return w ? `${w.title}${sec}` : 'work';
     }
-    if (x.depth === 'focus' && x.fsec === 'foryou') return 'For you';
     if (x.tab === 'discuss' && x.thread) { const t = r.threads.find((y) => y.id === x.thread); return t ? `the ${t.about.name} thread` : 'Discuss'; }
     return ({ discuss: 'Discuss', decide: 'Decide', work: 'Work' } as Record<string, string>)[x.tab];
   };
@@ -148,7 +147,7 @@ export function useDeskKeys(ui: Ui, act: Pick<DeskAct, 'depth' | 'fsec' | 'inspe
       if (e.code === 'BracketRight' && e.shiftKey) { e.preventDefault(); act.depth(d === 'expanded' ? 'compact' : 'expanded'); }
       else if (e.code === 'BracketRight') { e.preventDefault(); ui.setState(st.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' }); }
       else if (e.key === 'F' && e.shiftKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); act.depth(d === 'focus' ? exitDepth(st) : 'focus'); }
-      else if (d === 'focus' && e.altKey && /^Digit[1-4]$/.test(e.code)) { e.preventDefault(); act.fsec((['foryou', 'discuss', 'decide', 'work'] as const)[+e.code.slice(5) - 1]); }
+      else if (d === 'focus' && e.altKey && /^Digit[1-3]$/.test(e.code)) { e.preventDefault(); act.fsec((['discuss', 'decide', 'work'] as const)[+e.code.slice(5) - 1]); }
       else if (e.key === 'Escape') { if (d === 'focus') act.depth(exitDepth(st)); else if (st.inspect) act.inspect(null); }
     };
     addEventListener('keydown', onKey);

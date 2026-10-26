@@ -56,7 +56,7 @@
 .rp-dots i:nth-child(2) { animation-delay: .15s; } .rp-dots i:nth-child(3) { animation-delay: .3s; }
 
 /* ---- Since you were last here */
-.rp-since { display: flex; flex-direction: column; gap: 7px; padding: 12px; margin-bottom: 12px; border-radius: 11px; background: var(--menu); box-shadow: 0 0 0 1px var(--border), var(--studio-shadow); animation: rp-rise 360ms var(--ease) both; }
+.rp-since { display: flex; flex-direction: column; gap: 7px; padding: 12px; margin-bottom: 12px; border-radius: 11px; background: var(--menu); box-shadow: 0 0 0 1px var(--border), var(--studio-shadow); }
 .rp-since b { font-size: 13px; color: var(--ink-bright); }
 .rp-since ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .rp-since li { display: flex; gap: 8px; align-items: baseline; font-size: 12px; line-height: 1.45; color: var(--ink-3); }
@@ -111,7 +111,6 @@
 .rp-tg.rp-closed.rp-many .rp-tstack { margin-bottom: 12px; cursor: pointer; }
 .rp-tg.rp-closed.rp-many .rp-tstack:hover .rp-peek { transform: translateY(2px); }
 .rp-cm { position: relative; display: flex; flex-direction: column; gap: 9px; padding: 11px 12px 10px; border-radius: 4px 13px 13px 13px; background: var(--studio-card); box-shadow: inset 0 0 0 1px var(--studio-card-edge), var(--studio-shadow); transition: box-shadow 220ms ease, transform 220ms var(--ease); }
-.rp-tg.rp-open .rp-cm { animation: rp-in 260ms var(--ease) both; }
 .rp-cm.rp-peek { position: absolute; left: calc(var(--i) * 8px); right: calc(var(--i) * 8px); top: 0; bottom: calc(var(--i) * -6px); padding: 0; pointer-events: none; box-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgba(18, 22, 30, .06); background: color-mix(in srgb, var(--studio-card) 90%, var(--ink) 10%); }
 .rp-cm.rp-peek > * { visibility: hidden; }
 .rp-cm.rp-live:not(.rp-peek) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rc) 45%, transparent), 0 0 0 3px color-mix(in srgb, var(--rc) 8%, transparent), var(--studio-shadow); }
@@ -129,7 +128,6 @@
 .rp-avstack > * + * { margin-left: -4px; }
 .rp-cm-thread { display: flex; flex-direction: column; gap: 11px; padding-top: 11px; border-top: 1px solid var(--hairline); }
 .rp-cm-r { display: flex; flex-direction: column; gap: 5px; padding-left: 10px; border-left: 1.5px solid var(--hairline); }
-.rp-cm-r.rp-fresh { animation: rp-in 320ms var(--ease) both; }
 .rp-cm-r.rp-fresh .rp-cm-body { color: var(--ink-bright); }
 .rp-cm-typing { display: flex; align-items: center; gap: 7px; padding-left: 10px; color: var(--ink-6); }
 .rp-bubble { display: inline-flex; align-items: center; height: 20px; padding: 0 9px; border-radius: 4px 10px 10px 10px; background: var(--fill-2); }

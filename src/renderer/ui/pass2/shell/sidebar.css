@@ -1,0 +1,48 @@
+/* The sidebar (ui/pass2/shell/Sidebar.tsx): sunken, global, the same on Home and in rooms. Ink, Paper & Signal
+   tokens only. Its host (AppShell's .vh-side, the room's .sidebar) places it; this styles what's inside. */
+.vh-sb { display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; font-family: var(--v-font-sans); }
+.vh-sb-places { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px 10px; }
+.vh-sb-row { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--v-fg-2); font: 500 13px/1 var(--v-font-sans); text-align: left; cursor: pointer; transition: background var(--v-dur-1) ease, color var(--v-dur-1) ease; }
+.vh-sb-row:hover { background: var(--v-surface-hover); color: var(--v-fg); }
+.vh-sb-row[aria-current="page"] { background: var(--v-surface-selected); color: var(--v-fg); }
+.vh-sb-row:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); }
+.vh-sb-glyph { width: 18px; height: 18px; flex: 0 0 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--v-fg-3); }
+.vh-sb-row[aria-current="page"] .vh-sb-glyph { color: var(--v-fg); }
+.vh-sb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The one number: what needs you, with the signal dot before it. */
+.vh-sb-count { display: inline-flex; align-items: center; gap: 5px; min-width: 18px; height: 18px; padding: 0 4px; font: 500 11.5px/1 var(--v-font-sans); font-variant-numeric: tabular-nums; color: var(--v-fg); }
+.vh-sb-count::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--v-signal); }
+.vh-sb-state { display: inline-flex; align-items: center; flex: none; padding-right: 4px; }
+.vh-sb-needsdot, .vh-sb-livedot { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
+.vh-sb-livedot { background: var(--v-success); }
+
+.vh-sb-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 8px 6px 16px; font: 500 10px/1 var(--v-font-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--v-fg-3); }
+.vh-sb-h .vh-sb-add { width: 22px; height: 22px; }
+.vh-sb-rooms { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 8px; display: flex; flex-direction: column; gap: 1px; scrollbar-gutter: stable; }
+.vh-sb-none { margin: 4px 8px; font-size: 12px; line-height: 1.5; color: var(--v-fg-3); }
+.vh-sb-repo { display: flex; flex-direction: column; gap: 1px; }
+.vh-sb-repoline { position: relative; }
+.vh-sb-reporow { padding-right: 36px; }
+.vh-sb-fold { position: relative; }
+.vh-sb-fold > span { position: absolute; inset: 0; display: inline-flex; align-items: center; justify-content: center; }
+.vh-sb-fold-hover { visibility: hidden; }
+.vh-sb-repoline:hover .vh-sb-fold-rest, .vh-sb-reporow:focus-visible .vh-sb-fold-rest { visibility: hidden; }
+.vh-sb-repoline:hover .vh-sb-fold-hover, .vh-sb-reporow:focus-visible .vh-sb-fold-hover { visibility: visible; }
+.vh-sb-repoline:hover .vh-sb-reporow { background: var(--v-surface-hover); color: var(--v-fg); }
+/* Hidden by opacity, not visibility, so Tab still reaches it: it shows on hover and while the row has focus. */
+.vh-sb-repoadd { position: absolute; right: 4px; top: 4px; width: 24px; height: 24px; opacity: 0; }
+.vh-sb-repoline:hover .vh-sb-repoadd, .vh-sb-repoline:focus-within .vh-sb-repoadd { opacity: 1; }
+.vh-sb-repoline:hover .vh-sb-closedmark { display: none; }
+.vh-sb-repo-rooms { display: flex; flex-direction: column; gap: 1px; padding-bottom: 6px; }
+.vh-sb-room { min-height: 30px; }
+.vh-sb-dot { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--v-fg-4); }
+.vh-sb-dot.is-live { background: var(--v-success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--v-success) 22%, transparent); }
+.vh-sb-dot.is-needs { background: var(--v-signal); }
+.vh-sb-ago { flex: none; font-size: 12px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; }
+.vh-sb-foot { flex: none; padding: 8px; border-top: 1px solid var(--v-line); }
+
+/* In a room: the window's .sidebar column hosts it, on the same sunken surface as Home's. */
+.win .sidebar.vh-sb-host { background: var(--v-bg-sunken); box-shadow: inset -1px 0 0 var(--v-line); padding-top: 44px; }
+.win .sidebar.vh-sb-host > * { min-width: 236px; }
+.win .sidebar.vh-sb-host .account-foot { border-top: 0; }
