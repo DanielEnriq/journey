@@ -260,7 +260,7 @@ function Conversation({ it, t, now, me, people, source }: BodyProps & { t: Threa
   return (
     <>
       <Kicker tone={needs ? 'needs' : undefined} when={needs ? waiting(it.waitingSince ?? it.at, now) : ago(it.at, now)}>{needs ? `${name(it.actor)} asked you` : it.raised ?? 'A conversation you’re in'}</Kicker>
-      <h2 class="vi-title">{t.title && !['Question', 'Note'].includes(t.title) ? t.title : `On the ${t.about.name}`}</h2>
+      <h2 class="vi-title">{t.title && !['Question', 'Note'].includes(t.title) ? t.title : `On ${/^the /i.test(t.about.name) ? '' : 'the '}${t.about.name}`}</h2>
       <p class="vi-lede">{t.about.kind === 'line' && t.quote ? <>About a line in a decision: <b>“{t.quote}”</b></> : <>On <b>{t.about.name}</b> in {it.room.name}.</>}</p>
       <div class="vi-block vi-convo">
         {t.replies.map((r, i) => (
