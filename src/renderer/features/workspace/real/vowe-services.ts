@@ -1,6 +1,6 @@
 import type { JourneyApi, RoomEvent, RoomResult, VoweNewThread } from '../../../../shared/api.js';
 import { parseDecisionVersionId } from '../../../../shared/vowe/ids.js';
-import type { NewThread, VoweServices } from '../../vowe-room/contracts/services.js';
+import type { NewThread, SettingsService, VoweServices } from '../../vowe-room/contracts/services.js';
 
 // The Vowe room's services over IPC (window.journey), for RoomScreen's Desk. Main runs every write as one
 // checked database function (integrations/supabase/vowe-record.ts); this only forwards calls and turns
@@ -12,12 +12,6 @@ import type { NewThread, VoweServices } from '../../vowe-room/contracts/services
 //   runs           PASS3_BACKEND: no unattended agent execution; nothing dispatches or steers a run.
 //   github         PASS3_BACKEND: no GitHub App/OAuth scope for PR and CI state; PRs are what people track.
 //   notifications  PASS3_BACKEND: no outbound channel (email, push); For you stays in the app.
-
-/** Mirrors contracts/services.ts SettingsService (the lead's addition), structurally. */
-export interface SettingsService {
-  /** Rename the assistant for the room's workspace/org. permission: room owner (server-enforced). Empty → back to 'Vowe'. */
-  agentName(roomId: string, name: string): Promise<RoomResult<void>>;
-}
 
 export type RealVoweServices = VoweServices & { settings: SettingsService | null };
 
