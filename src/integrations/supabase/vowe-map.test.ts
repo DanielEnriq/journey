@@ -76,6 +76,25 @@ describe('vowe record mapping', () => {
     assert.equal(toVoweRecord({ ...raw(), seen_at: null }, { now }).since, undefined);
   });
 
+  it('carries real times, the activity log, you and member names (additive, for the Inbox)', () => {
+    const rec = toVoweRecord(raw(), { now });
+    assert.equal(rec.me, 'alice');
+    assert.deepEqual(rec.members[0], { who: 'alice', role: 'owner', name: 'Alice' });
+    const t = rec.times!;
+    assert.equal(t['t1'], at(30));
+    assert.equal(t['t1:t1'], at(30));
+    assert.equal(t['t1:c1'], at(5));
+    assert.equal(t[D], at(120));
+    assert.equal(t[`${D}:signed:bob`], at(90));
+    assert.equal(t[`${D}:agreed`], at(90)); // no 'agreed' activity: the last signature agreed it
+    assert.equal(t[`${D}.v2`], at(10));
+    assert.equal(t[`${D}.v2:review`], at(9));
+    assert.equal(t[`${D}.v2:agreed`], undefined);
+    assert.deepEqual(rec.log!.map((e) => e.id), ['a2', 'a1', 'a3']); // newest first
+    assert.deepEqual(rec.log![1], { id: 'a1', by: 'bob', kind: 'review', text: 'Retry', subject: D, version: 2, at: at(9) });
+    assert.equal(toVoweRecord({ ...raw(), me: null }, { now }).me, undefined);
+  });
+
   it('says how long ago', () => {
     assert.equal(agoOf(at(0.5), now), 'now');
     assert.equal(agoOf(at(5), now), '5m');
