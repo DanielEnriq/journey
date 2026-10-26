@@ -163,6 +163,65 @@ describe('a different system draws with the same views', () => {
     assert.equal(db.rect[1], api.rect[1] + api.rect[3] + 74, 'the store sits under whoever writes it');
   });
 
+  test('a store goes on down past a part already under whoever writes it', () => {
+    // The coordinator and the cutover job share a column; Runs DB is the coordinator's, so it can't sit where the job is.
+    const d = apply(emptyDocument(), DAN, 'load_system', {
+      components: [
+        { id: 'runs-db', kind: 'database', name: 'Runs DB' },
+        { id: 'run-coordinator', kind: 'service', name: 'Run coordinator' },
+        { id: 'read-pool', kind: 'service', name: 'Read pool' },
+        { id: 'cutover', kind: 'worker', name: 'Cutover job' },
+      ],
+      relationships: [
+        { from: 'run-coordinator', to: 'runs-db', kind: 'reads_writes' },
+        { from: 'run-coordinator', to: 'read-pool', kind: 'calls' },
+        { from: 'cutover', to: 'read-pool', kind: 'calls' },
+      ],
+    }).doc;
+    const nodes = buildScenes(d).architecture.nodes;
+    const at = (k: string) => nodes.find((n) => n.key === k)!.rect;
+    const [db, job] = [at('runs-db'), at('cutover')];
+    assert.ok(db[1] >= job[1] + job[3], 'Runs DB is drawn below the cutover job, not over it');
+    for (const a of nodes) for (const b of nodes) {
+      if (a === b) continue;
+      const overlap = a.rect[0] < b.rect[0] + b.rect[2] && b.rect[0] < a.rect[0] + a.rect[2] && a.rect[1] < b.rect[1] + b.rect[3] && b.rect[1] < a.rect[1] + a.rect[3];
+      assert.ok(!overlap, `${a.key} and ${b.key} don't overlap`);
+    }
+  });
+
+  test('every arrow ends on a part, and no two wire labels sit on each other', () => {
+    // A replica below the read pool feeds Runs DB, which is lower down in the next column over;
+    // the coordinator fans out to three parts, so their labels share a starting point.
+    const d = apply(emptyDocument(), DAN, 'load_system', {
+      components: [
+        { id: 'runs-db', kind: 'database', name: 'Runs DB' },
+        { id: 'run-coordinator', kind: 'service', name: 'Run coordinator' },
+        { id: 'read-pool', kind: 'service', name: 'Read pool' },
+        { id: 'cutover', kind: 'worker', name: 'Cutover job' },
+        { id: 'replica', kind: 'database', name: 'Replica' },
+        { id: 'audit', kind: 'service', name: 'Audit' },
+      ],
+      relationships: [
+        { from: 'run-coordinator', to: 'runs-db', kind: 'reads_writes' },
+        { from: 'run-coordinator', to: 'read-pool', kind: 'calls', label: 'reads' },
+        { from: 'run-coordinator', to: 'audit', kind: 'calls', label: 'records' },
+        { from: 'cutover', to: 'read-pool', kind: 'calls' },
+        { from: 'read-pool', to: 'replica', kind: 'reads_writes', label: 'reads' },
+        { from: 'replica', to: 'runs-db', kind: 'depends_on', label: 'logical replication' },
+      ],
+    }).doc;
+    const { nodes, wires, labels } = buildScenes(d).architecture;
+    for (const w of wires.filter((x) => /arrow/.test(x.c))) {
+      const tip = /varrow/.test(w.c) ? [w.x, w.y + w.h] : /rev/.test(w.c) ? [w.x, w.y] : [w.x + w.w, w.y];
+      const on = nodes.some(({ rect: [x, y, rw, rh] }) => tip[0] >= x - 1 && tip[0] <= x + rw + 1 && tip[1] >= y - 1 && tip[1] <= y + rh + 1);
+      assert.ok(on, `the ${w.c} wire at ${w.x},${w.y} ends on a part`);
+    }
+    for (const a of labels) for (const b of labels) {
+      if (a === b) continue;
+      assert.ok(a.y !== b.y || a.x + 20 < b.x || b.x + 20 < a.x, `"${a.t}" and "${b.t}" don't overlap`);
+    }
+  });
+
   test('a view the system can’t support is refused, not invented', () => {
     const d = payment();
     assert.equal(code(() => apply(d, DAN, 'show_view', { view: 'failure-flow', focus: 'ledger' })), 'unsupported');

@@ -63,20 +63,30 @@ const pathLabel = (p: string) => p.replace(/^\/(Users|home)\/[^/]+/, '~');
 /** A part's name as a tile label: spoken names run long ("the electron main process"), tiles fit a word or two. */
 const tileLabel = (name: string) => { const t = name.replace(/^the\s+/i, '').replace(/\s*\(.*\)$/, ''); return t.length > 18 ? `${t.slice(0, 17).trimEnd()}…` : t; };
 
+/** A sketch tile's footprint on the card, in percent of its width and height (with a little air). */
+const SKETCH_TILE = { w: 27, h: 22 };
+
 /** The room's last shared view, drawn small: its parts where the scene puts them, and who talks to whom. */
 function sketchOf(scene: Scene): CanvasSketch | null {
   const [vw, vh] = scene.viewBox;
   const at = (x: number, y: number) => ({ x: Math.min(86, Math.max(14, (x / vw) * 100)), y: Math.min(84, Math.max(16, (y / vh) * 100)) });
   const seen = new Set<string>();
   const nodes: CanvasSketch['nodes'] = [];
+  // Tiles are a fixed size on a small card, so two parts close together in the scene would land on each other:
+  // a part whose tile would overlap one already drawn is left out, and the next one is drawn instead.
+  const clear = (p: { x: number; y: number }) => nodes.every((o) => Math.abs(o.x - p.x) >= SKETCH_TILE.w || Math.abs(o.y - p.y) >= SKETCH_TILE.h);
   for (const n of scene.nodes) {
     if (seen.has(n.component) || nodes.length >= 5) continue;
+    const p = at(n.rect[0] + n.rect[2] / 2, n.rect[1] + n.rect[3] / 2);
+    if (!clear(p)) continue;
     seen.add(n.component);
-    nodes.push({ id: n.key, label: tileLabel(n.short || n.name), kind: n.kind[0].toUpperCase() + n.kind.slice(1), ...at(n.rect[0] + n.rect[2] / 2, n.rect[1] + n.rect[3] / 2), state: n.proposed ? 'proposed' : undefined });
+    nodes.push({ id: n.key, label: tileLabel(n.short || n.name), kind: n.kind[0].toUpperCase() + n.kind.slice(1), ...p, state: n.proposed ? 'proposed' : undefined });
   }
   for (const s of scene.steps) {
     if (nodes.length >= 5) break;
-    nodes.push({ id: s.id, label: tileLabel(s.short || s.title), kind: `Step ${s.n}`, ...at(s.x + 90, s.y + 30) });
+    const p = at(s.x + 90, s.y + 30);
+    if (!clear(p)) continue;
+    nodes.push({ id: s.id, label: tileLabel(s.short || s.title), kind: `Step ${s.n}`, ...p });
   }
   if (!nodes.length) return null;
   const ids = new Set(nodes.map((n) => n.id));

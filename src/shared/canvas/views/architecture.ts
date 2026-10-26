@@ -14,6 +14,7 @@ const ROW_Y = 190;
 const GAP_X = 60;
 const GAP_Y = 40;
 const STORE_GAP = 74;
+const LABEL_H = 16;
 const PAD = { left: 18, right: 18, top: 30, bottom: 22 };
 
 /** Edges that carry work along the main row, oriented the way the work goes. */
@@ -23,6 +24,13 @@ function flow(r: Relationship, sys: System): [string, string] | null {
   if (r.kind === 'consumes') return [r.to, r.from];
   if (r.kind === 'calls' || r.kind === 'publishes' || r.kind === 'depends_on') return [r.from, r.to];
   return null;
+}
+
+/** The first part already placed that a box at (x, y, w, h) would overlap, gaps included. */
+const meets = (ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number) => ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
+
+function blocker(rects: Record<string, Rect>, x: number, y: number, w: number, h: number): Rect | undefined {
+  return Object.values(rects).find(([rx, ry, rw, rh]) => x < rx + rw + GAP_X / 2 && rx < x + w + GAP_X / 2 && y < ry + rh + GAP_Y && ry < y + h + GAP_Y);
 }
 
 export function architecture(spec: ViewSpec, sys: System): Scene {
@@ -69,8 +77,11 @@ export function architecture(spec: ViewSpec, sys: System): Scene {
     const accessor = sys.rels.find((r) => r.to === s.id && rects[r.from])?.from;
     const [w, h] = size(s);
     if (accessor) {
-      const a = rects[accessor], stack = below[accessor] ?? a[1] + a[3] + STORE_GAP;
-      rects[s.id] = [a[0] + a[2] / 2 - w / 2, stack, w, h];
+      const a = rects[accessor], sx = a[0] + a[2] / 2 - w / 2;
+      let stack = below[accessor] ?? a[1] + a[3] + STORE_GAP;
+      // Another part may already stand under the accessor in its column: go on down past it.
+      for (let hit = blocker(rects, sx, stack, w, h); hit; hit = blocker(rects, sx, stack, w, h)) stack = hit[1] + hit[3] + STORE_GAP;
+      rects[s.id] = [sx, stack, w, h];
       below[accessor] = stack + h + GAP_Y;
     } else {
       rects[s.id] = [x, ROW_Y, w, h];
@@ -88,17 +99,32 @@ export function architecture(spec: ViewSpec, sys: System): Scene {
     pairs.push(e);
     const ay = A[1] + A[3] / 2, by = B[1] + B[3] / 2;
     if (B[0] >= A[0] + A[2]) {
-      const x1 = A[0] + A[2], x2 = B[0];
-      if (Math.abs(ay - by) < 1) wires.push({ c: 'h arrow', x: x1, y: ay, w: x2 - x1, h: 1.35 });
+      const x1 = A[0] + A[2], x2 = B[0], level = Math.abs(ay - by) < 1, mx = level ? x1 : x1 + (x2 - x1) / 2;
+      if (level) wires.push({ c: 'h arrow', x: x1, y: ay, w: x2 - x1, h: 1.35 });
       else {
-        const mx = x1 + (x2 - x1) / 2;
         wires.push({ c: 'h', x: x1, y: ay, w: mx - x1, h: 1.35 }, { c: 'v', x: mx, y: Math.min(ay, by), w: 1.35, h: Math.abs(by - ay) }, { c: 'h arrow', x: mx, y: by, w: x2 - mx, h: 1.35 });
       }
-      labels.push({ t, x: Math.round(x1 + Math.max(2, (x2 - x1 - labelWidth(t)) / 2)), y: Math.min(ay, by) - 19 });
+      // Wires fanning out of one part share their first stretch, and a long wire runs behind the parts it passes,
+      // so a label goes to the first of these spots that sits on no other label and no part (the middle may run onto its own ends, as it always has): the middle of the
+      // wire, the middle of its last stretch, or just before its target. With none free, it's left to the other views.
+      const w = labelWidth(t);
+      const spot = [
+        { x: Math.round(x1 + Math.max(2, (x2 - x1 - w) / 2)), y: Math.min(ay, by) - 19 },
+        { x: Math.round(mx + Math.max(2, (x2 - mx - w) / 2)), y: by - 19 },
+        { x: Math.round(x2 - w - 4), y: by - 19 },
+      ].find((c, i) => labels.every((l) => !meets(c.x, c.y, w, LABEL_H, l.x, l.y, labelWidth(l.t), LABEL_H)) && Object.entries(rects).every(([id, [rx, ry, rw, rh]]) => (i === 0 && e.includes(id)) || !meets(c.x, c.y, w, LABEL_H, rx, ry, rw, rh)));
+      if (spot) labels.push({ t, ...spot });
     } else if (B[1] >= A[1] + A[3]) {
       const cx = A[0] + A[2] / 2, y1 = A[1] + A[3];
-      wires.push({ c: 'v varrow', x: cx, y: y1, w: 1.35, h: B[1] - y1 });
-      labels.push({ t, x: cx + 8, y: Math.round(y1 + (B[1] - y1) / 2 - 11) });
+      if (cx > B[0] && cx < B[0] + B[2]) {
+        wires.push({ c: 'v varrow', x: cx, y: y1, w: 1.35, h: B[1] - y1 });
+        labels.push({ t, x: cx + 8, y: Math.round(y1 + (B[1] - y1) / 2 - 11) });
+      } else {
+        // Below but in another column: down to the target's middle, then across into its near side.
+        const left = B[0] + B[2] <= cx, ex = left ? B[0] + B[2] : B[0];
+        wires.push({ c: 'v', x: cx, y: y1, w: 1.35, h: by - y1 }, { c: 'h arrow' + (left ? ' rev' : ''), x: Math.min(cx, ex), y: by, w: Math.abs(ex - cx), h: 1.35 });
+        labels.push({ t, x: cx + 8, y: Math.round(y1 + (by - y1) / 2 - 11) });
+      }
     }
     // Anything pointing back up or left is a relationship the topology doesn't draw; other views do.
   });

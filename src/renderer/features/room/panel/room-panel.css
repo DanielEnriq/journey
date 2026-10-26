@@ -120,7 +120,7 @@
 .rp-cm-head b { font-weight: 600; color: var(--ink-2); }
 .rp-cm-time { font-size: 11px; color: var(--ink-9); }
 .rp-cm-kind { margin-left: auto; flex: 0 0 auto; padding: 2px 7px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--border); font-size: 10.5px; font-weight: 500; color: var(--ink-6); }
-.rp-cm-body { font-size: 12.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
+.rp-cm-body { font-size: 12.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; white-space: pre-line; }
 .rp-cm-foot { display: flex; align-items: center; gap: 10px; min-height: 18px; }
 .rp-cm-replies { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: var(--ink-7); }
 .rp-cm-replies.rp-quiet { color: var(--ink-10); }

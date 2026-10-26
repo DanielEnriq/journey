@@ -159,9 +159,9 @@ export function RealRoom(p: RealRoomProps) {
     p.asker?.feedback(res.value.id, text, d.on, (said) => p.agentReply(res.value.id, said));
   };
 
-  const pins = (place: (x: number, y: number) => { x: number; y: number }) => (
+  const pins = (place: (x: number, y: number) => { x: number; y: number }, width: number, partRect: (component: string) => number[] | null) => (
     <>
-      <Pins rec={rec} place={place} hidden={u.sel.length > 0} open={(id) => act.thread(id)} />
+      <Pins rec={rec} place={place} width={width} partRect={partRect} hidden={u.sel.length > 0} open={(id) => act.thread(id)} />
       {draft ? (() => { const q = place(draft.x, draft.y); return (
         <div class="pin nx-draft-pin" style={`transform: translate(${q.x - 10}px, ${q.y - 20}px)`}>
           <span class="head">{directory.people[p.me]?.initials ?? 'Y'}</span>

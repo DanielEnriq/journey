@@ -289,7 +289,7 @@ function PrDetail2({ pr, w, p }: { pr: PR; w: Work; p: DeskProps }) {
           </div>
         ))}
       </div>
-      <div class="nx-files">{pr.files.map((f) => <span key={f.path} class="nx-file"><code>{f.path}</code><em class="a">+{f.add}</em><em class="d">−{f.del}</em></span>)}</div>
+      <div class="nx-files">{pr.files.map((f) => <span key={f.path} class="nx-file"><code title={f.path}>{f.path}</code><em class="a">+{f.add}</em><em class="d">−{f.del}</em></span>)}</div>
       {pr.review ? <span class="nx-pr-rev"><Who id={pr.review.by} size={16} />{nameOf(pr.review.by)}: {pr.review.text ?? pr.review.state}</span> : null}
       <span class="nx-offer-a">
         {prUrl(w, pr) ? <button type="button" class="nx-btn" onClick={() => act.openExternal(prUrl(w, pr)!)}>Review on GitHub<Ext /></button> : null}

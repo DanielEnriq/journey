@@ -62,6 +62,7 @@
   .wire.h{height:1.35px}.wire.v{width:1.35px}
   .wire.arrow::after{content:'';position:absolute;right:.5px;top:-2.4px;width:6px;height:6px;box-sizing:border-box;border-top:1.4px solid var(--studio-line);border-right:1.4px solid var(--studio-line);transform:rotate(45deg)}
   .wire.varrow::after{content:'';position:absolute;bottom:.5px;left:-2.4px;width:6px;height:6px;box-sizing:border-box;border-right:1.4px solid var(--studio-line);border-bottom:1.4px solid var(--studio-line);transform:rotate(45deg)}
+  .wire.arrow.rev::after{right:auto;left:.5px;transform:rotate(-135deg)}
   .wire.life{width:0;background:transparent;border-left:1.35px dashed var(--studio-line)}
   .wire.hot{background:var(--bad)}
   .wire.hot.varrow::after,.wire.hot.arrow::after{border-color:var(--bad)}
@@ -216,6 +217,10 @@
   .ink .stroke{fill:none;stroke:var(--me);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
   .ink .lasso{fill:color-mix(in srgb,var(--me) 9%,transparent);stroke:var(--me);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .ink .lasso.live{fill:none;stroke-dasharray:1 5;stroke-width:2.4}
+  .ink .lasso.peer{stroke:var(--peer);fill:color-mix(in srgb,var(--peer) 9%,transparent)}
+  .ink .lasso.peer2{stroke:var(--peer2);fill:color-mix(in srgb,var(--peer2) 9%,transparent)}
+  .ink .lasso.peer3{stroke:var(--peer3);fill:color-mix(in srgb,var(--peer3) 9%,transparent)}
+  .ink .lasso.peer4{stroke:var(--peer4);fill:color-mix(in srgb,var(--peer4) 9%,transparent)}
   .ink .lasso.read{stroke:var(--studio-accent);fill:color-mix(in srgb,var(--studio-accent) 8%,transparent)}
   .marquee{position:absolute;left:0;top:0;z-index:4;pointer-events:none;border:1px solid var(--me);background:color-mix(in srgb,var(--me) 8%,transparent);border-radius:3px}
   .lasso-ask{position:absolute;left:0;top:0;z-index:9;display:flex;flex-direction:column;gap:8px;width:236px;padding:10px 10px 10px 12px;box-sizing:border-box;border-radius:11px;background:var(--menu);box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1px var(--border),var(--shadow-menu);animation:rise 260ms var(--studio-ease) both}
@@ -430,6 +435,9 @@
   .pin .head.peer{background:var(--peer)}
   .pin .head.p2{background:var(--peer2)}
   .pin .head.p3{background:var(--peer3)}
+  .pin .head.peer2{background:var(--peer2)}
+  .pin .head.peer3{background:var(--peer3)}
+  .pin .head.peer4{background:var(--peer4)}
   .pin .pin-note{max-width:220px;padding:5px 9px;border-radius:7px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--studio-shadow);color:var(--ink);font-size:12px;line-height:1.4}
   .pin.lit .pin-note{box-shadow:0 0 0 1.5px var(--me),var(--studio-shadow)}
 }
