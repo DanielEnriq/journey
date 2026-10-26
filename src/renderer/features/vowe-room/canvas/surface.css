@@ -12,6 +12,10 @@
 .surface-head .nx-copies.nx-copies-head > em{padding:0 6px;font-style:normal;color:var(--v-fg-3);white-space:nowrap}
 .nx-copies button:focus-visible{outline:2px solid var(--v-focus);outline-offset:1px}
 
+/* The selection menu is one row. The Desk's context list (ul.nx-ctx) shares the class and stacks it into a
+   column over the part, where a double-click's second click lands on "Point everyone here". */
+.ctx.nx-ctx{flex-direction:row;padding:3px}
+
 /* Anatomy from the canvas alone: what isn't read yet says so. */
 .nx-anat-src{margin:-4px 0 8px}
 .nx-pg.nx-unread{font-style:italic;color:var(--v-fg-3)}
