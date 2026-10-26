@@ -67,6 +67,12 @@ export function createMainWindow({ preview = false }: WindowOptions = {}): Brows
     if (!isAppPage(url)) event.preventDefault();
   });
 
+  // The top bars leave room for the traffic lights, which macOS hides in full screen.
+  const fullScreen = () => win.webContents.send('window:fullScreen', win.isFullScreen());
+  win.on('enter-full-screen', fullScreen);
+  win.on('leave-full-screen', fullScreen);
+  win.webContents.on('did-finish-load', fullScreen);
+
   win.loadFile(join(RENDERER_DIR, 'vowe.html'));
   return win;
 }

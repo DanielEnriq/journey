@@ -15,6 +15,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--v-bg)}
 .drag-strip{position:fixed;inset:0 0 auto 0;height:40px;z-index:50;-webkit-app-region:drag}
 .vh-band{-webkit-app-region:drag}
 .vh-band :is(button,a,input,[role=button]){-webkit-app-region:no-drag}
+/* The 86px the top bars keep for the traffic lights; full screen has none, so the controls take the corner. */
+.full-screen :is(.vh-band,.top-chrome){padding-left:14px}
 /* The session splash covers the sign-in screen while the app finds out whether you're signed in. */
 .welcome-screen{position:relative}
 /* The Rooms list's thumbnails are too small for the empty canvas's sentence (it overflows on the board too): the

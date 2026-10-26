@@ -368,6 +368,8 @@ function App() {
 }
 
 if (navigator.userAgent.includes('Electron')) document.documentElement.classList.add('in-electron');
+// In full screen there are no traffic lights, so the top-left controls move into their corner.
+window.journey?.window.onFullScreen((on) => document.documentElement.classList.toggle('full-screen', on));
 // The first paint already wears the right theme; App takes over once the setting has loaded.
 document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 render(<App />, document.getElementById('app')!);

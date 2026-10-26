@@ -1203,6 +1203,8 @@ export interface Channels {
     'voice:status': VoiceStatus;
     'voice:speech': { roomId: string; speech: HeardSpeech };
     'voice:said': { roomId: string; turnId: string; text: string };
+    /** The window went in or out of full screen (and once on load): macOS hides the traffic lights there. */
+    'window:fullScreen': boolean;
   };
 }
 
@@ -1484,5 +1486,9 @@ export interface JourneyApi {
     onSpeech(listener: (update: { roomId: string; speech: HeardSpeech }) => void): () => void;
     /** Each sentence your Vowe starts saying, for captions. */
     onSaid(listener: (update: { roomId: string; turnId: string; text: string }) => void): () => void;
+  };
+  window: {
+    /** Whether the window is in full screen, now (once the page has loaded) and on every change. */
+    onFullScreen(listener: (fullScreen: boolean) => void): () => void;
   };
 }

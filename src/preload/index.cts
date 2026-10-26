@@ -190,6 +190,9 @@ const api: JourneyApi = {
     onSpeech: (listener) => subscribe('voice:speech', listener),
     onSaid: (listener) => subscribe('voice:said', listener),
   },
+  window: {
+    onFullScreen: (listener) => subscribe('window:fullScreen', listener),
+  },
 };
 
 contextBridge.exposeInMainWorld('journey', api);
