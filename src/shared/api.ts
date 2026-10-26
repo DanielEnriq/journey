@@ -12,6 +12,8 @@ import type { ModelBilling, ModelProviderErrorCode } from '../assistant/provider
 import type { Tables } from '../integrations/supabase/types.js';
 import type { CanvasChanged, CanvasDocument, CanvasPresence, CommandResult } from './canvas/index.js';
 import type { HeardSpeech, VoiceStatus } from '../voice/index.js';
+import type { About, Change, PR, VoweRecord } from './vowe/model.js';
+import type { PlanOp } from './vowe/plan.js';
 
 export type { CanvasCommand, CanvasSnapshot, Grounding };
 
@@ -758,8 +760,12 @@ export interface Participant {
  */
 export interface RoomEvents {
   'chat:message': { text: string };
-  /** The room's record changed (a thread, reply, decision or signature); members re-read it. */
-  'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' };
+  /**
+   * The room's record changed (a thread, reply, decision or signature; work and its plan; the room's
+   * settings such as the assistant's name); members re-read it. The database sends it too, after each
+   * vowe_* write.
+   */
+  'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' | 'work' | 'plan' | 'settings' };
   /**
    * Who's in the room changed: someone joined, left, was removed or got another role, or an invitation
    * changed. Members re-read the room's access; `userId` (when it's about a person) lets the person it's
@@ -808,6 +814,30 @@ export interface RoomSession {
 
 /** `reconnecting` after a dropped connection (rejoins automatically); `left` once the room is closed. */
 export type RoomStatus = 'connected' | 'reconnecting' | 'left';
+
+// ─── The Vowe room's record ──────────────────────────────────────────────────
+// Decisions as documents with per-version state, versioned plans, authorization, scope requests,
+// questions, findings, tracked PRs and attention marks (supabase/migrations/*_vowe_room_work.sql). The
+// record itself is VoweRecord (shared/vowe/model.ts). 'agent' saves Vowe's content from your session,
+// shown as Vowe's; the database never lets it sign, authorize, allow scope or resolve.
+
+export type VoweAuthorKind = 'human' | 'agent';
+export interface VoweNewThread {
+  about: About;
+  body: string;
+  /** The plan passage or decision line it's anchored to. */
+  quote?: string;
+  /** A canvas pin, in stage units. */
+  at?: { x: number; y: number };
+  /** Ask someone in the room directly (a cloud user id). */
+  waiting?: string;
+}
+/** Vowe offering to make something from a conversation; people accept or dismiss it. */
+export interface VoweOffer { kind: 'decision' | 'work' | 'revision' | 'edit'; text: string; target?: string }
+/** One suggested plan change, before anyone decides it. */
+export type VoweChange = Omit<Change, 'id' | 'state' | 'decidedBy'>;
+export interface VoweRevision { base: number; why: string; changes: VoweChange[]; from?: string }
+export type VoweLineKind = 'decide' | 'because' | 'assume' | 'open' | 'scope';
 
 // ─── Room record ─────────────────────────────────────────────────────────────
 // What a room keeps between calls: threads pinned to what it was looking at, their replies, its
@@ -1071,6 +1101,36 @@ export interface Channels {
     'record:sign': (roomId: string, decisionId: string, version: number) => RoomResult<RoomDecision>;
     'record:seen': (roomId: string) => RoomResult<void>;
     'record:call': (roomId: string, what: 'call-started' | 'call-left') => RoomResult<void>;
+    'vowe:load': (roomId: string) => RoomResult<VoweRecord>;
+    'vowe:thread': (roomId: string, thread: VoweNewThread, authorKind?: VoweAuthorKind) => RoomResult<{ id: string }>;
+    'vowe:offer': (roomId: string, threadId: string, body: string, offer: VoweOffer) => RoomResult<{ id: string }>;
+    'vowe:answerOffer': (roomId: string, threadId: string, replyId: string, accept: boolean) => RoomResult<void>;
+    'vowe:link': (roomId: string, threadId: string, about: About) => RoomResult<void>;
+    'vowe:decision:create': (roomId: string, decision: { title: string; line?: string; from?: string; problem?: string }, authorKind?: VoweAuthorKind) => RoomResult<{ id: string }>;
+    'vowe:decision:addLine': (roomId: string, decisionId: string, kind: VoweLineKind, text: string, authorKind?: VoweAuthorKind) => RoomResult<{ id: string }>;
+    'vowe:decision:editLine': (roomId: string, decisionId: string, lineId: string, text: string) => RoomResult<void>;
+    'vowe:decision:suggestLine': (roomId: string, decisionId: string, lineId: string, text: string, why: string, authorKind?: VoweAuthorKind) => RoomResult<void>;
+    'vowe:decision:editDoc': (roomId: string, decisionId: string, field: 'problem' | 'rationale', text: string) => RoomResult<void>;
+    'vowe:decision:takeSuggestion': (roomId: string, decisionId: string, lineId: string, accept: boolean) => RoomResult<void>;
+    'vowe:decision:requestSignatures': (roomId: string, decisionId: string, who: string[]) => RoomResult<void>;
+    'vowe:decision:requestChanges': (roomId: string, decisionId: string, version: number, text: string) => RoomResult<void>;
+    'vowe:decision:amend': (roomId: string, decisionId: string) => RoomResult<{ id: string }>;
+    'vowe:decision:setSuggested': (roomId: string, decisionId: string, state: 'dismissed' | 'draft') => RoomResult<void>;
+    'vowe:work:create': (roomId: string, work: { title: string; objective: string; decision?: string; thread?: string }, authorKind?: VoweAuthorKind) => RoomResult<{ id: string }>;
+    'vowe:work:plan': (roomId: string, workId: string, op: PlanOp, base: number) => RoomResult<{ version: number }>;
+    'vowe:work:suggest': (roomId: string, workId: string, revision: VoweRevision, authorKind?: VoweAuthorKind) => RoomResult<{ id: string }>;
+    'vowe:work:decideChange': (roomId: string, workId: string, changeId: string, accept: boolean) => RoomResult<void>;
+    'vowe:work:authorize': (roomId: string, workId: string, version: number) => RoomResult<void>;
+    'vowe:work:requestScope': (roomId: string, workId: string, ask: { text: string; adds: string; by: string }, authorKind?: VoweAuthorKind) => RoomResult<{ id: string }>;
+    'vowe:work:allowScope': (roomId: string, workId: string, allow: boolean) => RoomResult<void>;
+    'vowe:work:ask': (roomId: string, workId: string, question: { text: string; about?: string; step?: string; for: string; options?: string[] }, authorKind?: VoweAuthorKind) => RoomResult<{ id: string }>;
+    'vowe:work:answer': (roomId: string, workId: string, questionId: string, text: string) => RoomResult<void>;
+    'vowe:work:defer': (roomId: string, workId: string, questionId: string) => RoomResult<void>;
+    'vowe:work:finding': (roomId: string, workId: string, finding: { text: string; evidence?: string[]; offer?: string }, authorKind?: VoweAuthorKind) => RoomResult<{ id: string }>;
+    'vowe:work:trackPr': (roomId: string, workId: string, pr: { num: number; title: string; state: PR['state']; branch?: string; url?: string; step?: string }) => RoomResult<void>;
+    'vowe:work:resolve': (roomId: string, workId: string) => RoomResult<void>;
+    'vowe:attention:done': (roomId: string, ids: string[]) => RoomResult<void>;
+    'vowe:settings:agentName': (roomId: string, name: string) => RoomResult<string>;
     'invites:list': (roomId: string) => RoomResult<RoomInvitation[]>;
     'invites:send': (roomId: string, emails: string[], role: RoomRole) => RoomResult<RoomInvitation[]>;
     'invites:createLink': (roomId: string, settings: { role: RoomRole; expiry: LinkExpiry; domain: string | null }) => RoomResult<RoomLink>;
@@ -1292,6 +1352,64 @@ export interface JourneyApi {
     seen(roomId: string): Promise<RoomResult<void>>;
     /** Records that you started or left the room's call. */
     call(roomId: string, what: 'call-started' | 'call-left'): Promise<RoomResult<void>>;
+  };
+  /**
+   * The Vowe room's record (VoweRecord): decision documents, versioned plans and their authorization.
+   * Replies, resolving and signing stay on `record`. Members only; each write names who may do it, and the
+   * database enforces it. Decision ids are the Desk's: `<decision>` for v1, `<decision>.v<n>` after.
+   */
+  vowe: {
+    load(roomId: string): Promise<RoomResult<VoweRecord>>;
+    /** permission: comment. */
+    thread(roomId: string, thread: VoweNewThread, authorKind?: VoweAuthorKind): Promise<RoomResult<{ id: string }>>;
+    /** Vowe's reply carrying an offer. permission: comment. */
+    offer(roomId: string, threadId: string, body: string, offer: VoweOffer): Promise<RoomResult<{ id: string }>>;
+    /** Records the answer only. permission: write. */
+    answerOffer(roomId: string, threadId: string, replyId: string, accept: boolean): Promise<RoomResult<void>>;
+    /** Another subject a thread concerns. permission: comment. */
+    link(roomId: string, threadId: string, about: About): Promise<RoomResult<void>>;
+    decisions: {
+      /** A draft (a person) or a suggestion (Vowe). permission: write. */
+      create(roomId: string, decision: { title: string; line?: string; from?: string; problem?: string }, authorKind?: VoweAuthorKind): Promise<RoomResult<{ id: string }>>;
+      addLine(roomId: string, decisionId: string, kind: VoweLineKind, text: string, authorKind?: VoweAuthorKind): Promise<RoomResult<{ id: string }>>;
+      /** `conflict` once the version has a signature or isn't current. permission: write. */
+      editLine(roomId: string, decisionId: string, lineId: string, text: string): Promise<RoomResult<void>>;
+      suggestLine(roomId: string, decisionId: string, lineId: string, text: string, why: string, authorKind?: VoweAuthorKind): Promise<RoomResult<void>>;
+      editDoc(roomId: string, decisionId: string, field: 'problem' | 'rationale', text: string): Promise<RoomResult<void>>;
+      takeSuggestion(roomId: string, decisionId: string, lineId: string, accept: boolean): Promise<RoomResult<void>>;
+      /** You (if you may sign) and `who` (owners and members) become its approvers; `who` may be empty. */
+      requestSignatures(roomId: string, decisionId: string, who: string[]): Promise<RoomResult<void>>;
+      /** permission: sign. */
+      requestChanges(roomId: string, decisionId: string, version: number, text: string): Promise<RoomResult<void>>;
+      /** The next version as a draft; returns its Desk id. permission: write. */
+      amend(roomId: string, decisionId: string): Promise<RoomResult<{ id: string }>>;
+      setSuggested(roomId: string, decisionId: string, state: 'dismissed' | 'draft'): Promise<RoomResult<void>>;
+    };
+    work: {
+      create(roomId: string, work: { title: string; objective: string; decision?: string; thread?: string }, authorKind?: VoweAuthorKind): Promise<RoomResult<{ id: string }>>;
+      /** One plan op against `base`, the version you read; `conflict` if it moved. permission: write. */
+      plan(roomId: string, workId: string, op: PlanOp, base: number): Promise<RoomResult<{ version: number }>>;
+      /** Suggested changes, each decided on its own. permission: write. */
+      suggest(roomId: string, workId: string, revision: VoweRevision, authorKind?: VoweAuthorKind): Promise<RoomResult<{ id: string }>>;
+      decideChange(roomId: string, workId: string, changeId: string, accept: boolean): Promise<RoomResult<void>>;
+      /** Freezes `version` as approved. permission: the plan's owner or the room's owner. Starts nothing. */
+      authorize(roomId: string, workId: string, version: number): Promise<RoomResult<void>>;
+      requestScope(roomId: string, workId: string, ask: { text: string; adds: string; by: string }, authorKind?: VoweAuthorKind): Promise<RoomResult<{ id: string }>>;
+      /** permission: the plan's owner or the room's owner. */
+      allowScope(roomId: string, workId: string, allow: boolean): Promise<RoomResult<void>>;
+      ask(roomId: string, workId: string, question: { text: string; about?: string; step?: string; for: string; options?: string[] }, authorKind?: VoweAuthorKind): Promise<RoomResult<{ id: string }>>;
+      answer(roomId: string, workId: string, questionId: string, text: string): Promise<RoomResult<void>>;
+      defer(roomId: string, workId: string, questionId: string): Promise<RoomResult<void>>;
+      finding(roomId: string, workId: string, finding: { text: string; evidence?: string[]; offer?: string }, authorKind?: VoweAuthorKind): Promise<RoomResult<{ id: string }>>;
+      /** A PR as a person reports it (no GitHub sync). permission: write. */
+      trackPr(roomId: string, workId: string, pr: { num: number; title: string; state: PR['state']; branch?: string; url?: string; step?: string }): Promise<RoomResult<void>>;
+      /** Every tracked PR must be merged or closed. permission: the plan's owner or the room's owner. */
+      resolve(roomId: string, workId: string): Promise<RoomResult<void>>;
+    };
+    /** Your own For you marks. permission: comment. */
+    markDone(roomId: string, ids: string[]): Promise<RoomResult<void>>;
+    /** Renames the assistant in the room's workspace ('' → 'Vowe'); returns the name in use. Owners only. */
+    setAgentName(roomId: string, name: string): Promise<RoomResult<string>>;
   };
   calls: {
     /** Returns a token for the room's call. Members only. */

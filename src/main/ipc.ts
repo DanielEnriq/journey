@@ -31,7 +31,9 @@ import { getCloudUserId } from '../integrations/supabase/index.js';
 import { getCallAccess, syncCallParticipant } from '../integrations/livekit/index.js';
 import { connectRoom, disconnectRoom, roomActivity, sendRoomEvent, setRoomCall } from '../integrations/supabase/realtime.js';
 import { repositoryIdentity, RoomError, toRoomError } from '../integrations/supabase/rooms.js';
-import { createWorkspace, invitations, listWorkspaces, roomRecord, rooms } from '../integrations/supabase/workspaces.js';
+import { createWorkspace, invitations, listWorkspaces, roomRecord, rooms, voweRecord } from '../integrations/supabase/workspaces.js';
+import { decisionVersionId } from '../shared/vowe/ids.js';
+import type { VoweRecord } from '../shared/vowe/model.js';
 import type {
   AgentEvent,
   Channels,
@@ -190,6 +192,35 @@ async function roomCheckout(roomId: string): Promise<RoomCheckout | null> {
     }
   }
   return null;
+}
+
+/**
+ * Whether a coding agent is reachable from this room on this machine, for the Desk's "who does it". Only
+ * Claude Code, and only where the room's repository is checked out here; worked out locally, never sent
+ * anywhere. Reachable means a person can hand it an authorized plan in Claude Code: Journey starts no runs.
+ */
+async function voweAgents(roomId: string): Promise<VoweRecord['agents']> {
+  // The Desk re-reads the record after every write; looking through local remotes each time isn't needed.
+  const hit = agentsSeen.get(roomId);
+  if (hit && Date.now() - hit.at < 30_000) return hit.agents;
+  const agents = await findAgents(roomId);
+  agentsSeen.set(roomId, { at: Date.now(), agents });
+  return agents;
+}
+const agentsSeen = new Map<string, { at: number; agents: VoweRecord['agents'] }>();
+
+async function findAgents(roomId: string): Promise<VoweRecord['agents']> {
+  const checkout = await roomCheckout(roomId).catch(() => null);
+  if (!checkout) {
+    const room = await rooms.getRoom(roomId).catch(() => null);
+    if (!room?.repository) return [];
+    return [{ name: claudeCode.name, status: 'not-connected', note: 'This room’s repository isn’t checked out on this machine' }];
+  }
+  const sessions = await workContext.listSessions(checkout.repositoryId).catch(() => []);
+  return [{
+    name: claudeCode.name, status: 'connected',
+    note: sessions.length ? 'Checked out here, with Claude Code sessions' : 'Checked out here; no Claude Code sessions yet',
+  }];
 }
 
 /**
@@ -367,6 +398,39 @@ export function registerIpc() {
   handle('record:sign', (roomId, decisionId, version) => roomResult(() => roomRecord.sign(roomId, decisionId, version)));
   handle('record:seen', (roomId) => roomResult(() => roomRecord.markSeen(roomId)));
   handle('record:call', (roomId, what) => roomResult(() => roomRecord.logCall(roomId, what)));
+  // The Vowe room's record: each write is one checked database function (vowe-record.ts).
+  handle('vowe:load', (roomId) => roomResult(async () => voweRecord.load(roomId, { agents: await voweAgents(String(roomId)) })));
+  handle('vowe:thread', (roomId, thread, authorKind) => roomResult(() => voweRecord.createThread(roomId, thread, authorKind)));
+  handle('vowe:offer', (roomId, threadId, body, offer) => roomResult(() => voweRecord.reply(roomId, threadId, body, 'agent', offer)));
+  handle('vowe:answerOffer', (roomId, threadId, replyId, accept) => roomResult(() => voweRecord.answerOffer(roomId, threadId, replyId, accept)));
+  handle('vowe:link', (roomId, threadId, about) => roomResult(() => voweRecord.linkThread(roomId, threadId, about)));
+  handle('vowe:decision:create', (roomId, decision, authorKind) => roomResult(() => voweRecord.createDecision(roomId, decision, authorKind)));
+  handle('vowe:decision:addLine', (roomId, decisionId, kind, text, authorKind) => roomResult(() => voweRecord.addLine(roomId, decisionId, kind, text, authorKind)));
+  handle('vowe:decision:editLine', (roomId, decisionId, lineId, text) => roomResult(() => voweRecord.editLine(roomId, decisionId, lineId, text)));
+  handle('vowe:decision:suggestLine', (roomId, decisionId, lineId, text, why, authorKind) =>
+    roomResult(() => voweRecord.suggestLine(roomId, decisionId, lineId, text, why, authorKind)));
+  handle('vowe:decision:editDoc', (roomId, decisionId, field, text) => roomResult(() => voweRecord.editDoc(roomId, decisionId, field, text)));
+  handle('vowe:decision:takeSuggestion', (roomId, decisionId, lineId, accept) => roomResult(() => voweRecord.takeSuggestion(roomId, decisionId, lineId, accept)));
+  handle('vowe:decision:requestSignatures', (roomId, decisionId, who) => roomResult(() => voweRecord.requestSignatures(roomId, decisionId, who)));
+  handle('vowe:decision:requestChanges', (roomId, decisionId, version, text) => roomResult(() => voweRecord.requestChanges(roomId, decisionId, version, text)));
+  handle('vowe:decision:amend', (roomId, decisionId) =>
+    roomResult(async () => { const v = await voweRecord.amend(roomId, decisionId); return { id: decisionVersionId(v.decisionId, v.version) }; }));
+  handle('vowe:decision:setSuggested', (roomId, decisionId, state) => roomResult(() => voweRecord.setSuggested(roomId, decisionId, state)));
+  handle('vowe:work:create', (roomId, work, authorKind) => roomResult(() => voweRecord.createWork(roomId, work, authorKind)));
+  handle('vowe:work:plan', (roomId, workId, op, base) => roomResult(() => voweRecord.plan(roomId, workId, op, base)));
+  handle('vowe:work:suggest', (roomId, workId, revision, authorKind) => roomResult(() => voweRecord.suggestRevision(roomId, workId, revision, authorKind)));
+  handle('vowe:work:decideChange', (roomId, workId, changeId, accept) => roomResult(() => voweRecord.decideChange(roomId, workId, changeId, accept)));
+  handle('vowe:work:authorize', (roomId, workId, version) => roomResult(() => voweRecord.authorize(roomId, workId, version)));
+  handle('vowe:work:requestScope', (roomId, workId, ask, authorKind) => roomResult(() => voweRecord.requestScope(roomId, workId, ask, authorKind)));
+  handle('vowe:work:allowScope', (roomId, workId, allow) => roomResult(() => voweRecord.allowScope(roomId, workId, allow)));
+  handle('vowe:work:ask', (roomId, workId, question, authorKind) => roomResult(() => voweRecord.ask(roomId, workId, question, authorKind)));
+  handle('vowe:work:answer', (roomId, workId, questionId, text) => roomResult(() => voweRecord.answer(roomId, workId, questionId, text)));
+  handle('vowe:work:defer', (roomId, workId, questionId) => roomResult(() => voweRecord.defer(roomId, workId, questionId)));
+  handle('vowe:work:finding', (roomId, workId, finding, authorKind) => roomResult(() => voweRecord.addFinding(roomId, workId, finding, authorKind)));
+  handle('vowe:work:trackPr', (roomId, workId, pr) => roomResult(() => voweRecord.trackPr(roomId, workId, pr)));
+  handle('vowe:work:resolve', (roomId, workId) => roomResult(() => voweRecord.resolve(roomId, workId)));
+  handle('vowe:attention:done', (roomId, ids) => roomResult(() => voweRecord.markDone(roomId, ids)));
+  handle('vowe:settings:agentName', (roomId, name) => roomResult(() => voweRecord.setAgentName(roomId, name)));
   // Invitations: the token in a link is passed through to the database and never logged or kept here.
   handle('invites:list', (roomId) => roomResult(() => invitations.list(roomId)));
   handle('invites:send', (roomId, emails, role) => roomResult(() => invitations.send(roomId, emails, role)));

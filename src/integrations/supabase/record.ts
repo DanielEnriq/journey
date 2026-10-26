@@ -24,6 +24,7 @@ export type RoomRecordService = ReturnType<typeof createRoomRecordService>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KINDS: ThreadKind[] = ['note', 'concern', 'avoid', 'constraint', 'question', 'goal'];
 const ACTIVITY_LIMIT = 50;
+const ACTIVITY_KINDS: RoomActivityKind[] = ['thread', 'reply', 'decision', 'amended', 'signed', 'repository', 'call-started', 'call-left', 'joined', 'left', 'removed', 'role'];
 const AUTHOR = 'id, name, email';
 
 export function createRoomRecordService(client: () => Promise<Cloud>) {
@@ -75,6 +76,7 @@ export function createRoomRecordService(client: () => Promise<Cloud>) {
           .from('room_activity')
           .select(`*, actor:users!room_activity_actor_id_fkey(${AUTHOR})`)
           .eq('room_id', room)
+          .in('kind', ACTIVITY_KINDS) // the Vowe room's kinds (review, agreed, plan…) are read through vowe-record.ts
           .order('created_at', { ascending: false })
           .limit(ACTIVITY_LIMIT),
         supabase.from('room_visits').select('seen_at').eq('room_id', room).eq('user_id', selfId).maybeSingle(),
