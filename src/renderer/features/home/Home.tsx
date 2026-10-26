@@ -20,6 +20,7 @@ import type { AccountView, CanvasPreview, CanvasSketch, DecisionItem, LocalRepoV
 import type { NewRoom, RepoChoice } from '../room/data/sources.js';
 import type { PersonRef, RoomSummary } from '../room/types.js';
 import { acrossRooms, localWork, realStatus, realWorkspace, repositories, retryRooms, roomCheckouts, roomScene } from '../workspace/real/workspace.js';
+import type { InboxSource } from '../inbox/source.js';
 
 // Home, Rooms, Projects and Invitations (Design Pass 2), inside the Pass 2 shell. The components in
 // ui/pass2 never fetch: this reads what they show from the real workspace (rooms and their records,
@@ -46,13 +47,20 @@ export interface HomeProps {
   onOpenRoom(id: string): void;
   /** Makes the room and opens its preview; rejects with a message to show. Never starts a call. */
   onCreate(room: NewRoom): Promise<void>;
-  onNewRoom(): void;
+  /** Opens the New room sheet; with a repository, the sheet starts on it. */
+  onNewRoom(repo?: string | null): void;
   /** Absent in the demo: its pages have no invitations or link field. */
   onOpenInvite?(key: InviteKey): void;
   /** The New room sheet, when open. */
   overlay?: ComponentChildren;
   /** An invite being opened: shown in place of the page. */
   invite?: ComponentChildren;
+  /** The workspace's Inbox (activeInbox's source); null while there is none. */
+  inbox?: InboxSource | null;
+  /** The Inbox item the route selects (#/home/i/<id>), or null. */
+  selected?: string | null;
+  /** Selects an Inbox item (a history entry, so back and forward walk them); null clears it. */
+  onSelect?(id: string | null): void;
 }
 
 const TONE: Record<PersonRef['tone'], 1 | 2 | 3 | 4> = { me: 1, peer: 2, p2: 3, p3: 4 };
