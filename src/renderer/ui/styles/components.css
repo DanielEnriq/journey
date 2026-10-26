@@ -165,7 +165,7 @@
 .v-fault b { display: block; font-size: 13px; font-weight: 600; color: var(--v-fault-fg); }
 
 /* --------------------------------------------------------- dialogs, menus */
-.v-popover { border-radius: var(--v-radius-lg); background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); animation: v-pop var(--v-dur-2) var(--v-ease) both; }
+.v-popover { border-radius: var(--v-radius-lg); background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
 .v-menu { min-width: 220px; padding: 5px; border-radius: 11px; background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
 .v-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; height: 30px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: var(--v-fg-2); text-align: left; }
 .v-menu-item .v-icon { color: var(--v-fg-3); }
@@ -173,7 +173,7 @@
 .v-menu-item .v-kbd { margin-left: auto; }
 .v-menu-sep { height: 1px; margin: 4px 8px; background: var(--v-line); }
 .v-menu-label { padding: 8px 9px 4px; }
-.v-dialog { width: 380px; padding: 20px 20px 16px; border-radius: var(--v-radius-lg); background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); animation: v-pop var(--v-dur-2) var(--v-ease) both; }
+.v-dialog { width: 380px; padding: 20px 20px 16px; border-radius: var(--v-radius-lg); background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
 .v-dialog-title { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--v-fg); }
 .v-dialog-body { margin: 0; font-size: 13px; line-height: 1.5; color: var(--v-fg-3); }
 .v-dialog-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }

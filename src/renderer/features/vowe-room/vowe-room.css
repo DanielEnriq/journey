@@ -61,7 +61,7 @@
 .nx-call{display:grid;grid-template-columns:1fr auto 12px;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;box-shadow:inset 0 0 0 1px var(--v-line-2);font-family:var(--v-font-mono);font-size:10.5px;color:var(--v-fg-2)}
 .nx-call .amt{color:var(--v-fg)}
 .nx-call .ok{color:var(--v-fg-3)}
-.nx-call.dup{background:var(--v-fault-wash);box-shadow:inset 0 0 0 1px var(--v-fault-line);color:var(--v-fault-fg);animation:nx-in 420ms var(--v-ease) both}
+.nx-call.dup{background:var(--v-fault-wash);box-shadow:inset 0 0 0 1px var(--v-fault-line);color:var(--v-fault-fg);}
 .nx-call.dup .amt,.nx-call.dup .ok{color:var(--v-fault-fg)}
 .nx-own{position:absolute;top:12px;bottom:12px;right:-7px;border-right:1.5px dashed var(--v-line-strong);pointer-events:none}
 .part.nx-part.kind-external::after{content:"you don’t run it";position:absolute;right:-7px;top:50%;transform:translate(100%,-50%) rotate(90deg);transform-origin:left center;display:none}
@@ -95,7 +95,7 @@
 .nx-chip.pr.review{color:var(--v-signal-fg);box-shadow:0 0 0 1px var(--v-signal-line)}
 .nx-chip.pr.draft,.nx-chip.pr.open{color:var(--v-fg-2)}
 @keyframes nx-pulse{50%{opacity:.35}}
-.nx-since{position:absolute;left:12px;top:-12px;z-index:3;display:inline-flex;align-items:center;gap:6px;max-width:calc(100% - 24px);height:22px;padding:0 9px;border-radius:7px;background:color-mix(in srgb,var(--v-info) 16%,var(--menu));box-shadow:0 0 0 1px var(--v-info-line);font-size:11px;color:var(--v-info-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:nx-in 380ms var(--v-ease) both}
+.nx-since{position:absolute;left:12px;top:-12px;z-index:3;display:inline-flex;align-items:center;gap:6px;max-width:calc(100% - 24px);height:22px;padding:0 9px;border-radius:7px;background:color-mix(in srgb,var(--v-info) 16%,var(--menu));box-shadow:0 0 0 1px var(--v-info-line);font-size:11px;color:var(--v-info-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .nx-since i{width:6px;height:6px;flex:0 0 auto;border-radius:50%;background:var(--v-info-fg)}
 .part.nx-changed{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1.5px var(--v-info-line),var(--studio-shadow)}
 .part.nx-lit{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 2px var(--v-fg-2),var(--studio-lift)}
@@ -103,7 +103,7 @@
 @keyframes nx-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 
 /* a PR, shown on the parts it changes */
-.nx-diff{position:absolute;left:10px;right:-30px;bottom:calc(100% + 14px);z-index:4;display:flex;flex-direction:column;gap:2px;padding:7px 9px;border-radius:9px;background:var(--menu);box-shadow:0 0 0 1px var(--v-signal-line),var(--shadow-menu);font-size:11.5px;line-height:1.35;color:var(--v-fg-2);animation:nx-in 300ms var(--v-ease) both}
+.nx-diff{position:absolute;left:10px;right:-30px;bottom:calc(100% + 14px);z-index:4;display:flex;flex-direction:column;gap:2px;padding:7px 9px;border-radius:9px;background:var(--menu);box-shadow:0 0 0 1px var(--v-signal-line),var(--shadow-menu);font-size:11.5px;line-height:1.35;color:var(--v-fg-2);}
 .nx-diff b{font-family:var(--v-font-mono);font-size:10.5px;font-weight:500;color:var(--v-signal-fg)}
 .nx-diff code{font-family:var(--v-font-mono);font-size:10px;color:var(--v-fg-3)}
 .part.nx-diffed{box-shadow:inset 0 1px 0 var(--studio-card-top),0 0 0 1.5px var(--v-signal-line),var(--studio-lift)}
@@ -152,7 +152,7 @@
 .nx-dial:focus-visible{outline:2px solid var(--v-focus);outline-offset:2px}
 
 .nx-ctx button.on{background:var(--hover-strong);color:var(--ink-bright)}
-.nx-whatif{position:absolute;left:0;top:0;z-index:30;width:300px;display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:12px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);animation:rise 200ms var(--studio-ease) both}
+.nx-whatif{position:absolute;left:0;top:0;z-index:30;width:300px;display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:12px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);}
 .nx-wi-h{display:flex;align-items:center;gap:7px;padding:4px 6px 6px;font-size:11.5px;color:var(--v-fg-3)}
 .nx-wi-h .orb{width:12px;height:12px}
 .nx-whatif button{display:grid;grid-template-columns:12px 1fr;column-gap:6px;align-items:baseline;padding:7px 8px;border:0;border-radius:8px;background:transparent;font:inherit;text-align:left;color:var(--v-fg)}
@@ -161,7 +161,7 @@
 .nx-whatif b{font-size:13px;font-weight:600}
 .nx-whatif button span{grid-column:2;font-size:11.5px;color:var(--v-fg-3)}
 
-.nx-anat{position:absolute;left:0;top:0;z-index:11;width:304px;box-sizing:border-box;padding:12px 12px 10px;border-radius:13px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);animation:rise 220ms var(--studio-ease) both;cursor:default}
+.nx-anat{position:absolute;left:0;top:0;z-index:11;width:304px;box-sizing:border-box;padding:12px 12px 10px;border-radius:13px;background:var(--menu);box-shadow:0 0 0 1px var(--border),var(--shadow-menu);cursor:default}
 .nx-anat-h{display:flex;align-items:center;gap:7px}
 .nx-anat-h b{flex:1;font-size:14px;font-weight:600}
 .nx-x{width:22px;height:22px;border:0;border-radius:6px;background:transparent;font-size:16px;line-height:1;color:var(--v-fg-3)}
@@ -192,7 +192,7 @@
 .nx-quiet{margin:4px 0;font-size:12px;line-height:1.45;color:var(--v-fg-3)}
 
 /* Vowe at work, said where it acts */
-.nx-vowe-work{position:absolute;z-index:8;left:50%;top:52px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;height:32px;padding:0 12px 0 10px;border-radius:11px;background:var(--menu);box-shadow:0 0 0 1px color-mix(in srgb,var(--ask) 30%,var(--border)),var(--shadow-menu);font-size:12.5px;color:var(--v-fg-2);white-space:nowrap;animation:rise 260ms var(--studio-ease) both}
+.nx-vowe-work{position:absolute;z-index:8;left:50%;top:52px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;height:32px;padding:0 12px 0 10px;border-radius:11px;background:var(--menu);box-shadow:0 0 0 1px color-mix(in srgb,var(--ask) 30%,var(--border)),var(--shadow-menu);font-size:12.5px;color:var(--v-fg-2);white-space:nowrap;}
 .nx-vowe-work b{font-weight:600;color:var(--v-fg)}
 .nx-vowe-work.investigating .orb,.nx-vowe-work.understanding .orb,.nx-vowe-work.preparing .orb,.nx-vowe-work.uncertain .orb{animation:nx-pulse 1.2s ease-in-out infinite}
 .nx-vowe-work.awaiting{box-shadow:0 0 0 1px var(--border),var(--shadow-menu);outline:1.25px dashed color-mix(in srgb,var(--ask) 55%,transparent);outline-offset:2px}
@@ -210,7 +210,7 @@
 .nx-evchip .nx-basis{width:6px;height:6px;margin-right:4px}
 
 @keyframes nx-flash{0%,100%{box-shadow:inset 0 0 0 1px transparent}30%{box-shadow:inset 0 0 0 1.5px var(--v-fg-2),0 0 0 4px color-mix(in srgb,var(--v-fg) 10%,transparent)}}
-.nx-flash{animation:nx-flash 1.6s var(--v-ease) 2}
+.nx-flash{animation:nx-flash 600ms var(--v-ease) 1}
 .rp-tg.nx-dim{opacity:.5;transition:opacity 200ms ease}
 
 .nx-akind{font-family:var(--v-font-mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--v-fg-3)}
@@ -220,7 +220,7 @@
 .nx-eff-last{display:flex;align-items:baseline;gap:0;font-size:12px;line-height:1.4;color:var(--v-fg-2)}
 .nx-eff-last .nx-basis{color:var(--v-info-fg);flex:0 0 auto}
 .nx-eff-last em{margin-left:auto;padding-left:8px;font-style:normal;font-size:11px;color:var(--v-fg-3);white-space:nowrap}
-.nx-q{display:flex;flex-direction:column;gap:6px;padding:9px 10px;border-radius:10px;background:var(--v-signal-wash);box-shadow:inset 0 0 0 1px var(--v-signal-line);animation:nx-in 300ms var(--v-ease) both}
+.nx-q{display:flex;flex-direction:column;gap:6px;padding:9px 10px;border-radius:10px;background:var(--v-signal-wash);box-shadow:inset 0 0 0 1px var(--v-signal-line);}
 
 .nx-q-h{font-size:11px;font-weight:600;color:var(--v-signal-fg)}
 
@@ -231,7 +231,7 @@
 
 @keyframes nx-spin{to{transform:rotate(360deg)}}
 .nx-prs{display:flex;flex-direction:column;gap:4px;margin-top:2px}
-.nx-pr{display:flex;flex-direction:column;gap:3px;padding:7px 9px;border-radius:9px;background:var(--v-surface);box-shadow:inset 0 0 0 1px var(--v-line);animation:nx-in 300ms var(--v-ease) both}
+.nx-pr{display:flex;flex-direction:column;gap:3px;padding:7px 9px;border-radius:9px;background:var(--v-surface);box-shadow:inset 0 0 0 1px var(--v-line);}
 .nx-pr.superseded{opacity:.6}
 .nx-pr.review{box-shadow:inset 0 0 0 1px var(--v-signal-line)}
 .nx-pr-main{display:flex;align-items:baseline;gap:7px;padding:0;border:0;background:transparent;font:inherit;text-align:left;color:var(--v-fg);cursor:pointer}
@@ -629,7 +629,7 @@ body.nx-resizing{cursor:col-resize;user-select:none}
 .nx-actrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
 
 /* Focus workspace: the Desk over the room, below the band; the canvas stays live underneath */
-.win.nx-fws .desk{position:absolute;z-index:30;top:40px;left:var(--left-column);right:0;bottom:0;width:auto;grid-column:auto;padding-top:0;opacity:1;pointer-events:auto;background:var(--v-bg);animation:nx-grow 220ms var(--v-ease)}
+.win.nx-fws .desk{position:absolute;z-index:30;top:40px;left:var(--left-column);right:0;bottom:0;width:auto;grid-column:auto;padding-top:0;opacity:1;pointer-events:auto;background:var(--v-bg);animation:nx-grow 180ms var(--v-ease-out, var(--v-ease))}
 .win.nx-fws .desk-panel{width:100%;display:flex;flex-direction:column}
 .win.nx-fws .nx-split{display:none}
 .nx-fbar{display:flex;align-items:center;gap:14px;padding:10px 20px;border-bottom:1px solid var(--v-line);background:var(--v-bg)}
@@ -919,7 +919,8 @@ body.nx-resizing{cursor:col-resize;user-select:none}
 .nx-lens-note{padding:0 6px;max-width:220px;overflow:hidden;text-overflow:ellipsis;color:var(--v-fg-3);white-space:nowrap}
 }
 
-@keyframes nx-grow{from{opacity:.4;clip-path:inset(0 0 0 55%)}to{opacity:1;clip-path:inset(0 0 0 0)}}
+/* Focus opens from the Desk's edge: the only spatial motion left (nothing fades in). */
+@keyframes nx-grow{from{clip-path:inset(0 0 0 calc(100% - var(--nx-ins-w, 352px)))}to{clip-path:inset(0 0 0 0)}}
 
 .room-screen .nx-toast{top:52px;bottom:auto;z-index:40}
 

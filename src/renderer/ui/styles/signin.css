@@ -2,7 +2,7 @@
    concept is not integrated: Home keeps Journey's layout until Pass 2). Prefixed vs-. Reads --v-* tokens only. */
 /* ---------------------------------------------------------------- sign-in */
 .vs-signin { position: relative; min-height: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--v-bg); }
-.vs-signin-col { position: relative; z-index: 1; width: 340px; display: flex; flex-direction: column; gap: 26px; margin-top: -40px; animation: v-in var(--v-dur-3) var(--v-ease) both; }
+.vs-signin-col { position: relative; z-index: 1; width: 340px; display: flex; flex-direction: column; gap: 26px; margin-top: -40px; }
 .vs-signin-head { display: flex; flex-direction: column; gap: 10px; }
 .vs-signin-word { font-size: 30px; gap: 12px; }
 .vs-signin-head p { margin: 0; font-size: 14px; color: var(--v-fg-3); }
@@ -14,7 +14,7 @@
 .vs-provider-mark > * { max-width: 18px; max-height: 18px; }
 .vs-signin-later { display: flex; align-items: center; gap: 8px; margin-top: -8px; padding: 0 2px; font-size: 12.5px; color: var(--v-fg-4); cursor: not-allowed; }
 .vs-signin-later .v-badge { margin-left: auto; height: 18px; color: var(--v-fg-4); }
-.vs-signin-panel { display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: 12px; background: var(--v-surface); box-shadow: inset 0 0 0 1px var(--v-line), var(--v-shadow-1); animation: v-in var(--v-dur-2) var(--v-ease) both; }
+.vs-signin-panel { display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: 12px; background: var(--v-surface); box-shadow: inset 0 0 0 1px var(--v-line), var(--v-shadow-1); }
 .vs-signin-row { display: flex; align-items: center; gap: 12px; }
 .vs-signin-row b { display: block; font-size: 14px; font-weight: 600; color: var(--v-fg); }
 .vs-signin-code { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--v-line); }

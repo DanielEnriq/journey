@@ -10,11 +10,8 @@
 @keyframes vh-arrive { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: none; } }
 @keyframes vh-sheet { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
 @keyframes vh-fade { from { opacity: 0; } to { opacity: 1; } }
-.vh-enter { animation: vh-enter var(--v-dur-3) var(--v-ease) both; }
-.vh-stagger > * { animation: vh-enter var(--v-dur-3) var(--v-ease) both; }
 .vh-stagger > *:nth-child(2) { animation-delay: 40ms; } .vh-stagger > *:nth-child(3) { animation-delay: 80ms; }
 .vh-stagger > *:nth-child(4) { animation-delay: 120ms; } .vh-stagger > *:nth-child(5) { animation-delay: 160ms; }
-.vh-arrive { animation: vh-arrive var(--v-dur-2) var(--v-ease) both; }
 @media (prefers-reduced-motion: reduce) {
   .vh-enter, .vh-stagger > *, .vh-arrive, .vh-sheet, .vh-sketch .e, .vh-sketch .n { animation: none !important; }
 }
@@ -52,7 +49,7 @@
 .vh-page { width: min(1080px, calc(100% - 80px)); margin: 0 auto; padding: 72px 0 56px; }
 
 /* --------------------------------------------------------------- account */
-.vh-pop { position: absolute; z-index: 40; width: 300px; padding: 6px; border-radius: 12px; background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); animation: vh-sheet var(--v-dur-2) var(--v-ease) both; }
+.vh-pop { position: absolute; z-index: 40; width: 300px; padding: 6px; border-radius: 12px; background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
 .vh-pop-head { display: flex; gap: 12px; align-items: center; padding: 10px 10px 12px; border-bottom: 1px solid var(--v-line); margin-bottom: 4px; }
 .vh-pop-head b { display: block; font-size: 14px; font-weight: 600; color: var(--v-fg); }
 .vh-pop-sec { padding: 8px 10px 4px; }
@@ -63,8 +60,8 @@
 .vh-mark-slot.has-mark { box-shadow: none; }
 
 /* ------------------------------------------------------------- sheets */
-.vh-scrim { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: var(--v-scrim); animation: vh-fade var(--v-dur-2) ease both; }
-.vh-sheet { width: 480px; max-width: calc(100% - 48px); max-height: calc(100% - 64px); overflow: auto; display: flex; flex-direction: column; border-radius: var(--v-radius-lg); background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); animation: vh-sheet var(--v-dur-2) var(--v-ease) both; }
+.vh-scrim { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: var(--v-scrim); }
+.vh-sheet { width: 480px; max-width: calc(100% - 48px); max-height: calc(100% - 64px); overflow: auto; display: flex; flex-direction: column; border-radius: var(--v-radius-lg); background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
 .vh-sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 0; }
 .vh-sheet-head h2 { margin: 0; font-family: var(--v-font-serif); font-weight: 400; font-size: 28px; line-height: 1.05; letter-spacing: -0.012em; color: var(--v-fg); }
 .vh-sheet-head p { margin: 6px 0 0; font-size: 13px; color: var(--v-fg-3); }
@@ -92,7 +89,7 @@
 .vh-auth-context { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--v-surface); box-shadow: inset 0 0 0 1px var(--v-line); font-size: 12.5px; color: var(--v-fg-2); }
 .vh-auth-context b { color: var(--v-fg); font-weight: 600; }
 .vh-auth-quiet { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--v-surface-hover); font-size: 12.5px; color: var(--v-fg-2); }
-.vh-splash { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: var(--v-bg); animation: vh-fade var(--v-dur-2) ease both; }
+.vh-splash { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: var(--v-bg); }
 .vh-splash .v-wordmark { font-size: 26px; gap: 11px; }
 .vh-splash span.v-presence { color: var(--v-fg-3); }
 
@@ -152,10 +149,10 @@
 /* -------------------------------------------------------- canvas sketch */
 .vh-sketch { position: absolute; inset: 0; overflow: hidden; background-color: var(--v-canvas); background-image: radial-gradient(circle, var(--v-line-2) 0.9px, transparent 1.1px); background-size: 14px 14px; }
 .vh-sketch svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.vh-sketch .e { fill: none; stroke: var(--v-line-strong); stroke-width: 1.25; animation: vh-fade 500ms ease both; }
-.vh-sketch .e.is-proposed { stroke: var(--v-proposed-line); stroke-dasharray: 3 3; stroke-dashoffset: 0; animation: vh-fade 600ms ease both; }
+.vh-sketch .e { fill: none; stroke: var(--v-line-strong); stroke-width: 1.25; }
+.vh-sketch .e.is-proposed { stroke: var(--v-proposed-line); stroke-dasharray: 3 3; stroke-dashoffset: 0; }
 .vh-sketch .e.is-fault { stroke: var(--v-fault); }
-.vh-sketch .n { position: absolute; transform: translate(-50%, -50%); padding: 4px 7px 5px; border-radius: 6px; background: var(--v-surface); box-shadow: inset 0 0 0 1px var(--v-line-2); font-size: 10.5px; font-weight: 600; color: var(--v-fg); white-space: nowrap; animation: vh-fade 400ms ease both; }
+.vh-sketch .n { position: absolute; transform: translate(-50%, -50%); padding: 4px 7px 5px; border-radius: 6px; background: var(--v-surface); box-shadow: inset 0 0 0 1px var(--v-line-2); font-size: 10.5px; font-weight: 600; color: var(--v-fg); white-space: nowrap; }
 .vh-sketch .n small { display: block; font-family: var(--v-font-mono); font-size: 7.5px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--v-fg-3); }
 .vh-sketch .n.is-proposed { background: var(--v-proposed-wash); box-shadow: none; outline: 1.1px dashed var(--v-proposed-line); outline-offset: -1px; color: var(--v-proposed-fg); }
 .vh-sketch .n.is-fault { box-shadow: inset 0 0 0 1px var(--v-fault-line); }
@@ -187,7 +184,7 @@
 .vh-person .v-meta { margin-left: auto; }
 
 /* --------------------------------------------------------- invitations */
-.vh-invite-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: var(--v-surface); box-shadow: inset 0 0 0 1px var(--v-line), var(--v-shadow-1); animation: vh-enter var(--v-dur-2) var(--v-ease) both; }
+.vh-invite-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: var(--v-surface); box-shadow: inset 0 0 0 1px var(--v-line), var(--v-shadow-1); }
 .vh-invite-card h3 { margin: 0; font-family: var(--v-font-serif); font-weight: 400; font-size: 28px; line-height: 1.05; color: var(--v-fg); }
 .vh-invite-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--v-fg-3); }
 .vh-web { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--v-bg); }
@@ -254,7 +251,7 @@
 .vh-repo-pick { position: relative; }
 .vh-repo-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--v-bg-sunken); box-shadow: inset 0 0 0 1px var(--v-line); font-family: var(--v-font-mono); font-size: 11.5px; color: var(--v-fg-2); }
 .vh-repo-btn:hover { box-shadow: inset 0 0 0 1px var(--v-line-strong); }
-.vh-repo-pop { position: absolute; z-index: 30; left: 0; top: 36px; min-width: 260px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); animation: vh-sheet var(--v-dur-2) var(--v-ease) both; }
+.vh-repo-pop { position: absolute; z-index: 30; left: 0; top: 36px; min-width: 260px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
 .vh-repo-pop button { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: none; font-size: 13px; color: var(--v-fg); text-align: left; }
 .vh-repo-pop button:hover { background: var(--v-surface-hover); }
 .vh-repo-pop .vh-repo-add { justify-content: flex-start; margin-top: 4px; border-top: 1px solid var(--v-line); border-radius: 0 0 7px 7px; color: var(--v-fg-2); }
