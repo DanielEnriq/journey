@@ -46,7 +46,8 @@ export interface VoweRoomProps {
   lit: string[];
   onAsk(about: { components: string[]; names: string[] }): void;
   onScenario(component: string, s: Scenario): void;
-  onCopies(n: number): void;
+  /** Told after the canvas changed how many copies it shows (it runs the command itself). */
+  onCopies?(n: number): void;
   onComment(x: number, y: number, on: { component: string; name: string } | null): void;
   onMarks(component: string): void;
   /** Journey's call controls; null when there's no call (the normal state). */

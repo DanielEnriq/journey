@@ -177,10 +177,6 @@ export function RealRoom(p: RealRoomProps) {
       pins={pins}
       onAsk={(about) => p.asker?.open({ selected: about.components, circled: [], names: about.names })}
       onScenario={(component, s) => { void p.client.run('show_view', s.view === 'concurrency' ? { view: 'concurrency', focus: component, instances: 2 } : { view: s.view, focus: component }); }}
-      onCopies={(count) => {
-        const focus = u.sel.length === 1 && !('step' in u.sel[0]) ? u.sel[0].component : undefined;
-        void p.client.run('show_view', count > 1 && focus ? { view: 'concurrency', focus, instances: count } : { view: 'architecture' });
-      }}
       onComment={(x, y, on) => setDraft({ x, y, on })}
       onMarks={one}
     />
