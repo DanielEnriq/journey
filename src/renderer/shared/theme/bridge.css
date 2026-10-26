@@ -2,8 +2,9 @@
    Ink, Paper & Signal tokens (ui/styles/tokens.css). Light or dark comes from <html data-theme>, which
    app.tsx keeps in step with the Theme setting, so .win and .win.light read the same lines.
    Meaning carries over: --attention (needs you) is vermilion, --bad (failed) is oxide, --ask (Vowe and
-   the system) is slate, --good (live, passed) is sage. Delete a line once nothing reads it. */
-.win,.win.light{
+   the system) is slate, --good (live, passed) is sage. A canvas still outside a room (.glimpse-scope) reads
+   them too. Delete a line once nothing reads it. */
+.win,.win.light,.glimpse-scope{
   /* surfaces, back to front */
   --app:var(--v-bg-sunken);--rail:var(--v-bg-sunken);--pane:var(--v-bg);--surface:var(--v-surface);--field:var(--v-surface);
   --menu:var(--v-surface-raised);--selected:var(--v-surface-selected);--chip:var(--v-surface-press);--chip-strong:var(--v-surface-raised);

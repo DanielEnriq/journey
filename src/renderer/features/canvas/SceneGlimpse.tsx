@@ -27,7 +27,7 @@ export function SceneGlimpse({ scene, lit, height }: { scene: Scene; lit?: strin
   const on = new Set(lit ?? []);
 
   return (
-    <div class="room-screen" style="height:auto">
+    <div class="room-screen glimpse-scope" style="height:auto">
       <div class="glimpse-view" ref={box} aria-hidden="true" style={`height:${Math.round(vb[1] * k + pad * 2)}px`}>
         {k > 0 && (
           <div class="glimpse-fit" style={`width:${vb[0]}px;height:${vb[1]}px;transform:translate(${(width - vb[0] * k) / 2}px, ${pad}px) scale(${k})`}>
