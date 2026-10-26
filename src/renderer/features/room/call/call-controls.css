@@ -1,0 +1,41 @@
+/* The call cluster (features/room/call/CallControls.tsx): one group at the band's right end, the same order
+   everywhere. Ink, Paper & Signal tokens only; the hang-up is the only red in the window. */
+.vc-call { position: relative; display: flex; align-items: center; gap: 2px; padding: 2px; border-radius: 10px; -webkit-app-region: no-drag; }
+.vc-pill { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 9px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--v-fg-2); font: 500 12px/1 var(--v-font-sans); cursor: pointer; white-space: nowrap; transition: background var(--v-dur-1) ease, color var(--v-dur-1) ease; }
+.vc-pill:hover, .vc-pill[aria-expanded="true"] { background: var(--v-surface-hover); color: var(--v-fg); }
+.vc-pill:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); }
+.vc-live { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--v-success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--v-success) 22%, transparent); }
+.vc-live.is-off { background: var(--v-fg-4); box-shadow: none; }
+.vc-trouble { color: var(--v-fg-3); font-weight: 400; }
+.vc-room { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.vc-faces .v-av { width: 20px; height: 20px; font-size: 9px; }
+.vc-more { font-size: 11px; color: var(--v-fg-3); font-variant-numeric: tabular-nums; }
+.vc-vmark { position: relative; display: inline-block; width: 16px; height: 16px; flex: 0 0 16px; border-radius: 50%; box-shadow: inset 0 0 0 1.25px var(--v-info-line); }
+.vc-vmark::after { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: var(--v-info); }
+.vc-vmark.is-hearing::before { content: ''; position: absolute; inset: -3px; border-radius: 50%; box-shadow: 0 0 0 1px var(--v-info-line); }
+.vc-vmark.is-deaf::after { background: transparent; box-shadow: inset 0 0 0 1.25px var(--v-info); }
+.vc-mic { position: relative; }
+.vc-mic[aria-pressed="false"] { color: var(--v-fg); }
+.vc-mic[aria-pressed="true"] { color: var(--v-fg-3); background: var(--v-surface-press); }
+.vc-mic:disabled, .vc-hang:disabled { opacity: .45; cursor: default; }
+.vc-mic:disabled:hover { background: transparent; }
+.vc-lvl { position: absolute; right: 4px; bottom: 5px; display: flex; gap: 1px; align-items: flex-end; height: 7px; }
+.vc-lvl i { width: 2px; height: 4px; border-radius: 1px; background: var(--v-success); }
+.vc-lvl i:nth-child(2) { height: 7px; }
+.vc-lvl i:nth-child(3) { height: 5px; }
+.vc-hang { color: var(--v-fault-fg); }
+.vc-hang:hover:not(:disabled) { background: var(--v-fault-wash); color: var(--v-fault-fg); }
+.vc-rejoin { margin: 0 2px; }
+.vc-call.is-dropped .vc-pill { color: var(--v-fg-3); }
+
+.vc-pop { position: absolute; z-index: 70; top: calc(100% + 6px); right: 0; width: 300px; padding: 12px; border-radius: 12px; background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); text-align: left; }
+.vc-pop h4 { margin: 0 0 2px; font: 400 18px/1.2 var(--v-font-serif); color: var(--v-fg); }
+.vc-pop .vc-s { font-size: 12px; line-height: 1.45; color: var(--v-fg-3); }
+.vc-pop ul { list-style: none; margin: 12px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.vc-pop li { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--v-fg); }
+.vc-pop li .v-av { width: 20px; height: 20px; font-size: 9px; }
+.vc-pop li .vc-vmark { margin: 0 2px; }
+.vc-pop .vc-ps { margin-left: auto; font-size: 12px; color: var(--v-fg-3); }
+.vc-pop .vc-note { margin: 0 0 10px; }
+.vc-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; border-top: 1px solid var(--v-line); }
+.vc-acts .vc-leave { margin-left: auto; }

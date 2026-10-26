@@ -75,9 +75,14 @@ export function Button({ variant = 'default', size = 'md', icon, iconEnd, shortc
   );
 }
 
-export function IconButton({ icon, label, active, ...rest }: { icon: IconName; label: string; active?: boolean } & JSX.HTMLAttributes<HTMLButtonElement>) {
+/**
+ * An icon-only control: always named, with a tooltip (`data-tip`, components.css) that shows on hover and on
+ * keyboard focus after a short wait. `tip` adds the shortcut or a longer reason; `tipEnd` anchors it to the
+ * right edge for controls at the window's right.
+ */
+export function IconButton({ icon, label, active, tip, tipEnd, class: klass, ...rest }: { icon: IconName; label: string; active?: boolean; tip?: string; tipEnd?: boolean } & JSX.HTMLAttributes<HTMLButtonElement>) {
   return (
-    <button type="button" class={cx('v-iconbtn', active && 'is-on')} aria-label={label} title={label} aria-pressed={active ?? undefined} {...rest}>
+    <button type="button" class={cx('v-iconbtn', active && 'is-on', klass as string)} aria-label={label} data-tip={tip ?? label} data-tip-end={tipEnd ? '' : undefined} aria-pressed={active ?? undefined} {...rest}>
       <Icon name={icon} />
     </button>
   );

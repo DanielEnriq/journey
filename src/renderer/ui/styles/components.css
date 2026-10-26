@@ -199,3 +199,16 @@
 @media (prefers-reduced-motion: reduce) {
   .v-root *, .v-root *::before, .v-root *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+
+/* ---------------------------------------------------------------- tooltips
+   Icon-only controls carry their name (and shortcut) in data-tip: it shows on hover and on keyboard focus
+   after 450ms, under the control. data-tip-end anchors it to the control's right edge (controls at the
+   window's right), data-tip-start to its left edge (the sidebar). Never the only place a name lives:
+   every such control also has an aria-label. */
+[data-tip] { position: relative; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; z-index: 90; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 8px; border-radius: 6px; background: var(--v-fg); color: var(--v-fg-inverse); font: 500 11.5px/1.3 var(--v-font-sans); letter-spacing: 0; text-transform: none; white-space: nowrap; pointer-events: none; opacity: 0; animation: v-tip 1ms linear 450ms forwards; }
+[data-tip][data-tip-end]:hover::after, [data-tip][data-tip-end]:focus-visible::after { left: auto; right: 0; transform: none; }
+[data-tip][data-tip-start]:hover::after, [data-tip][data-tip-start]:focus-visible::after { left: 0; transform: none; }
+[data-tip][aria-expanded="true"]::after { display: none; }
+@keyframes v-tip { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { [data-tip]:hover::after, [data-tip]:focus-visible::after { animation-duration: 1ms; } }
