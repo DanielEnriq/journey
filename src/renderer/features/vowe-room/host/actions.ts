@@ -103,7 +103,8 @@ export function createDeskActions(d: HostDeps): DeskAct {
       else void run(s.decisions.requestSignatures(roomId, id, r().members.filter((m) => maySign(m.role) && m.who !== me).map((m) => m.who)));
     },
     askFor: (id, who) => void run(s.decisions.requestSignatures(roomId, id, who.filter((x) => x !== me))).then((ok) => {
-      if (ok !== null) ui.setState({ toast: { text: `Asked ${who.filter((x) => x !== me).map(names.nameOf).join(', ')} to sign. It’s in their For you.` } });
+      const others = who.filter((x) => x !== me);
+      if (ok !== null) ui.setState({ toast: { text: others.length ? `Asked ${others.map(names.nameOf).join(', ')} to sign. It’s in their For you.` : 'It’s in review. Sign it when it’s ready.' } });
     }),
     takeEdit: (id, line, accept) => void run(s.decisions.takeSuggestion(roomId, id, line, accept)),
     dismissSuggested: (id) => void run(s.decisions.setSuggested(roomId, id, 'dismissed')),
@@ -129,7 +130,7 @@ export function createDeskActions(d: HostDeps): DeskAct {
     prepareWork: (id) => {
       const dec = r().decisions.find((x) => x.id === id);
       if (!dec) return;
-      void run(s.work.create(roomId, { title: dec.title, objective: '', decision: id })).then((x) => { if (x) nav.inspect({ kind: 'work', id: x.id, section: 'plan' }); });
+      void run(s.work.create(roomId, { title: dec.title, objective: dec.lines.find((l) => l.kind === 'decide')?.text ?? '', decision: id })).then((x) => { if (x) nav.inspect({ kind: 'work', id: x.id, section: 'plan' }); });
     },
     newWork: (title, objective) => void run(s.work.create(roomId, { title, objective })).then((x) => { if (x) nav.inspect({ kind: 'work', id: x.id, section: 'plan' }); }),
     plan: (w, op) => {

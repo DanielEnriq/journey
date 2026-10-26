@@ -146,6 +146,8 @@ function Review({ d, p, mine }: { d: Decision; p: DeskProps; mine?: Decision['ap
   const { rec, me, act } = p;
   const [rc, setRc] = useState<string | null>(null);
   const [pick, setPick] = useState(false);
+  /** Who you're asking to sign: every member who may sign, until you untick someone. */
+  const [skip, setSkip] = useState<string[]>([]);
   const work = rec.work.filter((w) => w.decision === d.id);
   return (
     <div class="nx-review">
@@ -170,15 +172,17 @@ function Review({ d, p, mine }: { d: Decision; p: DeskProps; mine?: Decision['ap
       {pick ? (
         <div class="nx-picker" role="dialog" aria-label="Ask for signatures">
           <span class="nx-rk2">Who should sign v{d.version}?<em>room members</em></span>
-          {rec.members.map((m) => <label key={m.who} class={'nx-pk' + (!mayWrite(m.role) ? ' off' : '')}><input type="checkbox" disabled={!mayWrite(m.role)} checked={mayWrite(m.role)} /><Who id={m.who} size={16} />{m.who === me ? 'You' : nameOf(m.who)}<small>{!mayWrite(m.role) ? 'viewer: can read and comment, can’t sign' : m.role}</small></label>)}
-          <span class="nx-actrow"><button type="button" class="nx-btn primary" onClick={() => { setPick(false); act.askFor(d.id, rec.members.filter((m) => mayWrite(m.role)).map((m) => m.who)); }}>Ask them to sign</button><button type="button" class="nx-btn" onClick={() => setPick(false)}>Cancel</button><button type="button" class="nx-textbtn" onClick={() => act.invite()}>Invite someone…</button></span>
+          {rec.members.map((m) => <label key={m.who} class={'nx-pk' + (!mayWrite(m.role) ? ' off' : '')}><input type="checkbox" disabled={!mayWrite(m.role) || m.who === me} checked={mayWrite(m.role) && m.who !== me && !skip.includes(m.who)}
+            onChange={(e) => setSkip(e.currentTarget.checked ? skip.filter((x) => x !== m.who) : [...skip, m.who])} /><Who id={m.who} size={16} />{m.who === me ? 'You' : nameOf(m.who)}<small>{!mayWrite(m.role) ? 'viewer: can read and comment, can’t sign' : m.who === me ? 'you sign from the decision itself' : m.role}</small></label>)}
+          <span class="nx-actrow"><button type="button" class="nx-btn primary" 
+            onClick={() => { setPick(false); act.askFor(d.id, rec.members.filter((m) => mayWrite(m.role) && m.who !== me && !skip.includes(m.who)).map((m) => m.who)); }}>{rec.members.some((m) => mayWrite(m.role) && m.who !== me && !skip.includes(m.who)) ? 'Ask them to sign' : 'Put it to review (only you sign)'}</button><button type="button" class="nx-btn" onClick={() => setPick(false)}>Cancel</button><button type="button" class="nx-textbtn" onClick={() => act.invite()}>Invite someone…</button></span>
         </div>
       ) : null}
       <div class="nx-actrow">
         {d.state === 'review' && mine && mine.signed !== d.version && !mine.changes && rc === null ? <><button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={() => act.sign(d.id)}>Sign v{d.version}</button><button type="button" class="nx-btn" onClick={() => setRc('')}>Request changes</button></> : null}
         {d.state === 'draft' && !pick ? <button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={() => setPick(true)}>Ask for signatures…</button> : null}
         {(d.state === 'review' && d.approvers.some((a) => a.changes)) || d.state === 'agreed' ? <button type="button" class="nx-btn" disabled={!mayWrite(p.role)} onClick={() => act.amend(d.id)}>Amend as v{d.version + 1}</button> : null}
-        {d.state === 'agreed' && !work.length ? <button type="button" class="nx-btn primary" onClick={() => act.prepareWork(d.id)}>{rec.vowe ? `Plan the work (${agentName()} drafts)` : 'Plan the work'}</button> : null}
+        {d.state === 'agreed' && !work.length ? <button type="button" class="nx-btn primary" onClick={() => act.prepareWork(d.id)}>Plan the work</button> : null}
       </div>
     </div>
   );

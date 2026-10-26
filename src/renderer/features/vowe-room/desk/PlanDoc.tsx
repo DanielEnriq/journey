@@ -350,7 +350,7 @@ function Execution({ w, p }: { w: Work; p: DeskProps }) {
             {opts.map((o) => (
               <button key={o.name} type="button" role="radio" aria-checked={w.doer?.name === o.name} disabled={!o.ok} class={'nx-doer2' + (w.doer?.name === o.name ? ' on' : '')} onClick={() => act.plan(w.id, { op: 'doer', doer: { kind: o.kind, name: o.name } })}
                 title={!o.ok ? `${o.name} isn’t connected to this room` : ''}>
-                <span class="nx-radio"></span><span><b>{o.name}</b><small>{o.ok ? o.sub : `${o.sub}. Connect it in Settings first.`}</small></span>
+                <span class="nx-radio"></span><span><b>{o.name}</b><small>{o.ok ? o.sub : o.sub || 'Not reachable from this room'}</small></span>
               </button>
             ))}
           </div>

@@ -466,7 +466,7 @@ function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
         <div class="nx-rsec">
           <span class="nx-rk2">Led to</span>
           {led.length ? led.map((d) => <button key={d.id} type="button" class="nx-rc" onClick={() => act.inspect({ kind: 'decision', id: d.id })}><span><b>{d.title}</b></span><em>Decision v{d.version} · {DEC_STATE[d.state].toLowerCase()}</em></button>)
-            : <><p class="nx-quiet">Nothing yet.</p><button type="button" class="nx-btn" disabled={!mayWrite(p.role)} onClick={() => act.draftFrom(t.id)}>{rec.vowe ? `Ask ${agentName()} to draft a decision` : 'Start a decision from this'}</button></>}
+            : <><p class="nx-quiet">Nothing yet.</p><button type="button" class="nx-btn" disabled={!mayWrite(p.role)} onClick={() => act.draftFrom(t.id)}>Start a decision from this</button></>}
         </div>
       </aside>
     </div>
@@ -690,7 +690,7 @@ function WorkTab(p: DeskProps) {
           <p>Work is an objective with a plan. A person or a connected coding agent does it, and its PRs stay together here.{noAgent ? ' No coding agent is connected to this room, so a person would do it.' : ''}</p>
           <button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>New work</button>
           {ready.length ? <span class="nx-empty2-k">Or start from a signed decision</span> : null}
-          {ready.map((d) => <div key={d.id} class="nx-empty2-row"><span><b>{d.title}</b> · v{d.version}</span><button type="button" class="nx-textbtn strong" onClick={() => act.prepareWork(d.id)}>{rec.vowe ? `Plan it (${agentName()} drafts)` : 'Plan it'}</button></div>)}
+          {ready.map((d) => <div key={d.id} class="nx-empty2-row"><span><b>{d.title}</b> · v{d.version}</span><button type="button" class="nx-textbtn strong" onClick={() => act.prepareWork(d.id)}>Plan it</button></div>)}
         </div>
       ) : null}
       {list.map((w) => <ObjectiveCard key={w.id} w={w} p={p} dim={!rel(w)} />)}
