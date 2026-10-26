@@ -417,7 +417,7 @@ function FsDecisions({ p, decisions, composing, setComposing }: { p: DeskProps; 
       <button key={d.id} type="button" role="listitem" class={'nx-frow' + (p.inspect?.id === d.id ? ' on' : '')} onClick={() => p.act.inspect({ kind: 'decision', id: d.id })} onPointerEnter={() => p.act.light(d.parts)} onPointerLeave={() => p.act.light(null)}>
         <span class={'nx-st2 ' + (needs ? 'needs' : d.state)}>{needs ? 'Waiting on your signature' : `${DEC_STATE[d.state]} · v${d.version}`}</span>
         <b>{d.title}</b>
-        <span class="nx-frow-s">{d.lines.filter((l) => l.kind === 'decide').map((l) => l.text).join(' · ').slice(0, 90)}</span>
+        <span class="nx-frow-s">{d.lines.filter((l) => l.kind === 'decide').map((l) => l.text).join(' · ')}</span>
       </button>
     );
   };

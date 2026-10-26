@@ -63,7 +63,7 @@ export interface VoweRoomProps {
   nav?: DeskNav;
   /** Things drawn over the canvas: Journey's captions, the agent's working state, a "start a call" strip. */
   overlays?: ComponentChildren;
-  pins?(place: (x: number, y: number) => { x: number; y: number }): ComponentChildren;
+  pins?(place: (x: number, y: number) => { x: number; y: number }, width: number, partRect: (component: string) => number[] | null): ComponentChildren;
   /** The prototype simulates window sizes; in the app this is the window. */
   size?: [number, number];
   /** Journey's light flag (RoomScreen passes the same to its .win). */

@@ -25,7 +25,7 @@ export interface SurfaceProps {
   onCopies?(n: number): void;
   onComment?(x: number, y: number, on: { component: string; name: string } | null): void;
   onMarks?(component: string): void;
-  anchored?(place: (x: number, y: number) => { x: number; y: number }): ComponentChildren;
+  anchored?(place: (x: number, y: number) => { x: number; y: number }, width: number, partRect: (component: string) => number[] | null): ComponentChildren;
   /** Room under the canvas kept clear for captions. */
   reserve?: number;
   /** A call is on: the view can follow the call or be just yours. */
@@ -34,13 +34,13 @@ export interface SurfaceProps {
 }
 
 export function Surface({ client, ui, marks, lit, onAsk, onScenario, onCopies, onComment, onMarks, anchored, reserve, inCall, children }: SurfaceProps) {
-  const { agentName } = useNames();
+  const { agentName, person } = useNames();
   const semantics = useSemantics();
   const { since } = useStore(ui);
   return (
     <CanvasSurface client={client} ui={ui} marks={marks} lit={lit} semantics={semantics} agentName={agentName()} since={since}
       onAsk={onAsk ? ({ components, names }) => onAsk({ components, names }) : undefined}
-      onScenario={onScenario} onCopies={onCopies} onComment={onComment} onMarks={onMarks} anchored={anchored} reserve={reserve} inCall={inCall}>
+      onScenario={onScenario} onCopies={onCopies} onComment={onComment} onMarks={onMarks} anchored={anchored} toneOf={(id) => { const t = person(id).tone; return t && t !== 'me' ? t : undefined; }} reserve={reserve} inCall={inCall}>
       {children}
     </CanvasSurface>
   );

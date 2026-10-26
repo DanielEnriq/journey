@@ -14,7 +14,7 @@ export interface LiveSurfaceProps {
   /** The comment tool: where you clicked on the canvas (stage units) and the part it landed on, if any. Absent: no comment tool. */
   onComment?(x: number, y: number, on: { component: string; name: string } | null): void;
   /** Drawn over the canvas but kept on it as you pan and zoom (comment pins); `place` turns stage units into surface pixels. */
-  anchored?(place: (x: number, y: number) => { x: number; y: number }): ComponentChildren;
+  anchored?(place: (x: number, y: number) => { x: number; y: number }, width: number, partRect: (component: string) => number[] | null): ComponentChildren;
   /** Asking Vowe about what you selected or circled (component ids, and how the canvas names them). Absent: no ask. */
   onAsk?(about: { selected: string[]; circled: string[]; names: string[] }): void;
   /** Drawn inside the surface, over the canvas: pins, the empty state, captions, the call bar. */

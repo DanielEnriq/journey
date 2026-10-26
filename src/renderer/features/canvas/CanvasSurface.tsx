@@ -92,7 +92,9 @@ export interface CanvasSurfaceProps {
   onCopies?(n: number): void;
   onComment?(x: number, y: number, on: { component: string; name: string } | null): void;
   onMarks?(component: string): void;
-  anchored?(place: (x: number, y: number) => { x: number; y: number }): ComponentChildren;
+  anchored?(place: (x: number, y: number) => { x: number; y: number }, width: number, partRect: (component: string) => number[] | null): ComponentChildren;
+  /** A person's colour in this room (peer, peer2, …), so their circles are drawn in it; without it, everyone else's are `peer`. */
+  toneOf?(personId: string): string | undefined;
   /** Room under the canvas kept clear for captions. */
   reserve?: number;
   /** A call is on: the view can follow the call or be just yours. */
@@ -126,7 +128,7 @@ const avatar = (by: Actor, me: Actor) => by.kind === 'agent' ? 'mav vowe' : by.i
 const presenceTool = (t: Tool) => t === 'pan' ? 'select' : t === 'erase' ? 'draw' : t;
 
 export function CanvasSurface(p: CanvasSurfaceProps) {
-  const { client, ui, marks = {}, lit = [], semantics: sem = NO_SEMANTICS, agentName = 'Vowe', since = false, onAsk, onScenario, onCopies, onComment, onMarks, anchored, reserve = 0, inCall = false, states = true, children } = p;
+  const { client, ui, marks = {}, lit = [], semantics: sem = NO_SEMANTICS, agentName = 'Vowe', since = false, onAsk, onScenario, onCopies, onComment, onMarks, anchored, toneOf, reserve = 0, inCall = false, states = true, children } = p;
   const s = useStore(client.store);
   const u = useStore(ui);
   const me = client.transport.me();
@@ -188,6 +190,8 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
   const frame = frameOf(size, vb, cam, reserve);
   const z = frame.z;
   const place = (x: number, y: number) => toScreen(size, cam, frame, x, y);
+  /** Where a part is drawn in this view (stage units), for things anchored to it; null when the view leaves it out. */
+  const partRect = (component: string) => scene?.nodes.find((n) => n.component === component && !n.key.includes('#'))?.rect ?? null;
 
   // Wheel needs a non-passive listener so ⌘-scroll zooms the canvas instead of the page.
   const live = useRef({ cam, frame, setCam });
@@ -380,6 +384,7 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
     const popOpen = on && single === h0.key && its.length > 0 && !u.whatIf && !isOpen;
     return {
       key: h0.key, ref: nodeRef(part), part, shown: on, rect, sel: sel1, peer, pm, flip, isOpen, notes: its, popOpen,
+      marked: !!(on && pm && (pm.threads > 0 || pm.prs?.length || pm.agent || pm.governed)),
       wrapCls: 'node nx-wrap' + (on ? '' : ' gone') + (glance && !glance.includes(h0.key) ? ' far' : '') + (isOpen || popOpen || (sel1 && u.whatIf) ? ' raised' : ''),
       cls: 'part nx-part kind-' + part.kind + ' smart-' + part.smart + (part.proposed ? ' proposed' : '') + (sel1 ? ' sel' : '') + (peer ? ' peer' : '')
         + (on && vlit.has(part.component) ? ' agent' : '') + (on && dlit.has(part.component) ? ' nx-lit' : '') + (pm?.since && since ? ' nx-changed' : '') + (pm?.diff ? ' nx-diffed' : ''),
@@ -467,15 +472,17 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
                 )}
                 {n.peer && !n.sel && <span class="tab peer">{n.peer.name}</span>}
                 {n.peer && n.sel && sel.length === 1 && <span class="tab me">You</span>}
-                {n.shown && n.pm && (n.pm.threads > 0 || n.pm.prs?.length || n.pm.agent || n.pm.governed) ? (
+                {n.marked && n.pm ? (
                   <span class="nx-marks" onPointerDown={(e) => e.stopPropagation()}>
+                    {n.notes.length > 0 && !n.pm.threads && <button class="notes-chip nx-chip" type="button" aria-label={`${n.notes.length} notes on ${n.part.name}`} onClick={() => select([n.ref])}><NoteIcon />{n.notes.length}</button>}
                     {n.pm.threads > 0 && <button class={'notes-chip nx-chip' + (n.pm.needs ? ' needs' : '')} type="button" aria-label={`${n.pm.threads} threads on ${n.part.name}`} onClick={() => onMarks?.(n.part.component)}><NoteIcon />{n.pm.threads}</button>}
                     {n.pm.governed && <button class="nx-chip dec" type="button" onClick={() => onMarks?.(n.part.component)} title="The decision that governs this part">{n.pm.governed}</button>}
                     {n.pm.agent && <button class={'nx-chip agent' + (n.pm.agent.needs ? ' needs' : '')} type="button" onClick={() => onMarks?.(n.part.component)}><i></i>{n.pm.agent.text}</button>}
                     {n.pm.prs?.map((pr) => <button key={pr.id} class={'nx-chip pr ' + pr.state} type="button" onClick={() => onMarks?.(n.part.component)}>{pr.id}</button>)}
                   </span>
                 ) : null}
-                {n.notes.length > 0 && !n.pm?.threads && (
+                {/* Notes alone get their own chip; next to other marks they join that row (above), so the two never overlap. */}
+                {n.notes.length > 0 && !n.marked && (
                   <span class="nx-marks nx-notes"><button class="notes-chip nx-chip" type="button" aria-label={`${n.notes.length} notes on ${n.part.name}`} onClick={() => select([n.ref])}><NoteIcon />{n.notes.length}</button></span>
                 )}
                 {n.popOpen && (
@@ -503,7 +510,7 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
 
           <svg class="ink" viewBox={`0 0 ${STAGE_W} 620`} aria-hidden="true">
             {pen.filter((a) => !erased.current.has(a.id)).map((a) => (
-              <path key={a.id} class={(a.kind === 'ink' ? 'stroke' : 'lasso' + (a.by.kind === 'agent' ? ' read' : a.by.id !== me.id ? ' peer' : '')) + (under?.has(a.id) ? ' nx-rub' : '')} d={a.d}></path>
+              <path key={a.id} class={(a.kind === 'ink' ? 'stroke' : 'lasso' + (a.by.kind === 'agent' ? ' read' : a.by.id !== me.id ? ' ' + (toneOf?.(a.by.id) ?? 'peer') : '')) + (under?.has(a.id) ? ' nx-rub' : '')} d={a.d}></path>
             ))}
             <path class="stroke" d={toD(stroke, false)}></path>
             <path class="lasso live" d={toD(lasso, false)}></path>
@@ -661,7 +668,7 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
       </div>
       <span style={srOnly} aria-live="polite">{s.pending ? 'Saving…' : ''}</span>
 
-      {anchored?.(place)}
+      {anchored?.(place, size.w, partRect)}
       {states && s.status === 'loading' && empty ? (
         <div class="fresh-empty nx-loading" role="status"><span class="orb"></span><b>Opening this room’s canvas…</b></div>
       ) : states && empty ? (
