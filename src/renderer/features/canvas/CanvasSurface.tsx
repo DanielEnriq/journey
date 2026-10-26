@@ -1,5 +1,6 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
 import { useEffect, useMemo, useRef, useState } from '../../vendor/preact-hooks.js';
+import { useShownRef } from '../call/shown.js';
 import {
   Arrow, ClearInk, Cursor, Note as NoteIcon, ToolCircle, ToolComment, ToolDraw, ToolPan, ToolSelect, ZoomIn, ZoomOut,
 } from '../../shared/components/icons.js';
@@ -341,7 +342,10 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
     id: v.id, name: v.name, title: v.question, on: v.id === view, cls: (v.id === view ? 'on' : '') + (v.status === 'proposed' ? ' proposed' : ''),
   }));
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  // A room kept for its call while you're elsewhere doesn't answer keys.
+  const onScreen = useShownRef();
   keyRef.current = (e: KeyboardEvent) => {
+    if (!onScreen.current) return;
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); void run('undo', {}); return; }

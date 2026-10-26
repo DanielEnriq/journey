@@ -11,6 +11,9 @@ import { AskVowe, AskVowePanel } from '../canvas/AskVowe.js';
 import { CanvasClient, ipcTransport } from '../canvas/client.js';
 import { LiveSurface } from '../canvas/LiveSurface.js';
 import type { CallSession } from '../call/session.js';
+import { callLink } from '../call/continuity.js';
+import type { CallPresence } from '../call/presence.js';
+import { RoomShown, usePublishCall, useShownRef } from '../call/shown.js';
 import { AccessLostScreen, AccessNotice } from '../membership/AccessNotice.js';
 import { PeopleSection, ShareControl, useAccess, useNow, useVoice } from '../membership/hooks.js';
 import { MembersPanel } from '../membership/MembersPanel.js';
@@ -58,7 +61,8 @@ export interface RoomScreenProps {
   onHome(): void;
   /** Joins the call: muted, unless you chose to talk (which is what asks for the microphone). */
   onJoin(opts?: { talk: boolean }): void;
-  onLeave(): void;
+  /** Ends your part in the call; the app decides what's on screen after. */
+  onLeave(): void | Promise<void>;
   /** Drawn inside the window, over everything: the New room sheet. */
   overlay?: ComponentChildren;
   /** Who's in the room and their invitations; absent in the demo. */
@@ -68,6 +72,8 @@ export interface RoomScreenProps {
   /** The Pass 3 room's services (decisions, plans, work, attention); absent in the demo. With them, a real
    *  room's call opens the Vowe room: the semantic canvas and the Desk (Discuss, Decide, Work). */
   vowe?: VoweServices;
+  /** Kept mounted for its call while you're elsewhere: drawn hidden and inert, deaf to the keyboard. */
+  hidden?: boolean;
 }
 
 /** Membership, as each state of the room draws it. */
@@ -140,8 +146,9 @@ function PreviewRoom(props: InnerProps) {
   const rooms = useRooms(sources.room);
   const [side, setSide] = useState(true);
   const summary = rooms.find((r) => r.id === roomId);
+  const shown = useShownRef();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (!typing(e) && e.key === '[') { setSide((v) => !v); e.preventDefault(); } };
+    const onKey = (e: KeyboardEvent) => { if (shown.current && !typing(e) && e.key === '[') { setSide((v) => !v); e.preventDefault(); } };
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   }, []);
@@ -184,8 +191,9 @@ function PreviewRoom(props: InnerProps) {
 function DemoCall(props: InnerProps & { canvas: RoomController }) {
   const { sources, canvas: ctrl, session, onOpenRoom, onNewRoom, onLeave, onJoin, light, roomId } = props;
   useEffect(() => { ctrl.resume(); return () => ctrl.suspend(); }, [ctrl]);
+  const shown = useShownRef();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => ctrl.key(e);
+    const onKey = (e: KeyboardEvent) => { if (shown.current) ctrl.key(e); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [ctrl]);
@@ -200,8 +208,24 @@ function DemoCall(props: InnerProps & { canvas: RoomController }) {
     togglePart: () => ctrl.setState({ partOpen: !s.partOpen }), pickChime: (c) => ctrl.setState({ chime: c, partOpen: false }),
     micCls: m.micCls, micLabel: m.micLabel, muted: s.muted, micDown: () => ctrl.micDown(), micUp: () => ctrl.micUp(),
     cc: s.cc, ccCls: m.ccCls, toggleCc: () => ctrl.toggleCc(),
-    leaving: cs.status === 'leaving', leave: onLeave,
+    leaving: cs.status === 'leaving', leave: () => { void onLeave(); },
   };
+  // The call, for every other screen while you look elsewhere (the demo's people are scripted).
+  const link = cs.roomId === roomId ? callLink(cs.status, null) : null;
+  usePublishCall(link ? {
+    roomId, roomName: summary?.name ?? 'Payment Reliability', link, muted: s.muted, vowe: true, agentName: 'Vowe',
+    people: [
+      sources.room.me(),
+      ...(ctrl.options.scenario === 'live' ? [{ name: 'John', initials: 'JM', tone: 'peer' as const }] : []),
+      ...(s.srikar === 'present' ? [{ name: 'Srikar', initials: 'SR', tone: 'p2' as const }] : []),
+    ],
+    speaking: m.ring.daniel ? 'me' : m.ring.john ? 'JM' : m.ring.srikar ? 'SR' : null,
+    act: {
+      mic: () => { ctrl.micDown(); ctrl.micUp(); },
+      leave: async () => { await onLeave(); },
+      rejoin: link === 'dropped' ? () => onJoin() : undefined,
+    },
+  } : null);
 
   return (
     <div class={`win ${light ? 'light ' : ''}${m.winClass} in-call`}>
@@ -288,9 +312,10 @@ function FreshCall(props: InnerProps) {
   // Opening People (from Share's Manage access) opens the column it lives in.
   useEffect(() => { if (ui.people) setDesk(true); }, [ui.people]);
   useEffect(() => { if (snap?.error === MICROPHONE_DENIED) micRefused = true; else if (snap?.micEnabled) micRefused = false; }, [snap?.error, snap?.micEnabled]);
+  const shown = useShownRef();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (typing(e)) return;
+      if (!shown.current || typing(e)) return;
       const tools: Record<string, FreshTool> = { v: 'select', p: 'draw', c: 'comment' };
       if (tools[e.key]) { setTool(tools[e.key]); e.preventDefault(); }
       else if (e.key === '[') { setSide((v) => !v); e.preventDefault(); }
@@ -401,7 +426,7 @@ function FreshCall(props: InnerProps) {
     micToggle: live ? toggleMic : undefined,
     cc, ccCls: 'cbtn' + (cc ? ' on' : ''), toggleCc: () => { setCc(!cc); sources.call.setCaptions(!cc); },
     voiceOff, agentOff, micOff, leaving: cs.status === 'leaving',
-    leave: () => { if (voweOn) void callVoice?.stop().catch(() => {}); onLeave(); },
+    leave: () => { if (voweOn) void callVoice?.stop().catch(() => {}); void onLeave(); },
     askByText: asker ? () => asker.open() : undefined,
   };
   // Who's speaking, by initials (how the band draws people).
@@ -412,6 +437,22 @@ function FreshCall(props: InnerProps) {
       if (u && p.isSpeaking) ring[u.initials] = 'speaking';
     }
   }
+  // The call, for every other screen while you look elsewhere: published from here, the room that owns it.
+  const link = cs.roomId === roomId ? callLink(cs.status, live ? snap!.status : null) : null;
+  const cantTalk = voiceOff ?? (live && !talks ? 'Viewers listen. Ask an owner to make you a member to talk.' : undefined);
+  const presence: CallPresence | null = link ? {
+    roomId, roomName: summary?.name ?? 'Room', link,
+    muted: micMuted || !!cantTalk, micOff: cantTalk,
+    vowe: callVoice ? voweOn : false, agentName: 'Vowe',
+    people: [me, ...others],
+    speaking: meSpeaking ? 'me' : Object.keys(ring).find((i) => i !== me.initials) ?? null,
+    act: {
+      mic: () => { if (cantTalk) return; if (live) toggleMic(); else { setMuted(!muted); sources.call.setMuted(!muted); } },
+      leave: async () => { if (voweOn) await callVoice?.stop().catch(() => {}); await onLeave(); },
+      rejoin: link === 'dropped' ? () => { if (cs.status === 'dropped' || !voice) onJoin(); else void voice.reconnect().catch(() => { /* the snapshot says why */ }); } : undefined,
+    },
+  } : null;
+  usePublishCall(presence);
   const callError = live && snap!.error && snap!.error !== dismissed ? snap!.error : null;
   const pins = view?.pins ?? [];
   const empty = !ink.length && !drafts.length && !pins.length;
@@ -627,7 +668,7 @@ export function RoomScreen(props: RoomScreenProps) {
 
   if (lost && membership) {
     return (
-      <div class="room-screen">
+      <div class="room-screen" hidden={props.hidden} inert={props.hidden}>
         <div class={`win ${light ? 'light ' : ''}outside`}>
           <Lights />
           <AccessLostScreen lost={lost} roomName={lost.roomName ?? 'this room'} onHome={() => { membership.dismissLost(roomId); props.onHome(); }} />
@@ -646,9 +687,12 @@ export function RoomScreen(props: RoomScreenProps) {
     people, setPeople,
   };
   const inner = { ...props, ui };
+  const hidden = !!props.hidden;
   return (
-    <div class="room-screen">
-      {!inCall ? <PreviewRoom {...inner} /> : canvas ? <DemoCall {...inner} canvas={canvas} /> : <FreshCall {...inner} />}
-    </div>
+    <RoomShown.Provider value={!hidden}>
+      <div class="room-screen" hidden={hidden} inert={hidden} aria-hidden={hidden || undefined}>
+        {!inCall ? <PreviewRoom {...inner} /> : canvas ? <DemoCall {...inner} canvas={canvas} /> : <FreshCall {...inner} />}
+      </div>
+    </RoomShown.Provider>
   );
 }
