@@ -282,7 +282,7 @@ function App() {
       <RoomScreen key={`${demo}:${id}`} sources={ws} record={demo ? undefined : realWorkspace.record} roomId={id} inCall={inCall} session={session}
         canvas={demo && id === 'payments' ? demoCanvas() : null} attachError={demo ? undefined : attachErrors.get(id)} light={light} overlay={overlay}
         onOpenRoom={openRoom} onNewRoom={() => setNewRoom(true)} onHome={home}
-        membership={demo ? undefined : realWorkspace.membership} voice={demo ? undefined : voice()}
+        membership={demo ? undefined : realWorkspace.membership} voice={demo ? undefined : voice()} vowe={demo ? undefined : realWorkspace.vowe}
         onJoin={async (o) => {
           if (!(await session.join(id))) return;
           go({ screen: 'room', id, call: true, demo });

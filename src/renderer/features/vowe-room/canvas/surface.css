@@ -1,0 +1,36 @@
+/* The one canvas engine's additions (features/canvas/CanvasSurface.tsx) on top of room.css and vowe-room.css:
+   the Concurrency instrument in the view head, frozen lease bars on a story view, unread interfaces, the
+   eraser's clear-all, and the loading state. Journey's tokens only; light and dark come from them. */
+@scope (.room-screen) {
+
+/* A lease bar on Failure flow or Concurrency is a moment, not a clock. */
+.nx-leasebar.nx-frozen{animation:none;width:62%}
+
+/* Concurrency: how many copies run, in the view's head. */
+.surface-head .nx-copies.nx-copies-head{position:static;display:inline-flex;align-items:center;gap:2px;height:28px;box-sizing:border-box;padding:0 4px 0 2px;border-radius:9px;background:var(--v-surface-raised);box-shadow:0 0 0 1px var(--v-line-2);font-size:11.5px;color:var(--v-fg-3)}
+.surface-head .nx-copies.nx-copies-head > span{padding:0 6px 0 8px}
+.surface-head .nx-copies.nx-copies-head > em{padding:0 6px;font-style:normal;color:var(--v-fg-3);white-space:nowrap}
+.nx-copies button:focus-visible{outline:2px solid var(--v-focus);outline-offset:1px}
+
+/* The selection menu is one row. The Desk's context list (ul.nx-ctx) shares the class and stacks it into a
+   column over the part, where a double-click's second click lands on "Point everyone here". */
+.ctx.nx-ctx{flex-direction:row;padding:3px}
+
+/* Anatomy from the canvas alone: what isn't read yet says so. */
+.nx-anat-src{margin:-4px 0 8px}
+.nx-pg.nx-unread{font-style:italic;color:var(--v-fg-3)}
+
+/* The eraser's "clear all of mine", under it on the rail. */
+.tools button.nx-clearall{height:22px;font-family:var(--v-font-mono);font-size:9.5px;color:var(--v-fg-3)}
+.tools button.nx-clearall:hover{color:var(--v-fault-fg)}
+
+/* Opening a room's canvas. */
+.fresh-empty.nx-loading .orb{animation:nx-breathe 1.6s ease-in-out infinite}
+@keyframes nx-breathe{0%,100%{opacity:.45}50%{opacity:1}}
+
+@media (prefers-reduced-motion: reduce) {
+  .fresh-empty.nx-loading .orb{animation:none}
+  .nx-leasebar{animation:none}
+}
+
+}

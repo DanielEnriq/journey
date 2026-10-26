@@ -19,7 +19,7 @@ dev harness ──memory store────────────────�
 | Where | What |
 |---|---|
 | `src/shared/canvas/model.ts` | The document: `Component`, `Relationship`, `ViewSpec`, `Annotation`, `Proposal`, `CanvasRef`, `Actor`. Schema `vowe.canvas/1`. |
-| `commands.ts` | The Command API: the 19 commands, their arguments, `parseCommand`, `fromToolCall`, `CommandResult`. |
+| `commands.ts` | The Command API: the 20 commands, their arguments, `parseCommand`, `fromToolCall`, `CommandResult`. |
 | `engine.ts` | `applyCommand(doc, cmd, actor, now)`: pure. It handles agent rules, proposals, per-actor undo and cascades. |
 | `views/` | `buildScene(doc, viewId)` / `buildScenes(doc)`: Architecture, Failure flow and Concurrency, laid out in the design's grammar. |
 | `store.ts` | `CanvasStore`, `execute()` (CAS with up to 5 re-applies, then `busy`), `memoryStore`. |
@@ -27,7 +27,7 @@ dev harness ──memory store────────────────�
 | `tools.ts` | `CANVAS_TOOLS`: JSON Schema tool definitions for the agent-allowed commands. |
 | `src/integrations/supabase/canvas.ts` | `createCanvasStore`, `createCanvasHub`, `canvasContext`. Electron-free. |
 | `src/main/canvas.ts` | The app's hub singleton (`canvas`), `loadRoomCanvas`, `executeAsPerson`, `sharePresence`. |
-| `src/renderer/features/canvas/` | `client.ts` (`CanvasClient`, `ipcTransport`, `memoryTransport`), `LiveSurface.tsx`, `SceneGlimpse.tsx`, `Harness.tsx`. |
+| `src/renderer/features/canvas/` | `client.ts` (`CanvasClient`, `ipcTransport`, `memoryTransport`); `CanvasSurface.tsx`, the one canvas engine (camera, tools, gestures, keys, presence, undo, proposals, receipts, instruments, anatomy) with `geometry.ts`, `story.ts`, `faces-model.ts` (pure, tested) and `faces.tsx` (the semantic faces); `semantics.ts` (the optional `CanvasSemantics` contract); `LiveSurface.tsx` (the engine with local UI state, for Journey's rooms and the harness); `SceneGlimpse.tsx`, `Harness.tsx`. The Pass 3 room's `vowe-room/canvas/Surface.tsx` is the same engine with the room's UI store, marks and semantics. |
 | `supabase/migrations/20261028000000_room_canvas.sql` | Tables and the only write path, `commit_canvas()`. |
 
 ## Command API
@@ -55,6 +55,7 @@ never thrown:
 | `propose_change` | `title, rationale?, changes[]` | Batches add/update/connect as one proposal. |
 | `accept_proposal` / `reject_proposal` | `proposal` | **People only.** Reject restores what was changed. |
 | `keep_view` / `remove_view` | `view` | Keep is **people only**. Vowe may only remove views it drew. Architecture can't be removed. |
+| `set_instances` | `view, instances` (2–4) | Concurrency only: changes how many copies of the focus run, on the view the room has (undoable, shared). Not offered to Vowe; Vowe may only change views it drew. |
 | `draw` | `view, kind: ink\|circle, d, refs?` | `d` is straight segments only (`M x y L x y … Z`). A circle carries the semantic refs it encloses. |
 | `remove_annotation` / `keep_note` | `annotation` | Keep is **people only**. Vowe may only remove its own notes. |
 | `undo` | `command?` | Undoes the actor's own latest (or the named) command. Refuses with `conflict` if something changed since or the undo would leave dangling refs; refuses with `forbidden` for someone else's change. |

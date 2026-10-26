@@ -34,18 +34,20 @@ export function useVoice(voice: CallService | null | undefined): CallSnapshot | 
 }
 
 /** Share, in the chrome band: the button and its popover. */
-export function ShareControl({ source, access, open, setOpen, onManage, onNote }: {
+export function ShareControl({ source, access, open, setOpen, onManage, onNote, label }: {
   source: MembershipSource;
   access: RoomAccess;
   open: boolean;
   setOpen(open: boolean): void;
   onManage(): void;
   onNote(text: string): void;
+  /** The button's word: Share outside the call, Invite in the Vowe room. */
+  label?: string;
 }) {
   const now = useNow();
   return (
     <div class="vm-share-anchor">
-      <ShareButton open={open} onClick={() => setOpen(!open)} />
+      <ShareButton open={open} label={label} onClick={() => setOpen(!open)} />
       {open && <ShareDialog access={access} source={source} now={now} onNote={onNote} onClose={() => setOpen(false)} onManage={() => { setOpen(false); onManage(); }} />}
     </div>
   );

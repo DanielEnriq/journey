@@ -1,6 +1,7 @@
 import { getCloud, getCloudUserId, isCloudConfigured } from './index.js';
 import { createInvitationService } from './invitations.js';
 import { createRoomRecordService } from './record.js';
+import { createVoweRecordService } from './vowe-record.js';
 import { createRoomService, RoomError, toRoomError } from './rooms.js';
 import type { Enums, Tables } from './types.js';
 
@@ -88,3 +89,6 @@ export const roomRecord = createRoomRecordService(roomCloud);
 
 /** Invitations into rooms (./invitations.ts), as the signed-in user. */
 export const invitations = createInvitationService(roomCloud);
+
+/** The Vowe room's record (./vowe-record.ts): decisions as documents, plans and their versions, as the signed-in user. */
+export const voweRecord = createVoweRecordService(roomCloud);
