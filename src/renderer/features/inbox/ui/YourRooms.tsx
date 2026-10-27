@@ -7,6 +7,7 @@ import { callPresence } from '../../call/presence.js';
 import type { RoomSummary } from '../../room/types.js';
 import { STATUS_WORDS } from '../../work/status.js';
 import type { WorkItem } from '../../../ui/pass2/types.js';
+import { Icon } from '../../../ui/icons.js';
 import { ago } from './time.js';
 
 // Home's reading page with nothing selected: your rooms, the ongoing spaces the Inbox's items come from.
@@ -45,20 +46,6 @@ function useScenes(ids: string[], load: (id: string) => Promise<Scene | null>) {
   return scenes;
 }
 
-/** In place of Needs you when nothing needs you: which room has a call on, and how the others stand. */
-export function RoomsQuiet({ rooms, now }: { rooms: RoomSummary[]; now: string }) {
-  const live = rooms.find((r) => r.inCall.length > 0);
-  const recent = rooms.filter((r) => r !== live && !(r.activityAt && Date.parse(now) - Date.parse(r.activityAt) > QUIET))
-    .sort((a, b) => ((a.activityAt ?? '') < (b.activityAt ?? '') ? 1 : -1)).slice(0, 2);
-  const state = (r: RoomSummary) => r.activity.replace(/\.$/, '').replace(/^(You|Nothing|No|A|An|The)\b/, (w) => w.toLowerCase());
-  return (
-    <p class="vi-quietline">
-      {live ? `${live.name} has a call on. ` : null}
-      {recent.length ? `${recent.map((r) => `${r.name}: ${state(r)}`).join('. ')}.` : live ? null : 'Your rooms are quiet.'}
-    </p>
-  );
-}
-
 export function YourRooms(p: YourRoomsProps) {
   const call = useStore(callPresence).call;
   const quiet = (r: RoomSummary) => !!r.activityAt && Date.parse(p.now) - Date.parse(r.activityAt) > QUIET;
@@ -69,16 +56,10 @@ export function YourRooms(p: YourRoomsProps) {
   const rest = byRecent.filter((r) => r !== lead);
   const ordered = [...rest.filter((r) => !quiet(r)), ...rest.filter(quiet)];
   const scenes = useScenes(byRecent.map((r) => r.id), p.scene);
-  const quietN = p.rooms.filter(quiet).length;
   const parts = (id: string) => [...new Set((scenes[id]?.nodes ?? []).map((n) => n.name))].slice(0, 6);
 
   if (!lead) {
-    return (
-      <div class="vi-rooms">
-        <h2>Your rooms</h2>
-        <p class="vi-rooms-sub">None yet. A room keeps a canvas, its conversations, decisions and work: start one from the sidebar’s +.</p>
-      </div>
-    );
+    return null;
   }
   const mine = call?.roomId === lead.id;
   const others = lead.inCall.filter((x) => x.tone !== 'me').map((x) => x.name);
@@ -86,16 +67,15 @@ export function YourRooms(p: YourRoomsProps) {
   return (
     <div class="vi-rooms">
       <h2>Your rooms</h2>
-      <p class="vi-rooms-sub">{p.rooms.length - quietN} ongoing{quietN ? ` · ${quietN} quiet` : ''} · each keeps its canvas, conversations, decisions and work</p>
       <div class="vi-lead">
-        {leadScene ? <SceneGlimpse scene={leadScene} height={300} /> : <div class="vi-lead-blank">{leadScene === null ? 'The canvas fills in as the room talks.' : ''}</div>}
+        {leadScene ? <SceneGlimpse scene={leadScene} height={300} /> : <div class="vi-lead-blank" />}
         <div class="vi-lead-cap">
           {lead.inCall.length ? <span class="vi-live" aria-hidden="true"></span> : null}
           <div class="vi-lead-txt">
             <b>{lead.name}</b>
             <span>{lead.inCall.length
               ? `${mine ? 'You’re in this call' : 'A call is on'}${others.length ? ` with ${others.join(', ')}` : ''}${leadScene ? ` · on ${leadScene.name}` : ''}`
-              : lead.activity}{p.missing?.has(lead.id) ? <i class="vi-miss" title={`${lead.repo} isn’t cloned on this machine`}> · repository not on this machine</i> : null}</span>
+              : lead.activity}{p.missing?.has(lead.id) ? <Missing repo={lead.repo} /> : null}</span>
           </div>
           {lead.inCall.length && !mine
             ? <button type="button" class="v-btn v-btn-ink v-btn-sm" onClick={() => p.onJoin(lead.id)}>Join the call</button>
@@ -110,7 +90,7 @@ export function YourRooms(p: YourRoomsProps) {
             <button key={r.id} type="button" class="vi-roomrow" onClick={() => p.onRoom(r.id)}>
               <div>
                 <div class="vi-roomrow-nm">{r.name}</div>
-                <div class="vi-roomrow-st">{n ? <b>{n} need{n > 1 ? '' : 's'} you · </b> : null}{r.activity}{p.missing?.has(r.id) ? <i class="vi-miss" title={`${r.repo} isn’t cloned on this machine`}> · repository not on this machine</i> : null}</div>
+                <div class="vi-roomrow-st">{n ? <b>{n} need{n > 1 ? '' : 's'} you · </b> : null}{r.activity}{p.missing?.has(r.id) ? <Missing repo={r.repo} /> : null}</div>
                 {ps.length ? <div class="vi-roomrow-parts">{ps.join(' · ')}</div> : null}
               </div>
               {r.activityAt ? <span class="vi-roomrow-ts">{ago(r.activityAt, p.now)}</span> : null}
@@ -129,10 +109,11 @@ const WORK_TONE = { active: 'is-live', attention: 'is-signal', completed: '', un
 function OngoingWork({ items, now }: { items: WorkItem[]; now: string }) {
   const at = (w: WorkItem) => w.lastActivityAt ?? '';
   const rows = [...items].sort((a, b) => (at(a) < at(b) ? 1 : -1)).slice(0, 5);
+  if (!rows.length) return null;
   return (
     <section class="vi-work" aria-label="Ongoing work on this machine">
-      <div class="vi-work-h"><span>Ongoing work</span><em>on this machine</em></div>
-      {rows.length ? rows.map((w) => (
+      <div class="vi-work-h">Ongoing work</div>
+      {rows.map((w) => (
         <div key={w.id} class="vi-work-row">
           <span class={`vi-work-dot ${WORK_TONE[w.status]}`} aria-hidden="true"></span>
           <div class="vi-work-main">
@@ -141,7 +122,13 @@ function OngoingWork({ items, now }: { items: WorkItem[]; now: string }) {
           </div>
           {w.lastActivityAt ? <span class="vi-roomrow-ts">{ago(w.lastActivityAt, now)}</span> : null}
         </div>
-      )) : <p class="vi-work-none">No Claude Code sessions in your repositories yet. Sessions you run in a room’s repository show here.</p>}
+      ))}
     </section>
   );
+}
+
+/** The room's repository isn't cloned here: a warning mark, named on hover. */
+function Missing({ repo }: { repo?: string | null }) {
+  const t = `${repo ?? 'The repository'} isn’t cloned on this machine`;
+  return <span class="vi-miss" title={t} aria-label={t}><Icon name="warn" size={14} /></span>;
 }

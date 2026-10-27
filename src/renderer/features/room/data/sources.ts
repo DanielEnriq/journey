@@ -24,6 +24,8 @@ export interface RoomEvent {
   who: PersonRef | null;
   /** `needs`: a person has to act; `pass`/`fail`: a verification outcome. Everything else is plain. */
   tone?: 'needs' | 'pass' | 'fail';
+  /** Someone joined or left a call, or a call ended: kept in the room's history, never its one-line summary. */
+  presence?: true;
 }
 
 /** What the room preview shows: enough to decide whether to join, never the canvas itself. */

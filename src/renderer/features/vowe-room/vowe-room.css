@@ -213,7 +213,7 @@
 .nx-flash{animation:nx-flash 600ms var(--v-ease) 1}
 .rp-tg.nx-dim{opacity:.5;transition:opacity 200ms ease}
 
-.nx-akind{font-family:var(--v-font-mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--v-fg-3)}
+.nx-akind{font-size:11.5px;font-weight:400;color:var(--v-fg-3)}
 .rp-tg-head{cursor:pointer}
 
 .nx-inl{padding:0;border:0;background:transparent;font:inherit;color:var(--v-fg-2);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
@@ -453,7 +453,7 @@
 .nx-dfilter button.on{background:var(--v-surface-press);color:var(--v-fg)}
 .nx-dfilter button em{font-style:normal;margin-left:5px;color:var(--v-fg-3)}
 .nx-dfilter span{font-size:11px;color:var(--v-fg-3);margin-left:4px}
-.nx-waits{margin-left:6px;font-family:var(--v-font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--v-signal-fg)}
+.nx-waits{margin-left:4px;font-size:11.5px;font-weight:500;color:var(--v-signal-fg)}
 
 /* Decide review */
 
@@ -860,7 +860,7 @@ body.nx-resizing{cursor:col-resize;user-select:none}
 .nx-fy-h{display:flex;align-items:baseline;justify-content:space-between;font-size:11.5px;font-weight:600;color:var(--v-fg-2);margin-bottom:4px}
 .nx-fy-h .nx-textbtn{font-weight:400;font-size:11.5px}
 .nx-fy{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 0;border-top:1px solid var(--v-line)}
-.nx-fy-k{grid-column:1/-1;font-family:var(--v-font-mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--v-fg-3)}
+.nx-fy-k{grid-column:1/-1;font-size:11.5px;font-weight:600;color:var(--v-fg-3)}
 .nx-fy.respond .nx-fy-k,.nx-fy.approve .nx-fy-k{color:var(--v-signal-fg)}
 .nx-fy-t{grid-column:1;font-size:12.5px;line-height:1.4;color:var(--v-fg)}
 .nx-fy-w{color:var(--v-fg-3)}
@@ -955,9 +955,6 @@ body.nx-resizing .room-screen .win{transition:none}
 .room-screen .win.nx-fws.nx-small .nx-ins-bar{right:calc(178px + 34%)}
 
 /* Back / forward, after the rooms and new-room controls */
-.room-screen .nx-navbtns{position:absolute;z-index:34;top:7px;left:158px;display:flex;gap:2px}
-.room-screen .nx-navbtns .panel-toggle:disabled{opacity:.35;cursor:default}
-.room-screen .win.side-open .nx-navbtns{left:158px}
 .room-screen .win.nx-fws .nx-ins-bar{left:226px}
 .room-screen .nx-crumbsep{font-style:normal;color:var(--v-fg-4);margin:0 -2px}
 
@@ -1075,3 +1072,31 @@ body.nx-resizing .room-screen .win{transition:none}
 .nx-addline-f input:focus{border-bottom-color:var(--v-fg-3)}
 .nx-widens { margin: 0 0 8px; padding: 8px 10px; border-left: 2px solid var(--v-signal-line); background: var(--v-proposed-wash); color: var(--v-fg); font-size: 12.5px; line-height: 1.45; border-radius: 4px; }
 .nx-widens b { color: var(--v-signal-fg); font-weight: 600; }
+
+/* Discuss as a grouped list, the way macOS lists things: a heading whose chevron folds the group, then one rounded
+   box per part with its conversations as rows split by hairlines. The selected row is filled (slate while the list
+   has focus, grey once focus moves on), and the hairlines either side of it step aside. */
+.nx-dlist{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.nx-dl-head{display:flex;align-items:center;gap:6px;width:100%;min-width:0;height:24px;margin-bottom:4px;padding:0 4px 0 0;border:0;border-radius:6px;background:transparent;font:600 12px/1 var(--v-font-ui);color:var(--v-fg-2);text-align:left;cursor:default}
+.nx-dl-head:focus-visible{outline:0;box-shadow:var(--v-focus-ring)}
+.nx-dl-chev{display:inline-flex;flex:none;color:var(--v-fg-3);transition:transform 180ms var(--v-ease)}
+.nx-dl-head[aria-expanded="true"] .nx-dl-chev{transform:rotate(90deg)}
+.nx-dl-head .nx-ag{flex:none;color:var(--v-fg-3)}
+.nx-dl-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nx-dl-n{margin-left:auto;padding-left:8px;font-weight:400;color:var(--v-fg-3)}
+.nx-dl.nx-dim .nx-dl-head{opacity:.6}
+.nx-dl-box{display:flex;flex-direction:column;padding:4px;border-radius:10px;background:var(--studio-card);box-shadow:inset 0 0 0 1px var(--studio-card-edge)}
+.nx-dl-row{position:relative;display:flex;flex-direction:column}
+.nx-dl-row + .nx-dl-row::before{content:"";position:absolute;top:0;left:10px;right:10px;height:1px;background:var(--hairline)}
+.nx-dl-row.is-sel::before,.nx-dl-row.is-sel + .nx-dl-row::before{opacity:0}
+.nx-dl-main{display:flex;flex-direction:column;gap:6px;width:100%;padding:9px 10px;border:0;border-radius:7px;background:transparent;font:inherit;color:inherit;text-align:left;cursor:default}
+.nx-dl-main:focus{outline:0}
+.nx-dl-row.is-sel > .nx-dl-main{background:var(--v-surface-selected)}
+.nx-dl-row.is-sel > .nx-dl-main:focus{background:var(--v-selection)}
+.nx-dl-main .rp-cm-time{margin-left:auto;flex:none}
+.nx-dl-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--v-fg-3)}
+.nx-dl-meta{display:flex;align-items:center;gap:10px;min-height:16px}
+.nx-dl-meta .rp-pres,.nx-dl-meta .nx-offer-tag{margin-left:auto}
+.nx-dl-row > .rp-cm-thread{margin:0 10px 8px}
+.nx-dl-menu{position:fixed;z-index:60}
+.nx-dl-menu .v-menu-item:disabled{opacity:.45;pointer-events:none}

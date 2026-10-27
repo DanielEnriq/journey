@@ -13,8 +13,7 @@ import { Icon } from '../../icons.js';
 
 import { initialsOf } from '../common.js';
 import { ERROR_COPY, joinNames, ROLE_HINT, ROLE_LABEL, type LandingState } from '../../../features/membership/model.js';
-import type { IncomingInvitation, InviteContext, InviteKey } from '../../../../shared/api.js';
-import { InvitationList, JoinByLink } from './JoinByLink.js';
+import type { InviteContext } from '../../../../shared/api.js';
 
 export interface InviteGateProps {
   state: LandingState;
@@ -106,27 +105,6 @@ function ErrorBody({ state, onRetry, onHome, onSwitchAccount }: InviteGateProps 
         {state.error === 'network' ? <Button onClick={onRetry}>Try again</Button> : null}
       </div>
     </>
-  );
-}
-
-/** The Invitations page: what's waiting for your address, and the link field (not in the demo, which has no `onOpen`). */
-export function InvitationsIndex({ invitations, onOpen, now }: { invitations: IncomingInvitation[] | null; onOpen?: (key: InviteKey) => void; now?: number }) {
-  return (
-    <div class="vh-page vh-enter">
-      <header class="vh-index-head"><div><div class="vh-eyebrow">Invitations</div><h1>Invitations</h1></div></header>
-      <div class="vh-inv-grid">
-        <section>
-          <div class="vh-sec-h"><span class="v-label">For you</span></div>
-          {invitations === null ? <div class="vh-invite-row"><Spinner />Looking for invitations…</div>
-            : invitations.length && onOpen ? <InvitationList invitations={invitations} onOpen={onOpen} now={now} />
-            : <p class="vh-empty">No invitations waiting. Email invitations sent to the address you sign in with show up here. Someone who shared a link can send it to you directly.</p>}
-        </section>
-        <section>
-          <div class="vh-sec-h"><span class="v-label">Have a link?</span></div>
-          {onOpen ? <JoinByLink onOpen={onOpen} /> : <p class="vh-empty">Invite links open in your own rooms, not in the demo.</p>}
-        </section>
-      </div>
-    </div>
   );
 }
 

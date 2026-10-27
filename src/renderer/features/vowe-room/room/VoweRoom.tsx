@@ -1,6 +1,6 @@
 import { h, Fragment, useEffect, useState, useStore, Lights, Chrome, Who, CallBar, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary, type Store } from '../journey.js';
 import { AccountFoot } from '../../../shared/components/Account.js';
-import { SIDEBAR_W, shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui/pass2/shell/prefs.js';
+import { shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui/pass2/shell/prefs.js';
 import { ShellSidebar } from '../../../ui/pass2/shell/Sidebar.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
@@ -113,7 +113,7 @@ function useWindowSize(): [number, number] {
 
 export function VoweRoom(p: VoweRoomProps) {
   const u = useStore(p.ui);
-  const side = useStore(shellPrefs).sidebar;
+  const { sidebar: side, width: sideW } = useStore(shellPrefs);
   useSidebarKey();
   const rec = useStore(p.record);
   const s = useStore(p.client.store);
@@ -129,7 +129,7 @@ export function VoweRoom(p: VoweRoomProps) {
   // Sizes: the compact column, and the widened Desk, which never leaves the canvas less than 440px.
   // Below 1180px the widened Desk becomes a sheet over the canvas.
   const [W, H] = p.size ?? win;
-  const left = side ? SIDEBAR_W : 0;
+  const left = side ? sideW : 0;
   const compact = W < 1200 ? 320 : 352;
   const sheet = W < 1180;
   const maxW = Math.max(compact, W - left - 440);
@@ -165,25 +165,15 @@ export function VoweRoom(p: VoweRoomProps) {
         <div style={style} class={cls}>
           <Lights />
           {p.windowOverlay}
-          {p.nav ? (
-            <div class="nx-navbtns" role="group" aria-label="History">
-              <button type="button" class="panel-toggle" disabled={!p.nav.backLabel} aria-label="Back" title={p.nav.backLabel ? `Back to ${p.nav.backLabel} · ⌘[` : 'Back'} onClick={p.nav.back}>
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>
-              </button>
-              <button type="button" class="panel-toggle" disabled={!p.nav.fwdLabel} aria-label="Forward" title={p.nav.fwdLabel ? `Forward to ${p.nav.fwdLabel} · ⌘]` : 'Forward'} onClick={p.nav.fwd}>
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" /></svg>
-              </button>
-            </div>
-          ) : null}
           <Chrome side={side} sideName="sidebar" desk={u.deskOpen} deskUnseen={!u.deskOpen && !!top} toggleSide={toggleSidebar} toggleDesk={() => p.ui.setState(u.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' })}
-            onNewRoom={() => p.onNewRoom(null)} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
+            nav={p.nav} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
           <aside class="sidebar vh-sb-host" aria-hidden={!side} inert={!side}>
             <ShellSidebar place={null} rooms={rooms} current={p.room.id} onRoom={p.onOpenRoom} onNew={(repo) => p.onNewRoom(repo)} foot={<AccountFoot />} />
           </aside>
           <main class="room">
             <div class="room-identity">
               <h1>{p.room.name}</h1>
-              {p.room.repo ? <span class="q">{p.room.repo}</span> : null}
+              {p.room.repo ? <span class="meta">{p.room.repo}</span> : null}
               <div class="presence"><Who people={p.people} vowe={!!p.call && rec.vowe && u.vowe !== 'off'} ring={p.speaking ? { [p.speaking]: 'speaking' } : {}} /></div>
             </div>
             <Surface client={p.client} ui={p.ui} marks={p.marks} lit={p.lit} onAsk={rec.vowe ? p.onAsk : undefined} onScenario={p.onScenario} onCopies={p.onCopies}

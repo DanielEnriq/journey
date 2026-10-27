@@ -58,8 +58,12 @@
   --oxide-300: #ee8790; /* text on graphite (7.1:1) */
 
   /* -------------------------------------------------------------- type */
-  --v-font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  /* Two families: the system's own face for everything, Instrument Serif for what people wrote (a greeting, a goal,
+     a decision), and mono only for code. */
+  --v-font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   --v-font-serif: 'Instrument Serif', 'New York', 'Iowan Old Style', Georgia, serif;
+  /* The app's chrome (sidebar, account, buttons, menus, tips): the same face, named for where it's used. */
+  --v-font-ui: var(--v-font-sans);
   --v-font-mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, Menlo, monospace;
 
   /* ------------------------------------------------------ shape & motion */

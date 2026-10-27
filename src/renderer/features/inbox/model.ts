@@ -98,6 +98,9 @@ export interface InboxItem {
   progress?: { done: number; of: number };
 }
 
+/** A `seen` count meaning you marked the item unread. */
+export const UNREAD = -1;
+
 /** What you did to items: kept per person (attention_done in Journey, plus snoozes and follows). */
 export interface InboxMarks {
   /** Opened or marked done, with the event count you'd seen. */

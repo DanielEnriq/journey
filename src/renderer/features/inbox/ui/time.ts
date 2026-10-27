@@ -20,14 +20,7 @@ export function ago(iso: string, now: string): string {
   return day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-/** "waiting 41m", or "since Yesterday" once it's a day rather than a duration. */
-export function waiting(iso: string, now: string): string {
-  const a = ago(iso, now);
-  return /^\d/.test(a) ? `waiting ${a}` : a === 'now' ? 'just now' : `since ${a}`;
-}
-
-/** "Monday, October 26" and "Morning" / "Afternoon" / "Evening", for the Inbox's head. */
-export const dayLine = (iso: string) => new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+/** "Morning" / "Afternoon" / "Evening", for the greeting. */
 export const partOfDay = (iso: string) => { const h = new Date(iso).getHours(); return h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening'; };
 
 /** Tomorrow at 9:00 in local time, for "Until tomorrow, 9:00". */

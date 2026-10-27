@@ -1,5 +1,5 @@
 import { Store } from '../../shared/store.js';
-import type { InboxMarks } from './model.js';
+import { UNREAD, type InboxMarks } from './model.js';
 
 // What you did to Inbox items, per person: seen counts, snoozes, follows, muted rooms, declined invitations,
 // and when you were last active (for "Since Friday"). Kept on this machine first so every mark is instant,
@@ -45,7 +45,7 @@ export function parseMarks(raw: string | null, now: string): LocalMarks {
   if (v.v !== MARKS_VERSION) return { ...EMPTY_MARKS };
   const t = Date.parse(now);
   const seen: Record<string, number> = {};
-  for (const [k, n] of Object.entries(obj(v.seen)).slice(-MAX_SEEN)) if (typeof n === 'number' && n >= 0) seen[k] = n;
+  for (const [k, n] of Object.entries(obj(v.seen)).slice(-MAX_SEEN)) if (typeof n === 'number' && (n >= 0 || n === UNREAD)) seen[k] = n;
   const done: Record<string, string> = {};
   for (const [k, at] of Object.entries(obj(v.done))) if (typeof at === 'string' && t - Date.parse(at) < 30 * DAY) done[k] = at;
   const snoozed: LocalMarks['snoozed'] = {};
@@ -137,6 +137,8 @@ export class MarksStore {
   }
 
   seen(id: string, events: number) { if (this.marks.seen[id] !== events) { const { [id]: _, ...rest } = this.marks.seen; this.set({ seen: { ...rest, [id]: events } }); } }
+  /** Marked unread: -1 in place of the events seen, so it reads as new until you look again. */
+  unseen(id: string) { if (this.marks.seen[id] !== UNREAD) this.set({ seen: { ...this.marks.seen, [id]: UNREAD } }); }
   done(key: string) { this.set({ done: { ...this.marks.done, [key]: this.now() } }); }
   undone(key: string) { const { [key]: _, ...rest } = this.marks.done; this.set({ done: rest }); }
   snooze(id: string, until: string, label: string) { this.set({ snoozed: { ...this.marks.snoozed, [id]: { until, label } } }); }

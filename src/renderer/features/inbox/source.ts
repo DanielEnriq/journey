@@ -45,6 +45,8 @@ export interface InboxSource {
   /* Your marks: persisted per person, survive relaunch. */
   /** Selecting or opening an item clears its unseen events. */
   seen(item: InboxItem): void;
+  /** Marks it unread again, as if you hadn't looked. */
+  unread(item: InboxItem): void;
   /** Following and Activity only (Needs you leaves when discharged). Returns an undo. */
   done(item: InboxItem): () => void;
   snooze(item: InboxItem, until: string, label: string): void;

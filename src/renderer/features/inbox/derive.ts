@@ -2,7 +2,7 @@ import { AGENT, type Decision, type RecordEvent, type RoomRole, type Thread, typ
 import { approvedOf, openChanges } from '../vowe-room/state/plan.js';
 import { maySign, mayWrite } from '../vowe-room/state/permissions.js';
 import type { PersonId } from '../vowe-room/journey.js';
-import type { Anchor, InboxEvent, InboxItem, InboxMarks, InboxView, Obligation, Resolved, SubjectKind } from './model.js';
+import { UNREAD, type Anchor, type InboxEvent, type InboxItem, type InboxMarks, type InboxView, type Obligation, type Resolved, type SubjectKind } from './model.js';
 
 // Builds the personal Inbox from Journey's real room records. Every rule is structural — who asked whom, who
 // signed, who owns, who authorized, who took part — so every item can say exactly why it is yours. Nothing is
@@ -480,7 +480,9 @@ export function derive(x: DeriveInput): InboxView {
   const snoozed: InboxItem[] = [];
   for (const it of items) {
     const seen = x.marks.seen[it.id];
-    const unseen = it.tier === 'needs' ? 0 : seen === undefined ? it.unseen : Math.max(0, it.events.length - seen);
+    // Needs you is unread until you've looked at it once; the rest count the events since you last looked.
+    const unseen = seen === UNREAD ? Math.max(1, it.tier === 'needs' ? 1 : it.unseen)
+      : it.tier === 'needs' ? (seen === undefined ? 1 : 0) : seen === undefined ? it.unseen : Math.max(0, it.events.length - seen);
     const item = { ...it, unseen };
     const sn = x.marks.snoozed[it.id];
     if (sn && sn.until > x.now) { snoozed.push(item); continue; }

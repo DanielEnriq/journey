@@ -5,18 +5,19 @@ import { useActiveInbox } from '../../../features/inbox/ui/hooks.js';
 import { callPresence } from '../../../features/call/presence.js';
 import type { RoomSummary } from '../../../features/room/types.js';
 import { Icon, type IconName } from '../../icons.js';
+import { setSidebarWidth, shellPrefs, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_W } from './prefs.js';
 import { countByRoom, groupRooms, openByDefault, since, sidebarRooms, type SidebarGroup, type SidebarRoom } from './sidebar-model.js';
 
-// The one sidebar, the same on Home and in every room: Journey's four places (Home, Rooms, Projects,
-// Invitations), then your repositories, each a folder you open to see its rooms. It is either shown or gone
+// The one sidebar, the same on Home and in every room: Journey's places (the Inbox, which is Home, and
+// New Space), then your spaces (repositories), each a folder you open to see its rooms. It is either shown or gone
 // ("[" or the sidebar button hide it entirely; shell/prefs.ts keeps the choice).
 //   repository row   a folder, open or closed. On hover or keyboard focus the folder becomes the chevron that
 //                    says what a click does (right: open, down: close), and a + starts a room in it.
 //   room row         a dot (sage: a call is on; signal: something needs you; quiet grey otherwise), the
 //                    name, and how long since it moved. A click opens the room.
-// Only Home carries a number, and only for what needs you; a waiting invitation is a dot (it's counted there).
+// Only the Inbox carries a number, and only for what needs you (a waiting invitation among it).
 
-export type SidebarPlace = 'home' | 'rooms' | 'projects' | 'invitations';
+export type SidebarPlace = 'home';
 
 export interface SidebarProps {
   /** The page on screen; null in a room. */
@@ -24,10 +25,8 @@ export interface SidebarProps {
   rooms: SidebarRoom[];
   /** The room on screen. */
   current: string | null;
-  /** Home's number: what needs you. */
+  /** The Inbox's number: what needs you. */
   needs: number;
-  /** Invitations waiting (shown as a dot). */
-  invitations: number;
   now: string;
   onPlace(p: SidebarPlace): void;
   onRoom(id: string): void;
@@ -41,10 +40,7 @@ export interface SidebarProps {
 const opened = new Map<string, boolean>();
 
 const PLACES: { key: SidebarPlace; label: string; icon: IconName; tip?: string }[] = [
-  { key: 'home', label: 'Home', icon: 'room', tip: 'Home · ⌘1' },
-  { key: 'rooms', label: 'Rooms', icon: 'people' },
-  { key: 'projects', label: 'Projects', icon: 'project' },
-  { key: 'invitations', label: 'Invitations', icon: 'mail' },
+  { key: 'home', label: 'Inbox', icon: 'mail', tip: 'Inbox · ⌘1' },
 ];
 
 const roomLabel = (r: SidebarRoom, now: string) =>
@@ -64,16 +60,16 @@ export function Sidebar(p: SidebarProps) {
             <span class="vh-sb-glyph"><Icon name={x.icon} size={16} /></span>
             <span class="vh-sb-name">{x.label}</span>
             {x.key === 'home' && p.needs ? <span class="vh-sb-count" aria-label={`${p.needs} need${p.needs > 1 ? '' : 's'} you`}>{p.needs}</span> : null}
-            {x.key === 'invitations' && p.invitations ? <span class="vh-sb-state" aria-label={`${p.invitations} waiting`}><i class="vh-sb-needsdot" /></span> : null}
           </button>
         ))}
+        <button type="button" class="vh-sb-row" onClick={() => p.onNew(null)}>
+          <span class="vh-sb-glyph"><Icon name="folder-plus" size={16} /></span>
+          <span class="vh-sb-name">New Space</span>
+        </button>
       </div>
-      <div class="vh-sb-h">
-        <span>Repositories</span>
-        <button type="button" class="v-iconbtn vh-sb-add" aria-label="New room" data-tip="New room" onClick={() => p.onNew(null)}><Icon name="plus" size={14} /></button>
-      </div>
+      <div class="vh-sb-h">Spaces</div>
       <div class="vh-sb-rooms">
-        {groups.length === 0 ? <p class="vh-sb-none">No rooms yet. Start one with +.</p> : null}
+        {groups.length === 0 ? <p class="vh-sb-none">No spaces yet. Start one with New Space.</p> : null}
         {groups.map((g) => {
           const o = isOpen(g), id = `vh-sb-repo-${g.key.replace(/[^a-z0-9]+/gi, '-') || 'none'}`;
           return (
@@ -82,7 +78,7 @@ export function Sidebar(p: SidebarProps) {
                 <button type="button" class="vh-sb-row vh-sb-reporow" aria-expanded={o} aria-controls={id} onClick={() => toggle(g)} title={g.repo ?? undefined}>
                   <span class="vh-sb-glyph vh-sb-fold" aria-hidden="true">
                     <span class="vh-sb-fold-rest"><Icon name={o ? 'folder-open' : 'folder'} size={16} /></span>
-                    <span class="vh-sb-fold-hover"><Icon name={o ? 'chevron' : 'chevron-r'} size={16} /></span>
+                    <span class="vh-sb-fold-hover"><Icon name="chevron-r" size={16} /></span>
                   </span>
                   <span class="vh-sb-name">{g.name}</span>
                   {!o && g.rooms.some((r) => r.needs) ? <span class="vh-sb-state vh-sb-closedmark" aria-label="something here needs you"><i class="vh-sb-needsdot" /></span> : null}
@@ -90,7 +86,8 @@ export function Sidebar(p: SidebarProps) {
                 </button>
                 <button type="button" class="v-iconbtn vh-sb-repoadd" aria-label={`New room in ${g.name}`} data-tip={`New room in ${g.name}`} data-tip-end="" onClick={() => p.onNew(g.repo)}><Icon name="plus" size={14} /></button>
               </div>
-              {o ? (
+              {/* Always drawn, so opening and closing can animate in step with the chevron; closed, it's out of reach. */}
+              <div class={'vh-sb-repo-fold' + (o ? ' is-open' : '')} inert={!o} aria-hidden={!o}>
                 <div id={id} role="group" aria-label={g.name} class="vh-sb-repo-rooms">
                   {g.rooms.map((r) => (
                     <button key={r.id} type="button" class="vh-sb-row vh-sb-room" aria-current={p.current === r.id ? 'page' : undefined} onClick={() => p.onRoom(r.id)} aria-label={roomLabel(r, p.now)}>
@@ -100,12 +97,13 @@ export function Sidebar(p: SidebarProps) {
                     </button>
                   ))}
                 </div>
-              ) : null}
+              </div>
             </div>
           );
         })}
       </div>
       {p.foot ? <div class="vh-sb-foot">{p.foot}</div> : null}
+      <SidebarEdge />
     </nav>
   );
 }
@@ -120,13 +118,42 @@ export function goPlace(place: SidebarPlace) {
  * (`activeInbox`), the live dot of your call's room from `callPresence`. Screens pass only their rooms and
  * where you are.
  */
-export function ShellSidebar(p: Omit<SidebarProps, 'rooms' | 'needs' | 'invitations' | 'now' | 'onPlace'> & { rooms: RoomSummary[]; invitations?: number; onPlace?(place: SidebarPlace): void }) {
+export function ShellSidebar(p: Omit<SidebarProps, 'rooms' | 'needs' | 'now' | 'onPlace'> & { rooms: RoomSummary[]; /** Invitations waiting, until the Inbox has read them. */ invitations?: number; onPlace?(place: SidebarPlace): void }) {
   const { state: inbox } = useActiveInbox();
   const { call } = useStore(callPresence);
   const now = new Date().toISOString();
   const needs = inbox && inbox.status !== 'loading' ? inbox.view.needs : null;
   const rooms = sidebarRooms(p.rooms, { now, callRoomId: call?.roomId ?? null, needsByRoom: needs ? countByRoom(needs) : null });
-  const invitations = Math.max(p.invitations ?? 0, needs ? needs.filter((i) => i.obligation === 'accept').length : 0);
-  return <Sidebar {...p} rooms={rooms} needs={inbox ? inbox.needsCount : 0} invitations={invitations} now={now} onPlace={p.onPlace ?? goPlace} />;
+  return <Sidebar {...p} rooms={rooms} needs={inbox ? inbox.needsCount : p.invitations ?? 0} now={now} onPlace={p.onPlace ?? goPlace} />;
 }
 
+/** The sidebar's right edge: drag it to widen or narrow the sidebar (double-click for the usual width), or focus it
+    and use the arrow keys. The width is the window's, so Home and every room follow. */
+function SidebarEdge() {
+  const { width } = useStore(shellPrefs);
+  const drag = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const x0 = e.clientX, w0 = shellPrefs.state.width;
+    const move = (ev: PointerEvent) => setSidebarWidth(w0 + ev.clientX - x0, false);
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up);
+      document.body.classList.remove('vh-sb-resizing');
+      setSidebarWidth(shellPrefs.state.width);
+    };
+    document.body.classList.add('vh-sb-resizing');
+    addEventListener('pointermove', move); addEventListener('pointerup', up);
+  };
+  const key = (e: KeyboardEvent) => {
+    const step = e.shiftKey ? 40 : 10;
+    const to = e.key === 'ArrowLeft' ? width - step : e.key === 'ArrowRight' ? width + step : e.key === 'Home' ? SIDEBAR_MIN : e.key === 'End' ? SIDEBAR_MAX : null;
+    if (to === null) return;
+    e.preventDefault();
+    setSidebarWidth(to);
+  };
+  return (
+    <div class="vh-sb-edge" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabIndex={0}
+      aria-valuenow={width} aria-valuemin={SIDEBAR_MIN} aria-valuemax={SIDEBAR_MAX}
+      onPointerDown={drag} onDblClick={() => setSidebarWidth(SIDEBAR_W)} onKeyDown={key} />
+  );
+}

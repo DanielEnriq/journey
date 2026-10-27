@@ -5,16 +5,37 @@ import { Store } from '../../../shared/store.js';
 // the sidebar button), and it stays as you left it while you move between places and across relaunches.
 // Kept on this machine only (localStorage); every read and write tolerates storage being unavailable.
 
-/** The sidebar's width when shown. Home's shell and the room's window both lay out on it. */
+/** The sidebar's width when shown, until you drag its edge; dragging stays between the min and max. Home's shell and
+    the room's window both lay out on it, through --vh-sidebar-w on the document. */
 export const SIDEBAR_W = 236;
+export const SIDEBAR_MIN = 200;
+export const SIDEBAR_MAX = 400;
 
 const KEY = 'vowe.shell.sidebar';
+const WIDTH_KEY = 'vowe.shell.sidebarWidth';
+
+const clampWidth = (w: number) => Math.round(Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, w)));
 
 function read(): boolean {
   try { return localStorage.getItem(KEY) !== 'hidden'; } catch { return true; }
 }
 
-export const shellPrefs = new Store<{ sidebar: boolean }>({ sidebar: typeof localStorage === 'undefined' ? true : read() });
+function readWidth(): number {
+  try { const w = Number(localStorage.getItem(WIDTH_KEY)); return w ? clampWidth(w) : SIDEBAR_W; } catch { return SIDEBAR_W; }
+}
+
+const stored = typeof localStorage !== 'undefined';
+export const shellPrefs = new Store<{ sidebar: boolean; width: number }>({ sidebar: stored ? read() : true, width: stored ? readWidth() : SIDEBAR_W });
+
+const applyWidth = (w: number) => { if (typeof document !== 'undefined') document.documentElement.style.setProperty('--vh-sidebar-w', `${w}px`); };
+applyWidth(shellPrefs.state.width);
+
+/** Sets the sidebar's width (clamped); `keep` saves it for next time, which a drag does only when you let go. */
+export function setSidebarWidth(w: number, keep = true) {
+  const width = clampWidth(w);
+  if (width !== shellPrefs.state.width) { shellPrefs.setState({ width }); applyWidth(width); }
+  if (keep) try { localStorage.setItem(WIDTH_KEY, String(width)); } catch { /* the width lasts this session */ }
+}
 
 export function setSidebar(on: boolean) {
   shellPrefs.setState({ sidebar: on });

@@ -1,6 +1,5 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
 import { useEffect, useState } from '../../vendor/preact-hooks.js';
-import type { Scene } from '../../../shared/canvas/index.js';
 import type { DetectedRepository, IncomingInvitation, InviteKey, Repository, RoomCheckout } from '../../../shared/api.js';
 import { account, cancelSignIn, firstName, initials, linkSignInMethod, loadSignInMethods, signInMethods, signOut, unlinkSignInMethod } from '../../shared/account.js';
 import { chatgpt } from '../../shared/chatgpt.js';
@@ -12,18 +11,16 @@ import { SessionSplash } from '../../ui/pass2/auth/SessionSplash.js';
 import { Sheet } from '../../ui/pass2/common.js';
 import { HomeFirst } from '../../ui/pass2/home/HomeFirst.js';
 import { InboxHome } from '../inbox/ui/InboxHome.js';
-import { RoomsQuiet, YourRooms } from '../inbox/ui/YourRooms.js';
+import { YourRooms } from '../inbox/ui/YourRooms.js';
 import { activeInbox, type InboxSource } from '../inbox/source.js';
-import { InvitationsIndex } from '../../ui/pass2/invites/InviteGate.js';
-import { FindRepositoriesSheet, ProjectsIndex } from '../../ui/pass2/projects/Projects.js';
-import { RoomsIndex } from '../../ui/pass2/rooms/RoomsIndex.js';
+import { FindRepositoriesSheet } from '../../ui/pass2/projects/Projects.js';
 import { AppShell, type ShellRoute } from '../../ui/pass2/shell/AppShell.js';
-import type { AccountView, CanvasPreview, CanvasSketch, LocalRepoView, MissingRepoView, Person, RoomCard, WorkItem } from '../../ui/pass2/types.js';
+import type { AccountView, WorkItem } from '../../ui/pass2/types.js';
 import type { NewRoom, RepoChoice } from '../room/data/sources.js';
-import type { PersonRef, RoomSummary } from '../room/types.js';
-import { localWork, realStatus, realWorkspace, repositories, retryRooms, roomCheckouts, roomScene } from '../workspace/real/workspace.js';
+import type { RoomSummary } from '../room/types.js';
+import { localWork, realStatus, realWorkspace, repositories, roomCheckouts } from '../workspace/real/workspace.js';
 
-// Home, Rooms, Projects and Invitations (Design Pass 2), inside the Pass 2 shell. The components in
+// Home, your Inbox (Design Pass 2), inside the Pass 2 shell. The components in
 // ui/pass2 never fetch: this reads what they show from the real workspace (rooms and their records,
 // invitations, rooms.checkout, each room's canvas, this machine's repositories and their Claude Code
 // work) and maps it to their view models. What Journey can't know is passed as null, so it's left out.
@@ -65,69 +62,6 @@ export interface HomeProps {
   onSelect?(id: string | null): void;
 }
 
-const TONE: Record<PersonRef['tone'], 1 | 2 | 3 | 4> = { me: 1, peer: 2, p2: 3, p3: 4 };
-const personOf = (p: PersonRef, i: number): Person => ({ id: `${p.name}-${i}`, name: p.name, initials: p.initials, tone: TONE[p.tone] });
-/** "~/code/payments": for its owner's eyes only. */
-const pathLabel = (p: string) => p.replace(/^\/(Users|home)\/[^/]+/, '~');
-
-/** A part's name as a tile label: spoken names run long ("the electron main process"), tiles fit a word or two. */
-const tileLabel = (name: string) => { const t = name.replace(/^the\s+/i, '').replace(/\s*\(.*\)$/, ''); return t.length > 18 ? `${t.slice(0, 17).trimEnd()}…` : t; };
-
-/** A sketch tile's footprint on the card, in percent of its width and height (with a little air). */
-const SKETCH_TILE = { w: 27, h: 22 };
-
-/** The room's last shared view, drawn small: its parts where the scene puts them, and who talks to whom. */
-function sketchOf(scene: Scene): CanvasSketch | null {
-  const [vw, vh] = scene.viewBox;
-  const at = (x: number, y: number) => ({ x: Math.min(86, Math.max(14, (x / vw) * 100)), y: Math.min(84, Math.max(16, (y / vh) * 100)) });
-  const seen = new Set<string>();
-  const nodes: CanvasSketch['nodes'] = [];
-  // Tiles are a fixed size on a small card, so two parts close together in the scene would land on each other:
-  // a part whose tile would overlap one already drawn is left out, and the next one is drawn instead.
-  const clear = (p: { x: number; y: number }) => nodes.every((o) => Math.abs(o.x - p.x) >= SKETCH_TILE.w || Math.abs(o.y - p.y) >= SKETCH_TILE.h);
-  for (const n of scene.nodes) {
-    if (seen.has(n.component) || nodes.length >= 5) continue;
-    const p = at(n.rect[0] + n.rect[2] / 2, n.rect[1] + n.rect[3] / 2);
-    if (!clear(p)) continue;
-    seen.add(n.component);
-    nodes.push({ id: n.key, label: tileLabel(n.short || n.name), kind: n.kind[0].toUpperCase() + n.kind.slice(1), ...p, state: n.proposed ? 'proposed' : undefined });
-  }
-  for (const s of scene.steps) {
-    if (nodes.length >= 5) break;
-    const p = at(s.x + 90, s.y + 30);
-    if (!clear(p)) continue;
-    nodes.push({ id: s.id, label: tileLabel(s.short || s.title), kind: `Step ${s.n}`, ...p });
-  }
-  if (!nodes.length) return null;
-  const ids = new Set(nodes.map((n) => n.id));
-  const edges: CanvasSketch['edges'] = [];
-  for (const [from, tos] of Object.entries(scene.neighbours)) {
-    for (const to of tos) if (from < to && ids.has(from) && ids.has(to)) edges.push({ from, to });
-  }
-  return { nodes, edges };
-}
-
-/** Each room's last shared view, loaded once per room shown (one canvas read per card). */
-function useStills(ids: string[], enabled: boolean): Map<string, CanvasPreview> {
-  const [stills, setStills] = useState(() => new Map<string, CanvasPreview>());
-  const key = ids.join(',');
-  useEffect(() => {
-    if (!enabled) return;
-    let live = true;
-    for (const id of ids) {
-      if (stills.has(id)) continue;
-      stills.set(id, { status: 'loading' });
-      roomScene(id).then(
-        ({ scene }) => { const sketch = scene && sketchOf(scene); return sketch ? { status: 'ready' as const, sketch, viewName: scene!.name } : { status: 'empty' as const }; },
-        () => ({ status: 'unavailable' as const }),
-      ).then((p) => { if (live) setStills((m) => new Map(m).set(id, p)); });
-    }
-    setStills((m) => new Map(m));
-    return () => { live = false; };
-  }, [key, enabled]);
-  return stills;
-}
-
 export function Home(p: HomeProps) {
   const { user } = useStore(account);
   const real = !p.demo;
@@ -165,39 +99,11 @@ export function Home(p: HomeProps) {
     }))), () => setWork(null));
   }, [real, local]);
 
-  // A canvas read per card that's on screen: Home shows six, the Rooms page all of them.
-  const shown = p.page === 'rooms' ? p.rooms : p.page === 'home' && !inbox ? p.rooms.slice(0, 6) : [];
-  const stills = useStills(shown.map((r) => r.id), real);
+  // You have no rooms once they've been read (or right away in the demo): Home welcomes you instead.
+  const noRooms = !p.rooms.length && !(real && status.state === 'loading');
 
-  const cards: RoomCard[] | null = real && status.state === 'loading' && !p.rooms.length ? null : p.rooms.map((r) => {
-    const others = (list: PersonRef[] | undefined) => (list ?? []).filter((x) => x.tone !== 'me').map(personOf);
-    const here = others(r.here), inCall = others(r.inCall);
-    const co = checkouts.get(r.id);
-    return {
-      id: r.id,
-      name: r.name,
-      role: r.role ?? 'owner',
-      repository: r.repo,
-      checkout: !r.repo || co === undefined ? null : co ? 'here' : 'missing',
-      activity: { text: r.activity, at: r.activityAt },
-      needs: r.needs,
-      presence: here.length || inCall.length ? { here, inCall } : null,
-      preview: real ? stills.get(r.id) ?? { status: 'loading' } : { status: 'unavailable' },
-    };
-  });
-
-  const localViews: LocalRepoView[] | null = local && local.map((r) => ({
-    id: r.id, name: r.name, pathLabel: pathLabel(r.path), lastOpenedAt: r.lastOpenedAt, remote: null,
-    rooms: p.rooms.filter((x) => checkouts.get(x.id)?.repositoryId === r.id).map((x) => ({ id: x.id, name: x.name })),
-  }));
   // Rooms whose repository has been checked and isn't cloned on this machine (null means checked, not found).
   const missingHere = new Set(p.rooms.filter((r) => r.repo && checkouts.get(r.id) === null).map((r) => r.id));
-  const missing: MissingRepoView[] = [];
-  for (const r of p.rooms) {
-    if (!r.repo || checkouts.get(r.id) !== null) continue;
-    const m = missing.find((x) => x.repository === r.repo);
-    if (m) m.rooms.push({ id: r.id, name: r.name }); else missing.push({ repository: r.repo, rooms: [{ id: r.id, name: r.name }] });
-  }
 
   const addRepo = real ? () => { setRepoError(null); repositories.add().then(reloadRepos, (err: Error) => setRepoError(err.message)); } : undefined;
   const findRepos = real ? () => { setFound(null); setSheet('find'); repositories.detect().then(setFound, () => setFound([])); } : undefined;
@@ -225,15 +131,7 @@ export function Home(p: HomeProps) {
 
   let page: ComponentChildren;
   if (p.invite) page = p.invite;
-  else if (p.page === 'rooms') {
-    page = <RoomsIndex rooms={cards} onOpen={p.onOpenRoom} onNewRoom={() => p.onNewRoom(null)} onJoinLink={() => p.onNavigate('invitations')}
-      error={real && status.state === 'failed' ? status.error : null} onRetry={real ? () => void retryRooms() : undefined} />;
-  } else if (p.page === 'projects') {
-    page = <ProjectsIndex repos={localViews} missing={missing} onAddRepo={addRepo} onFindRepos={findRepos} onOpenRoom={p.onOpenRoom}
-      onRemove={real ? (id) => { repositories.remove(id).then(reloadRepos, (err: Error) => setRepoError(err.message)); } : undefined} />;
-  } else if (p.page === 'invitations') {
-    page = <InvitationsIndex invitations={invitations} onOpen={p.onOpenInvite} />;
-  } else if (cards && !cards.length) {
+  else if (noRooms) {
     page = <HomeFirst firstName={firstName(user)} composer={composer} invitations={invitations ?? []} onOpenInvite={p.onOpenInvite}
       repoCount={local?.length ?? 0} onAddRepo={addRepo} onFindRepos={findRepos} notice={notice} />;
   } else {
@@ -244,7 +142,7 @@ export function Home(p: HomeProps) {
     );
     page = inbox
       ? <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
-          quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />} notice={notice}
+          notice={notice} onOpenInvite={p.onOpenInvite}
           idle={(st) => rooms(needsByRoom(st.view.needs), st.now)} />
       : rooms();
   }
@@ -273,9 +171,9 @@ export function Home(p: HomeProps) {
   );
 
   return (
-    <AppShell route={p.invite ? 'invitations' : p.page} onNavigate={p.onNavigate} account={me} invitationCount={invitations?.length ?? 0}
+    <AppShell route={p.page} onNavigate={p.onNavigate} account={me} invitationCount={invitations?.length ?? 0}
       rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={(repo) => p.onNewRoom(repo ?? null)} onAccount={() => setMenu(!menu)} accountOpen={menu} overlay={overlay}
-      fixed={p.page === 'home' && !p.invite && !!inbox && !(cards && !cards.length)}>
+      fixed={p.page === 'home' && !p.invite && !!inbox && !noRooms}>
       {page}
     </AppShell>
   );

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ago, nextAfter, snoozeChoices, step, waiting } from './time.js';
+import { ago, nextAfter, snoozeChoices, step } from './time.js';
 
 const NOW = new Date(2026, 9, 26, 15, 0).toISOString();
 const at = (y: number, mo: number, d: number, h: number, mi = 0) => new Date(y, mo, d, h, mi).toISOString();
@@ -17,9 +17,6 @@ describe('Inbox time and movement', () => {
     assert.equal(ago('nope', NOW), '');
   });
   it('says how long something has waited', () => {
-    assert.equal(waiting(at(2026, 9, 26, 14, 19), NOW), 'waiting 41m');
-    assert.equal(waiting(at(2026, 9, 25, 9), NOW), 'since Yesterday');
-    assert.equal(waiting(NOW, NOW), 'just now');
   });
   it('offers snoozes that end in the future', () => {
     const c = snoozeChoices(NOW);

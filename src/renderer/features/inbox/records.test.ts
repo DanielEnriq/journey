@@ -224,15 +224,21 @@ describe('Inbox source (records loader)', () => {
     h.src.dispose(); sign.src.dispose();
   });
 
-  it('counts what’s new on an item until you open it; Needs you never counts as unread', async () => {
+  it('counts what’s new on an item until you open it, and lets you mark it unread again; Needs you is unread until opened', async () => {
     const r = rec({ decisions: [decision], log: [{ id: 'e1', by: 'bob', kind: 'thread', text: 'New idea', subject: 't9', version: null, at: at(3) }] });
     const h = harness({ r1: r }, { invites: null });
     await h.settle();
     const act = h.src.store.state.view.activity[0]!;
     assert.equal(act.unseen, 1);
-    assert.equal(h.src.store.state.view.needs[0]!.unseen, 0);
     h.src.seen(act);
     assert.equal(h.src.store.state.view.activity[0]!.unseen, 0);
+    h.src.unread(act);
+    assert.equal(h.src.store.state.view.activity[0]!.unseen, 1);
+    const needs = h.src.store.state.view.needs[0]!;
+    assert.equal(needs.unseen, 1);
+    h.src.seen(needs);
+    assert.equal(h.src.store.state.view.needs[0]!.unseen, 0);
+    // Reading it doesn't discharge it: it still needs you.
     assert.equal(h.src.store.state.needsCount, 1);
     h.src.dispose();
   });

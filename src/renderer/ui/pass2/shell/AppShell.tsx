@@ -2,7 +2,7 @@
 // Home/Inbox integration (step 03): the aside is the one Sidebar, shared with rooms; it is shown or gone
 // entirely (no icon rail), and the choice is the window's (shell/prefs.ts), not this page's.
 /**
- * The restrained shell around Home, Rooms, Projects and Invitations.
+ * The restrained shell around Home, which is your Inbox.
  *
  * - The window band leaves room for the macOS traffic lights; the app draws its own drag strip. It carries the
  *   sidebar toggle, back and forward, the page's title, and the call cluster at its right end whenever you're
@@ -20,13 +20,13 @@ import type { AccountView } from '../types.js';
 import { shellPrefs, toggleSidebar, useSidebarKey } from './prefs.js';
 import { ShellSidebar } from './Sidebar.js';
 
-export type ShellRoute = 'home' | 'rooms' | 'projects' | 'invitations';
+export type ShellRoute = 'home';
 
 export interface AppShellProps {
   route: ShellRoute | 'room';
   onNavigate: (r: ShellRoute) => void;
   account: AccountView;
-  /** Invitations waiting for you (`invites.mine().length`); the sidebar shows a dot. */
+  /** Invitations waiting for you (`invites.mine().length`); the Inbox counts them once it has read them. */
   invitationCount: number;
   /** Your rooms; the sidebar groups them by repository. */
   rooms: RoomSummary[];
@@ -69,8 +69,8 @@ export function AppShell(p: AppShellProps) {
           onPlace={p.onNavigate} onRoom={p.onOpenRoom} onNew={p.onNewRoom}
           foot={
             <button type="button" class="vh-acct" data-account-anchor aria-haspopup="dialog" aria-expanded={!!p.accountOpen} onClick={p.onAccount}>
-              <Avatar initials={p.account.initials} tone={p.account.tone} size={28} />
-              <span class="vh-acct-main"><b>{p.account.name}</b><span class="v-meta">Signed in with {p.account.provider === 'github' ? 'GitHub' : 'Google'}</span></span>
+              <Avatar initials={p.account.initials} tone={p.account.tone} size={24} />
+              <span class="vh-acct-main"><b>{p.account.name}</b></span>
               <Icon name="chevron" size={14} />
             </button>
           } />

@@ -160,7 +160,7 @@ function PreviewRoom(props: InnerProps) {
       <Lights />
       {props.overlay}
       {ui.toasts}
-      <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} onNewRoom={() => onNewRoom(null)} onHome={onHome} actions={ui.share} />
+      <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} actions={ui.share} />
       <RoomSidebar rooms={rooms} current={roomId} side={side} onOpenRoom={onOpenRoom} onNewRoom={onNewRoom} />
       <main class="room">
         <div class="room-identity">
