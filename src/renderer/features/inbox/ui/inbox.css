@@ -6,7 +6,7 @@
 .vi-page { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--v-surface); }
 
 .vi-head { padding: 22px 28px 14px; }
-.vi-eyebrow { font: 500 10.5px/1 var(--v-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--v-fg-3); }
+.vi-eyebrow { font: 500 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
 .vi-hello { margin: 10px 0 0; font: 400 34px/1.05 var(--v-font-serif); letter-spacing: -.015em; }
 .vi-hello em { font-style: italic; color: var(--v-fg-3); }
 .vi-away { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--v-fg-2); }
@@ -18,9 +18,9 @@
 
 .vi-secs { display: flex; flex-direction: column; }
 .vi-sec { display: flex; flex-direction: column; padding-bottom: 6px; }
-.vi-sec-h { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 14px 28px 8px; background: var(--v-bg); box-shadow: inset -1px 0 0 var(--v-line); font: 500 10.5px/1 var(--v-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--v-fg-3); }
+.vi-sec-h { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 14px 28px 8px; background: var(--v-bg); box-shadow: inset -1px 0 0 var(--v-line); font: 600 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
 .vi-sec-h b { font-weight: 500; letter-spacing: 0; font-variant-numeric: tabular-nums; color: var(--v-fg-2); }
-.vi-sec-h em { margin-left: auto; font: 400 11.5px/1 var(--v-font-sans); font-style: normal; letter-spacing: 0; text-transform: none; color: var(--v-fg-4); }
+.vi-sec-h em { margin-left: auto; font: 400 11.5px/1 var(--v-font-ui); font-style: normal; color: var(--v-fg-4); }
 .vi-sec.is-needs .vi-sec-h { color: var(--v-signal-fg); }
 .vi-back { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--v-fg-3); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 .vi-back:hover { color: var(--v-fg); }
@@ -38,7 +38,7 @@
 .vi-row.is-read .vi-t { color: var(--v-fg-2); }
 .vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vi-row.is-unread .vi-hl { font-weight: 550; }
-.vi-verb { flex: none; font: 600 10px/1 var(--v-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--v-signal-fg); transform: translateY(-1px); }
+.vi-verb { flex: none; font: 600 12px/1 var(--v-font-ui); color: var(--v-signal-fg); transform: translateY(-1px); }
 .vi-r { grid-column: 3; grid-row: 1; padding-top: 2px; font-size: 11.5px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .vi-newn { display: inline-block; margin-right: 6px; padding: 1px 5px; border-radius: 4px; background: var(--v-info-wash); color: var(--v-info-fg); font-weight: 500; }
 .vi-raised { grid-column: 2; display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: 11.5px; color: var(--v-info-fg); }
@@ -82,7 +82,7 @@
 
 .vi-page-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; outline: 0; }
 .vi-doc { max-width: 680px; margin: 0 auto; padding: 36px clamp(20px, 6%, 48px) 64px; }
-.vi-kicker { display: flex; align-items: center; gap: 8px; font: 500 10.5px/1 var(--v-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--v-fg-3); }
+.vi-kicker { display: flex; align-items: center; gap: 8px; font: 600 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
 .vi-kicker.is-needs { color: var(--v-signal-fg); }
 .vi-kicker i { font-style: normal; color: var(--v-fg-4); }
 .vi-when { letter-spacing: .04em; text-transform: none; font-family: var(--v-font-sans); color: var(--v-fg-3); }
@@ -94,7 +94,7 @@
 .vi-lede b { font-weight: 500; color: var(--v-fg); }
 .vi-quiet { color: var(--v-fg-3); }
 .vi-block { margin-top: 28px; }
-.vi-block-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; font: 500 10.5px/1 var(--v-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--v-fg-3); }
+.vi-block-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; font: 600 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
 .vi-block-h em { font: italic 400 12.5px/1 var(--v-font-sans); letter-spacing: 0; text-transform: none; color: var(--v-fg-4); }
 .vi-blocks { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--v-line-2); color: var(--v-fg-2); font-size: 13px; line-height: 1.5; }
 .vi-blocks b { font-weight: 500; color: var(--v-fg); }
@@ -109,8 +109,8 @@
 .vi-lines del { color: var(--v-fg-3); text-decoration-color: var(--v-fault-line); }
 .vi-lines ins { text-decoration: none; background: var(--v-success-wash); border-radius: 3px; padding: 0 2px; }
 .vi-lines li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--v-line); font-size: 14px; line-height: 1.55; }
-.vi-k { padding-top: 3px; font: 500 10px/1.4 var(--v-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--v-fg-3); }
-.vi-newmark { display: inline-block; margin-left: 6px; font: 500 10px/1 var(--v-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--v-success); }
+.vi-k { padding-top: 3px; font: 500 12px/1.4 var(--v-font-ui); color: var(--v-fg-3); }
+.vi-newmark { display: inline-block; margin-left: 6px; font: 600 11px/1 var(--v-font-ui); color: var(--v-success); }
 .vi-flag { display: flex; gap: 8px; margin-top: 8px; padding: 9px 11px; border-radius: 8px; background: var(--v-info-wash); color: var(--v-fg-2); font-size: 12.5px; line-height: 1.5; }
 .vi-flag b { font-weight: 500; color: var(--v-fg); }
 .vi-flag svg { flex: none; margin-top: 2px; }
@@ -136,7 +136,7 @@
 .vi-n { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; font-size: 12.5px; color: var(--v-fg-3); }
 .vi-n b { font-weight: 500; color: var(--v-fg-2); }
 .vi-n span { color: var(--v-fg-3); font-size: 11.5px; }
-.vi-newline { display: flex; align-items: center; gap: 10px; font: 500 10px/1 var(--v-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--v-info-fg); }
+.vi-newline { display: flex; align-items: center; gap: 10px; font: 600 11px/1 var(--v-font-ui); color: var(--v-info-fg); }
 .vi-newline::after { content: ''; flex: 1; height: 1px; background: var(--v-info-line); }
 
 .vi-compose { margin-top: 18px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--v-line-2); background: var(--v-bg); }
@@ -179,14 +179,14 @@
 
 /* Your rooms: the reading page with nothing selected. */
 .vi-rooms { box-sizing: border-box; width: 100%; max-width: 760px; margin: 0 auto; padding: 32px clamp(20px, 6%, 48px) 56px; overflow-y: auto; scrollbar-gutter: stable; }
-.vi-rooms h2 { margin: 0; font: 400 26px/1.1 var(--v-font-serif); color: var(--v-fg); }
+.vi-rooms h2 { margin: 0; font: 600 15px/1.2 var(--v-font-ui); color: var(--v-fg); }
 .vi-rooms-sub { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--v-fg-3); }
 .vi-lead { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 20px; border-radius: 14px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--v-line-2, var(--v-line)); background: var(--v-bg); }
 .vi-lead .glimpse-view { border-radius: 0; box-shadow: none; }
 .vi-lead-blank { display: grid; place-items: center; height: 180px; padding: 0 16px; text-align: center; font: italic 400 15px/1.4 var(--v-font-serif); color: var(--v-fg-4); }
 .vi-lead-cap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 12px 16px; box-shadow: inset 0 1px 0 var(--v-line); }
 .vi-lead-txt { display: flex; flex: 1 1 160px; flex-direction: column; gap: 3px; min-width: 0; }
-.vi-lead-txt b { font: 400 19px/1.2 var(--v-font-serif); color: var(--v-fg); }
+.vi-lead-txt b { font: 600 14px/1.25 var(--v-font-ui); color: var(--v-fg); }
 .vi-lead-txt span { font-size: 12.5px; color: var(--v-fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vi-lead-cap .v-btn { margin-left: auto; flex: none; }
 .vi-live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--v-success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--v-success) 22%, transparent); }
@@ -194,16 +194,16 @@
 .vi-roomrow { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; width: 100%; padding: 12px 0; border: 0; border-top: 1px solid var(--v-line); background: transparent; text-align: left; cursor: pointer; font: inherit; color: inherit; }
 .vi-roomrow:hover .vi-roomrow-nm { text-decoration: underline; text-decoration-color: var(--v-line-strong, var(--v-line)); text-underline-offset: 3px; }
 .vi-roomrow:focus-visible { outline: 2px solid var(--v-focus, var(--v-signal)); outline-offset: 2px; border-radius: 4px; }
-.vi-roomrow-nm { font: 400 18px/1.2 var(--v-font-serif); color: var(--v-fg); }
+.vi-roomrow-nm { font: 500 14px/1.25 var(--v-font-ui); color: var(--v-fg); }
 .vi-roomrow-st { margin-top: 4px; font-size: 12.5px; line-height: 1.45; color: var(--v-fg-3); }
 .vi-roomrow-st b { font-weight: 500; color: var(--v-signal-fg); }
-.vi-roomrow-parts { margin-top: 5px; font: 400 10.5px/1.4 var(--v-font-mono); letter-spacing: .02em; color: var(--v-fg-4); }
+.vi-roomrow-parts { margin-top: 5px; font: 400 11.5px/1.4 var(--v-font-ui); color: var(--v-fg-4); }
 .vi-roomrow-ts { font-size: 11.5px; color: var(--v-fg-4); }
 .vi-miss { font-style: normal; color: var(--v-fg-4); }
 
 /* Ongoing work: Claude Code sessions in your repositories on this machine. */
 .vi-work { margin-top: 36px; }
-.vi-work-h { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; font: 500 10.5px/1 var(--v-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--v-fg-3); }
+.vi-work-h { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; font: 600 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
 .vi-work-h em { font: 400 11.5px/1 var(--v-font-sans); font-style: normal; letter-spacing: 0; text-transform: none; color: var(--v-fg-4); }
 .vi-work-row { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--v-line); }
 .vi-work-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--v-fg-4); }

@@ -35,8 +35,14 @@ interface Saved {
 
 const EMPTY: Saved = { demo: null, rooms: [], visits: {}, events: {}, shared: [] };
 
+/** Calls you started, left or ended, saved before events said so: marked, so they stay out of a room's summary. */
+const CALL_TEXT = /^(You started a call|You left the call|Call ended)\b/;
+
 function load(): Saved {
-  try { return { ...EMPTY, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return { ...EMPTY }; }
+  let out: Saved;
+  try { out = { ...EMPTY, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return { ...EMPTY }; }
+  for (const id in out.events) out.events[id] = out.events[id].map((e) => (!e.presence && CALL_TEXT.test(e.text) ? { ...e, presence: true as const } : e));
+  return out;
 }
 
 let saved = load();
@@ -71,7 +77,9 @@ export const EXAMPLE_REPOS: RepoChoice[] = ['acme/payments', 'acme/web', 'acme/l
 
 const now = () => Date.now();
 const iso = () => new Date().toISOString();
-const ev = (id: string, at: string, text: string, who: PersonRef | null, tone?: RoomEvent['tone']): RoomEvent => ({ id, at, text, who, ...(tone ? { tone } : {}) });
+const ev = (id: string, at: string, text: string, who: PersonRef | null, tone?: RoomEvent['tone'], presence?: boolean): RoomEvent => ({ id, at, text, who, ...(tone ? { tone } : {}), ...(presence ? { presence: true as const } : {}) });
+/** What last changed in a room, for its one-line summary: comings and goings in its call don't count. */
+const changed = (events: RoomEvent[]) => events.find((e) => !e.presence)?.text ?? '';
 const byNewest = (a: RoomEvent, b: RoomEvent) => Date.parse(b.at) - Date.parse(a.at);
 
 /* ---------- The example rooms: what they are, and the coding work behind them. ---------- */
@@ -164,7 +172,7 @@ function attentionOf(r: VoweRecord): RoomPreview['attention'] {
 }
 
 function recordEvents(r: VoweRecord): RoomEvent[] {
-  return (r.log ?? []).map((e) => ev(e.id, e.at, sentence(e), personRef(e.by), e.kind === 'question' ? 'needs' : undefined));
+  return (r.log ?? []).map((e) => ev(e.id, e.at, sentence(e), personRef(e.by), e.kind === 'question' ? 'needs' : undefined, /^call-/.test(e.kind)));
 }
 
 /* ---------- Rooms. ---------- */
@@ -181,17 +189,17 @@ function summaryOf(id: string): RoomSummary | null {
     const role = rec.members.find((m) => m.who === DEMO_ME)?.role ?? 'member';
     return {
       id, name: example.name, repo: example.repo, inCall: withYou(id, example.inCall()), role,
-      needs: attentionOf(rec)[0]?.text ?? null, activity: events[0]?.text ?? '', activityAt: events[0]?.at ?? null,
+      needs: attentionOf(rec)[0]?.text ?? null, activity: changed(events), activityAt: events[0]?.at ?? null,
     };
   }
   const mine = saved.rooms.find((r) => r.id === id);
   if (!mine) return null;
   const events = ownEvents(id);
-  return { id, name: mine.name, repo: mine.repo, inCall: withYou(id, []), role: 'owner', needs: null, activity: events[0]?.text ?? 'You created this room.', activityAt: events[0]?.at ?? mine.createdAt };
+  return { id, name: mine.name, repo: mine.repo, inCall: withYou(id, []), role: 'owner', needs: null, activity: changed(events), activityAt: events[0]?.at ?? mine.createdAt };
 }
 
-function record(roomId: string, text: string) {
-  const list = [ev('e' + now(), iso(), text, you())].concat(ownEvents(roomId)).slice(0, 20);
+function record(roomId: string, text: string, presence = false) {
+  const list = [ev('e' + now(), iso(), text, you(), undefined, presence)].concat(ownEvents(roomId)).slice(0, 20);
   commit({ events: { ...saved.events, [roomId]: list } });
 }
 
@@ -247,7 +255,7 @@ const call: CallDataSource = {
     if (f.failCall) throw new Error('Couldn’t reach the call. Nothing was joined.');
     const started = !summaryOf(roomId)?.inCall.length;
     inCallYou = roomId;
-    if (started) { callStarted[roomId] = now(); record(roomId, 'You started a call.'); } else notify();
+    if (started) { callStarted[roomId] = now(); record(roomId, 'You started a call.', true); } else notify();
   },
   async leave(roomId) {
     mockLog('call', `left the call in ${roomId}`);
@@ -256,8 +264,8 @@ const call: CallDataSource = {
     const others = summaryOf(roomId)?.inCall.length ?? 0;
     const min = callStarted[roomId] ? Math.max(1, Math.round((now() - callStarted[roomId]) / 60_000)) : 0;
     delete callStarted[roomId];
-    if (others) record(roomId, 'You left the call.');
-    else record(roomId, min ? `Call ended · ${min} min.` : 'Call ended.');
+    if (others) record(roomId, 'You left the call.', true);
+    else record(roomId, min ? `Call ended · ${min} min.` : 'Call ended.', true);
   },
   setMuted: (muted) => mockLog('call', muted ? 'microphone muted' : 'microphone on (simulated: nothing is recorded)'),
   setCaptions: (on) => mockLog('call', on ? 'captions on' : 'captions off'),

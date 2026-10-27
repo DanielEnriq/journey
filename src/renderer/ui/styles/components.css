@@ -11,7 +11,7 @@
 @keyframes v-breathe { 0%, 100% { box-shadow: 0 0 0 1.5px var(--v-bg), 0 0 0 3px var(--tone); } 50% { box-shadow: 0 0 0 1.5px var(--v-bg), 0 0 0 5px color-mix(in srgb, var(--tone) 45%, transparent); } }
 @keyframes v-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 
-.v-root { font-family: var(--v-font-sans); font-size: 13.5px; line-height: 1.5; color: var(--v-fg); background: var(--v-bg); -webkit-font-smoothing: antialiased; font-feature-settings: 'ss01', 'cv11'; }
+.v-root { font-family: var(--v-font-sans); font-size: 13.5px; line-height: 1.5; color: var(--v-fg); background: var(--v-bg); -webkit-font-smoothing: antialiased; }
 .v-root :where(button) { font: inherit; color: inherit; cursor: pointer; }
 .v-root ::selection { background: var(--v-selection); }
 

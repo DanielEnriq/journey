@@ -119,7 +119,7 @@ export function InboxHome(p: InboxHomeProps) {
       <div class="vi-list" ref={list}>
         <header class="vi-head">
           <div class="vi-eyebrow">{dayLine(st.now)}</div>
-          <h1 class="vi-hello">{partOfDay(st.now)}{p.firstName ? `, ${p.firstName}` : ''}.{v.needs.length ? null : <> <em>Nothing needs you.</em></>}</h1>
+          <h1 class="vi-hello">{partOfDay(st.now)}{p.firstName ? `, ${p.firstName}` : ''}.</h1>
           {v.away ? <p class="vi-away"><b>{v.away.label}:</b> {v.away.summary.replace(/\.?$/, '.')}</p>
             : v.needs.length ? <p class="vi-away">{v.needs.length} {v.needs.length > 1 ? 'things need' : 'thing needs'} you{v.following.length ? ` · ${v.following.length} moved in what you follow` : ''}.</p> : null}
         </header>

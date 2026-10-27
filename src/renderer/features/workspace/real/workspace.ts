@@ -130,7 +130,7 @@ function eventOf(a: RoomActivity, who: (id: string, fallback?: RoomAuthor) => Pe
     removed: `${name} removed ${a.subject ?? 'someone'} from the room.`,
     role: `${name} changed ${(a.subject ?? '').replace(' · ', '’s role to ')}.`,
   }[a.kind];
-  return { id: a.id, at: a.createdAt, text, who: p };
+  return { id: a.id, at: a.createdAt, text, who: p, ...(a.kind === 'call-started' || a.kind === 'call-left' ? { presence: true as const } : {}) };
 }
 
 /** The decision being worked on, and whether it waits on your signature (never a viewer's: they can't sign). */
@@ -143,6 +143,8 @@ function current(record: RoomRecord | null, role?: RoomRole) {
 function summaryOf(k: Known): RoomSummary {
   const who = peopleOf(k.members);
   const latest = k.record?.activity[0];
+  // The line says what last changed in the room; comings and goings in its call don't count (who's in it shows live).
+  const changed = k.record?.activity.find((a) => a.kind !== 'call-started' && a.kind !== 'call-left');
   const { d, needsMe } = current(k.record, k.room.role);
   return {
     id: k.room.id,
@@ -152,7 +154,7 @@ function summaryOf(k: Known): RoomSummary {
     here: (presence.get(k.room.id) ?? []).map((p) => who(p.userId, { name: p.name, email: '' })),
     role: k.room.role,
     needs: needsMe ? `Decision v${d!.version} needs your signature` : null,
-    activity: latest ? eventOf(latest, who).text : 'Room created.',
+    activity: changed ? eventOf(changed, who).text : '',
     activityAt: latest?.createdAt ?? k.room.createdAt,
   };
 }

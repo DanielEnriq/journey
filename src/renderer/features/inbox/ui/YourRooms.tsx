@@ -48,7 +48,7 @@ function useScenes(ids: string[], load: (id: string) => Promise<Scene | null>) {
 /** In place of Needs you when nothing needs you: which room has a call on, and how the others stand. */
 export function RoomsQuiet({ rooms, now }: { rooms: RoomSummary[]; now: string }) {
   const live = rooms.find((r) => r.inCall.length > 0);
-  const recent = rooms.filter((r) => r !== live && !(r.activityAt && Date.parse(now) - Date.parse(r.activityAt) > QUIET))
+  const recent = rooms.filter((r) => r !== live && r.activity && !(r.activityAt && Date.parse(now) - Date.parse(r.activityAt) > QUIET))
     .sort((a, b) => ((a.activityAt ?? '') < (b.activityAt ?? '') ? 1 : -1)).slice(0, 2);
   const state = (r: RoomSummary) => r.activity.replace(/\.$/, '').replace(/^(You|Nothing|No|A|An|The)\b/, (w) => w.toLowerCase());
   return (
