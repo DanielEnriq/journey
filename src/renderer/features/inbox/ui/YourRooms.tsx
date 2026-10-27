@@ -5,6 +5,8 @@ import { useStore } from '../../../shared/store.js';
 import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 import { callPresence } from '../../call/presence.js';
 import type { RoomSummary } from '../../room/types.js';
+import { STATUS_WORDS } from '../../work/status.js';
+import type { WorkItem } from '../../../ui/pass2/types.js';
 import { ago } from './time.js';
 
 // Home's reading page with nothing selected: your rooms, the ongoing spaces the Inbox's items come from.
@@ -23,6 +25,10 @@ export interface YourRoomsProps {
   scene(roomId: string): Promise<Scene | null>;
   onRoom(id: string): void;
   onJoin(id: string): void;
+  /** Claude Code sessions in your repositories on this machine; null when they can't be read here. */
+  work?: WorkItem[] | null;
+  /** Rooms whose repository isn't cloned on this machine. */
+  missing?: ReadonlySet<string>;
 }
 
 function useScenes(ids: string[], load: (id: string) => Promise<Scene | null>) {
@@ -89,7 +95,7 @@ export function YourRooms(p: YourRoomsProps) {
             <b>{lead.name}</b>
             <span>{lead.inCall.length
               ? `${mine ? 'You’re in this call' : 'A call is on'}${others.length ? ` with ${others.join(', ')}` : ''}${leadScene ? ` · on ${leadScene.name}` : ''}`
-              : lead.activity}</span>
+              : lead.activity}{p.missing?.has(lead.id) ? <i class="vi-miss" title={`${lead.repo} isn’t cloned on this machine`}> · repository not on this machine</i> : null}</span>
           </div>
           {lead.inCall.length && !mine
             ? <button type="button" class="v-btn v-btn-ink v-btn-sm" onClick={() => p.onJoin(lead.id)}>Join the call</button>
@@ -104,7 +110,7 @@ export function YourRooms(p: YourRoomsProps) {
             <button key={r.id} type="button" class="vi-roomrow" onClick={() => p.onRoom(r.id)}>
               <div>
                 <div class="vi-roomrow-nm">{r.name}</div>
-                <div class="vi-roomrow-st">{n ? <b>{n} need{n > 1 ? '' : 's'} you · </b> : null}{r.activity}</div>
+                <div class="vi-roomrow-st">{n ? <b>{n} need{n > 1 ? '' : 's'} you · </b> : null}{r.activity}{p.missing?.has(r.id) ? <i class="vi-miss" title={`${r.repo} isn’t cloned on this machine`}> · repository not on this machine</i> : null}</div>
                 {ps.length ? <div class="vi-roomrow-parts">{ps.join(' · ')}</div> : null}
               </div>
               {r.activityAt ? <span class="vi-roomrow-ts">{ago(r.activityAt, p.now)}</span> : null}
@@ -112,6 +118,30 @@ export function YourRooms(p: YourRoomsProps) {
           );
         })}
       </div>
+      {p.work ? <OngoingWork items={p.work} now={p.now} /> : null}
     </div>
+  );
+}
+
+const WORK_TONE = { active: 'is-live', attention: 'is-signal', completed: '', unknown: '' } as const;
+
+/** What Claude Code is doing in your repositories on this machine, newest first. */
+function OngoingWork({ items, now }: { items: WorkItem[]; now: string }) {
+  const at = (w: WorkItem) => w.lastActivityAt ?? '';
+  const rows = [...items].sort((a, b) => (at(a) < at(b) ? 1 : -1)).slice(0, 5);
+  return (
+    <section class="vi-work" aria-label="Ongoing work on this machine">
+      <div class="vi-work-h"><span>Ongoing work</span><em>on this machine</em></div>
+      {rows.length ? rows.map((w) => (
+        <div key={w.id} class="vi-work-row">
+          <span class={`vi-work-dot ${WORK_TONE[w.status]}`} aria-hidden="true"></span>
+          <div class="vi-work-main">
+            <div class="vi-work-t">{w.title}</div>
+            <div class="vi-work-m">{STATUS_WORDS[w.status]} · {w.agent} · {w.repository}{w.branch ? ` · ${w.branch}` : ''}</div>
+          </div>
+          {w.lastActivityAt ? <span class="vi-roomrow-ts">{ago(w.lastActivityAt, now)}</span> : null}
+        </div>
+      )) : <p class="vi-work-none">No Claude Code sessions in your repositories yet. Sessions you run in a room’s repository show here.</p>}
+    </section>
   );
 }

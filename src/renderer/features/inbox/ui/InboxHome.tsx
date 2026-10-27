@@ -27,6 +27,8 @@ export interface InboxHomeProps {
   idle?(st: InboxState): ComponentChildren;
   /** In place of Needs you when nothing needs you: a line on how your rooms stand. */
   quiet?: ComponentChildren;
+  /** Something Home itself couldn't do (adding a repository, say), shown under the greeting. */
+  notice?: string | null;
 }
 
 type Foot = null | 'done' | 'snoozed';
@@ -117,6 +119,7 @@ export function InboxHome(p: InboxHomeProps) {
           {v.away ? <p class="vi-away"><b>{v.away.label}:</b> {v.away.summary.replace(/\.?$/, '.')}</p>
             : v.needs.length ? <p class="vi-away">{v.needs.length} {v.needs.length > 1 ? 'things need' : 'thing needs'} you{v.following.length ? ` · ${v.following.length} moved in what you follow` : ''}.</p> : null}
         </header>
+        {p.notice ? <div class="vi-notice" role="alert"><Icon name="warn" /><span>{p.notice}</span></div> : null}
         {st.status === 'failed' ? (
           <div class="vi-error" role="alert"><Icon name="warn" /><span>Couldn’t read your rooms{st.error ? `: ${st.error}` : ''}.{ids.length ? ' Showing what was read last.' : ''}</span>
             <button type="button" class="v-btn v-btn-sm" onClick={() => p.source.refresh()}>Retry</button></div>

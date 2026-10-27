@@ -34,3 +34,6 @@
 }
 
 }
+.surface-head .nx-lineage{flex:none;height:28px;padding:0 9px;border:0;border-radius:9px;background:var(--v-surface-raised);box-shadow:0 0 0 1px var(--v-line-2);font:400 11.5px/1 var(--v-font-sans);color:var(--v-fg-3);white-space:nowrap;cursor:pointer}
+.surface-head .nx-lineage:hover{color:var(--v-fg);box-shadow:0 0 0 1px var(--v-line-strong)}
+.surface-head .nx-lineage:focus-visible{outline:0;box-shadow:var(--v-focus-ring)}

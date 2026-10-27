@@ -197,6 +197,8 @@ export function Home(p: HomeProps) {
     id: r.id, name: r.name, pathLabel: pathLabel(r.path), lastOpenedAt: r.lastOpenedAt, remote: null,
     rooms: p.rooms.filter((x) => checkouts.get(x.id)?.repositoryId === r.id).map((x) => ({ id: x.id, name: x.name })),
   }));
+  // Rooms whose repository has been checked and isn't cloned on this machine (null means checked, not found).
+  const missingHere = new Set(p.rooms.filter((r) => r.repo && checkouts.get(r.id) === null).map((r) => r.id));
   const missing: MissingRepoView[] = [];
   for (const r of p.rooms) {
     if (!r.repo || checkouts.get(r.id) !== null) continue;
@@ -243,9 +245,9 @@ export function Home(p: HomeProps) {
       repoCount={local?.length ?? 0} onAddRepo={addRepo} onFindRepos={findRepos} notice={notice} />;
   } else if (inbox) {
     page = <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
-      quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />}
+      quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />} notice={notice}
       idle={(st) => <YourRooms rooms={p.rooms} now={st.now} needs={needsByRoom(st.view.needs)} scene={(id) => inbox.context(id).then((c) => c.scene)}
-        onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} />} />;
+        onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} work={real ? work : null} missing={missingHere} />} />;
   } else {
     page = <HomeReturning firstName={firstName(user)} rooms={cards} needs={needs} work={real ? work : null} decisions={decisions}
       repos={real ? localViews : null} missing={missing} composer={composer} notice={notice} onOpenRoom={p.onOpenRoom} onOpenInvite={p.onOpenInvite}

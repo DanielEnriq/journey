@@ -341,6 +341,9 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
   const tabs = viewsOf(doc).filter((v) => s.scenes[v.id]).map((v) => ({
     id: v.id, name: v.name, title: v.question, on: v.id === view, cls: (v.id === view ? 'on' : '') + (v.status === 'proposed' ? ' proposed' : ''),
   }));
+  // The view this one grew from, when it's still on the canvas: one click back to it.
+  const parentId = viewOf(doc, view)?.parent;
+  const from = parentId && parentId !== view && s.scenes[parentId] ? viewOf(doc, parentId) ?? null : null;
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   // A room kept for its call while you're elsewhere doesn't answer keys.
   const onScreen = useShownRef();
@@ -616,6 +619,7 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
           <div class="seg" role="group" aria-label="Views">
             {tabs.map((t) => <button key={t.id} class={t.cls} type="button" title={t.title} aria-pressed={t.on} onClick={() => show(t.id)}>{t.name}</button>)}
           </div>
+          {from ? <button class="nx-lineage" type="button" title="Go to the view this one grew from" onClick={() => show(from.id)}>from {from.name}</button> : null}
           {scene.type === 'failure-flow' && stepsTotal > 0 ? (
             <div class="nx-scrub" role="group" aria-label="Step through the failure">
               <button type="button" aria-label="Back a step" disabled={shown <= 1} onClick={() => scrub(-1)}>‹</button>
