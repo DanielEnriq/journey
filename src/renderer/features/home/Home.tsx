@@ -14,14 +14,14 @@ import { InboxHome } from '../inbox/ui/InboxHome.js';
 import { RoomsQuiet, YourRooms } from '../inbox/ui/YourRooms.js';
 import { activeInbox, type InboxSource } from '../inbox/source.js';
 import { InvitationsIndex } from '../../ui/pass2/invites/InviteGate.js';
-import { FindRepositoriesSheet, ProjectsIndex } from '../../ui/pass2/projects/Projects.js';
+import { FindRepositoriesSheet } from '../../ui/pass2/projects/Projects.js';
 import { AppShell, type ShellRoute } from '../../ui/pass2/shell/AppShell.js';
-import type { AccountView, LocalRepoView, MissingRepoView, WorkItem } from '../../ui/pass2/types.js';
+import type { AccountView, WorkItem } from '../../ui/pass2/types.js';
 import type { NewRoom, RepoChoice } from '../room/data/sources.js';
 import type { RoomSummary } from '../room/types.js';
 import { localWork, realStatus, realWorkspace, repositories, roomCheckouts } from '../workspace/real/workspace.js';
 
-// Home, Rooms, Projects and Invitations (Design Pass 2), inside the Pass 2 shell. The components in
+// Home and Invitations (Design Pass 2), inside the Pass 2 shell. The components in
 // ui/pass2 never fetch: this reads what they show from the real workspace (rooms and their records,
 // invitations, rooms.checkout, each room's canvas, this machine's repositories and their Claude Code
 // work) and maps it to their view models. What Journey can't know is passed as null, so it's left out.
@@ -63,9 +63,6 @@ export interface HomeProps {
   onSelect?(id: string | null): void;
 }
 
-/** "~/code/payments": for its owner's eyes only. */
-const pathLabel = (p: string) => p.replace(/^\/(Users|home)\/[^/]+/, '~');
-
 export function Home(p: HomeProps) {
   const { user } = useStore(account);
   const real = !p.demo;
@@ -106,18 +103,8 @@ export function Home(p: HomeProps) {
   // You have no rooms once they've been read (or right away in the demo): Home welcomes you instead.
   const noRooms = !p.rooms.length && !(real && status.state === 'loading');
 
-  const localViews: LocalRepoView[] | null = local && local.map((r) => ({
-    id: r.id, name: r.name, pathLabel: pathLabel(r.path), lastOpenedAt: r.lastOpenedAt, remote: null,
-    rooms: p.rooms.filter((x) => checkouts.get(x.id)?.repositoryId === r.id).map((x) => ({ id: x.id, name: x.name })),
-  }));
   // Rooms whose repository has been checked and isn't cloned on this machine (null means checked, not found).
   const missingHere = new Set(p.rooms.filter((r) => r.repo && checkouts.get(r.id) === null).map((r) => r.id));
-  const missing: MissingRepoView[] = [];
-  for (const r of p.rooms) {
-    if (!r.repo || checkouts.get(r.id) !== null) continue;
-    const m = missing.find((x) => x.repository === r.repo);
-    if (m) m.rooms.push({ id: r.id, name: r.name }); else missing.push({ repository: r.repo, rooms: [{ id: r.id, name: r.name }] });
-  }
 
   const addRepo = real ? () => { setRepoError(null); repositories.add().then(reloadRepos, (err: Error) => setRepoError(err.message)); } : undefined;
   const findRepos = real ? () => { setFound(null); setSheet('find'); repositories.detect().then(setFound, () => setFound([])); } : undefined;
@@ -145,10 +132,7 @@ export function Home(p: HomeProps) {
 
   let page: ComponentChildren;
   if (p.invite) page = p.invite;
-  else if (p.page === 'projects') {
-    page = <ProjectsIndex repos={localViews} missing={missing} onAddRepo={addRepo} onFindRepos={findRepos} onOpenRoom={p.onOpenRoom}
-      onRemove={real ? (id) => { repositories.remove(id).then(reloadRepos, (err: Error) => setRepoError(err.message)); } : undefined} />;
-  } else if (p.page === 'invitations') {
+  else if (p.page === 'invitations') {
     page = <InvitationsIndex invitations={invitations} onOpen={p.onOpenInvite} />;
   } else if (noRooms) {
     page = <HomeFirst firstName={firstName(user)} composer={composer} invitations={invitations ?? []} onOpenInvite={p.onOpenInvite}

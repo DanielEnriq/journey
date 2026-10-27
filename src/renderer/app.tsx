@@ -32,7 +32,7 @@ import type { InviteKey, Theme } from '../shared/api.js';
 // sheets and a developer menu. Screens are hash routes kept in localStorage, so a relaunch lands back
 // on the same one; a call is the exception, since it is never rejoined without you asking.
 //
-// Two workspaces, never mixed: your real rooms (#/home, #/projects, #/invitations, #/room/…), and
+// Two workspaces, never mixed: your real rooms (#/home, #/invitations, #/room/…), and
 // the Payment Reliability demo (#/demo/home, #/demo/room/…, and so on), reached from the developer menu and marked as a demo while it shows.
 // The browser preview has no main process, so it only has the demo.
 
@@ -50,7 +50,7 @@ const ROUTE_KEY = 'vowe.route';
 /** No main process (the development preview, or a plain browser): only the demo exists here. */
 const PREVIEW = !window.journey;
 /** Home's pages, each its own route under the same shell. */
-const PAGES: HomePage[] = ['home', 'projects', 'invitations'];
+const PAGES: HomePage[] = ['home', 'invitations'];
 
 const demoSession = new CallSession(demoWorkspace.call);
 /** Your rooms' canvases: main's hub over IPC, acting as the signed-in person. */

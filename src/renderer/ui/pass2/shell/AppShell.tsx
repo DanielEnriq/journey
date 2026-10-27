@@ -2,7 +2,7 @@
 // Home/Inbox integration (step 03): the aside is the one Sidebar, shared with rooms; it is shown or gone
 // entirely (no icon rail), and the choice is the window's (shell/prefs.ts), not this page's.
 /**
- * The restrained shell around Home, Rooms, Projects and Invitations.
+ * The restrained shell around Home and Invitations.
  *
  * - The window band leaves room for the macOS traffic lights; the app draws its own drag strip. It carries the
  *   sidebar toggle, back and forward, the page's title, and the call cluster at its right end whenever you're
@@ -20,7 +20,7 @@ import type { AccountView } from '../types.js';
 import { shellPrefs, toggleSidebar, useSidebarKey } from './prefs.js';
 import { ShellSidebar } from './Sidebar.js';
 
-export type ShellRoute = 'home' | 'projects' | 'invitations';
+export type ShellRoute = 'home' | 'invitations';
 
 export interface AppShellProps {
   route: ShellRoute | 'room';
@@ -70,7 +70,7 @@ export function AppShell(p: AppShellProps) {
           foot={
             <button type="button" class="vh-acct" data-account-anchor aria-haspopup="dialog" aria-expanded={!!p.accountOpen} onClick={p.onAccount}>
               <Avatar initials={p.account.initials} tone={p.account.tone} size={28} />
-              <span class="vh-acct-main"><b>{p.account.name}</b><span class="v-meta">Signed in with {p.account.provider === 'github' ? 'GitHub' : 'Google'}</span></span>
+              <span class="vh-acct-main"><b>{p.account.name}</b></span>
               <Icon name="chevron" size={14} />
             </button>
           } />
