@@ -173,7 +173,7 @@ export function VoweRoom(p: VoweRoomProps) {
           <main class="room">
             <div class="room-identity">
               <h1>{p.room.name}</h1>
-              {p.room.repo ? <span class="q">{p.room.repo}</span> : null}
+              {p.room.repo ? <span class="meta">{p.room.repo}</span> : null}
               <div class="presence"><Who people={p.people} vowe={!!p.call && rec.vowe && u.vowe !== 'off'} ring={p.speaking ? { [p.speaking]: 'speaking' } : {}} /></div>
             </div>
             <Surface client={p.client} ui={p.ui} marks={p.marks} lit={p.lit} onAsk={rec.vowe ? p.onAsk : undefined} onScenario={p.onScenario} onCopies={p.onCopies}

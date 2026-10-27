@@ -1,4 +1,5 @@
-import { h, Fragment, useState, Avatar } from '../journey.js';
+import { h, Fragment, useEffect, useRef, useState, Avatar } from '../journey.js';
+import { Icon, type IconName } from '../../../ui/icons.js';
 import { useEvidence } from '../state/semantics.js';
 import { BasisGlyph } from '../canvas/faces.js';
 import { AGENT, type RoomRole, type About, type Decision, type Line, type Notice, type PR, type Reply, type VoweRecord, type Thread, type Work } from '../contracts/model.js';
@@ -369,18 +370,175 @@ function DiscussTab(p: DeskProps) {
       </label>
       <div class="nx-dfilter"><button type="button" class={!p.everywhere ? 'on' : ''} onClick={() => act.everywhere(false)}>About the system</button><button type="button" class={p.everywhere ? 'on' : ''} onClick={() => act.everywhere(true)}>Everywhere<em>{all.length}</em></button>{!p.everywhere && elsewhere ? <span>{elsewhere} on decisions, plans and PRs live there</span> : null}</div>
       <span class="nx-hint2">{focus ? `It will be pinned to ${focus.name}.` : 'Select a part first to pin the thread to it.'}{rec.vowe ? ` ${agentName()} only joins if you @mention it.` : ''}</span>
-      {open.length === 0 ? <p class="nx-quiet">No conversations yet.</p> : null}
-      <div class="rp-tgroups">
-        {shown.map((t) => <ThreadCard key={t.id} t={t} p={p} dim={!rel(t)} />)}
-      </div>
+      {open.length === 0 ? <p class="nx-quiet">No conversations yet.</p> : <ThreadList threads={shown} rel={rel} p={p} />}
     </section>
+  );
+}
+
+/** What a thread is about, as one key: threads with the same key share a group. */
+const aboutKey = (a: About) => `${a.kind}:${'decision' in a ? a.decision : 'work' in a ? a.work : 'pr' in a ? a.pr : ''}:${a.id}`;
+const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+/** "2 replies · 4m": the time only when the record has one. */
+const repliesLine = (t: Thread) => { const n = t.replies.length - 1, ago = t.replies[n].ago; return `${n} ${n === 1 ? 'reply' : 'replies'}${ago ? ` · ${ago}` : ''}`; };
+
+/**
+ * Discuss's conversations as a grouped list, the way macOS lists things: one rounded box for each part (or wire,
+ * PR, decision) with its conversations as rows split by hairlines, under a heading whose chevron folds the box.
+ * A click selects a row and opens its replies under it. With a row focused, ↑ and ↓ move, → and ← open and close
+ * the replies (← again folds the group), Return toggles, Esc closes; right-click (or Shift-F10) gives its menu.
+ * Groups the canvas focus doesn't touch start folded.
+ */
+function ThreadList({ threads, rel, p }: { threads: Thread[]; rel(t: Thread): boolean; p: DeskProps }) {
+  const { me, act, rec } = p;
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  const [sel, setSel] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ t: Thread; x: number; y: number } | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+
+  const groups: { key: string; about: About; list: Thread[]; dim: boolean }[] = [];
+  for (const t of threads) {
+    const key = aboutKey(t.about);
+    let g = groups.find((x) => x.key === key);
+    if (!g) groups.push(g = { key, about: t.about, list: [], dim: !rel(t) });
+    g.list.push(t);
+  }
+  const isOpen = (g: typeof groups[number]) => !(folded[g.key] ?? (g.dim && !g.list.some((t) => t.id === p.openThread)));
+  const fold = (key: string, on: boolean) => setFolded((f) => ({ ...f, [key]: on }));
+  const rows = groups.flatMap((g) => isOpen(g) ? g.list : []);
+  const focusRow = (id: string) => box.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"] > .nx-dl-main`)?.focus();
+  const openMenu = (t: Thread, x: number, y: number) => { setSel(t.id); setMenu({ t, x, y }); };
+
+  const key = (e: KeyboardEvent) => {
+    if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey || menu) return;
+    const row = (e.target as HTMLElement).closest<HTMLElement>('.nx-dl-row');
+    const t = row ? rows.find((x) => x.id === row.dataset.id) : undefined;
+    if (!t) return;
+    const open = p.openThread === t.id;
+    const k = e.key;
+    if (k === 'ArrowDown' || k === 'ArrowUp') {
+      e.preventDefault();
+      const next = rows[rows.indexOf(t) + (k === 'ArrowDown' ? 1 : -1)];
+      if (next) { setSel(next.id); focusRow(next.id); }
+    } else if (k === 'ArrowRight' && !open) { e.preventDefault(); act.thread(t.id); }
+    else if (k === 'ArrowLeft') {
+      e.preventDefault();
+      if (open) act.thread(null);
+      else { fold(aboutKey(t.about), true); setSel(null); box.current?.querySelector<HTMLElement>(`[data-group="${CSS.escape(aboutKey(t.about))}"]`)?.focus(); }
+    } else if (k === 'Escape' && open) { e.preventDefault(); act.thread(null); }
+    else if (k === 'F10' && e.shiftKey || k === 'ContextMenu') {
+      e.preventDefault();
+      const r = (e.target as HTMLElement).getBoundingClientRect();
+      openMenu(t, r.left + 24, r.top + 24);
+    }
+  };
+
+  return (
+    <div class="nx-dlist" ref={box} onKeyDown={key}>
+      {groups.map((g) => {
+        const o = isOpen(g);
+        const parts = partsOf(g.about, rec);
+        return (
+          <div key={g.key} class={'nx-dl' + (g.dim ? ' nx-dim' : '')}>
+            <button type="button" class="nx-dl-head" data-group={g.key} aria-expanded={o} onClick={() => fold(g.key, o)}
+              onPointerEnter={() => act.light(parts)} onPointerLeave={() => act.light(null)}
+              onKeyDown={(e) => { if (e.key === 'ArrowRight' && !o) { e.preventDefault(); fold(g.key, false); } else if (e.key === 'ArrowLeft' && o) { e.preventDefault(); fold(g.key, true); } }}>
+              <span class="nx-dl-chev" aria-hidden="true"><Icon name="chevron-r" size={14} /></span>
+              <AboutGlyph a={g.about.kind} />
+              <span class="nx-dl-name">{g.about.name}</span>
+              {ABOUT_WORD[g.about.kind] ? <span class="nx-akind">on {ABOUT_WORD[g.about.kind]}</span> : null}
+              {g.list.some((t) => t.waiting === me) ? <span class="nx-waits">Waiting on you</span> : null}
+              {g.list.length > 1 || !o ? <span class="nx-dl-n">{g.list.length}</span> : null}
+            </button>
+            {o ? (
+              <div class="nx-dl-box" role="list" aria-label={g.about.name}>
+                {g.list.map((t) => (
+                  <ThreadRow key={t.id} t={t} p={p} selected={sel === t.id} onSelect={() => setSel(t.id)}
+                    onMenu={(e) => { e.preventDefault(); focusRow(t.id); openMenu(t, e.clientX, e.clientY); }} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+      {menu ? <ThreadMenu t={menu.t} p={p} at={menu} onClose={() => setMenu(null)} /> : null}
+    </div>
+  );
+}
+
+/** One conversation in the list: who started it, what they said, how far it got; its replies open under it. */
+function ThreadRow({ t, p, selected, onSelect, onMenu }: { t: Thread; p: DeskProps; selected: boolean; onSelect(): void; onMenu(e: MouseEvent): void }) {
+  const { nameOf, agentName } = useNames();
+  const { me, act } = p;
+  const expanded = p.openThread === t.id;
+  const root = t.replies[0];
+  const offer = t.replies.find((r) => r.offer?.state === 'open');
+  return (
+    <div role="listitem" data-id={t.id} onContextMenu={onMenu}
+      class={'nx-dl-row' + (selected ? ' is-sel' : '') + (expanded ? ' is-open' : '') + (p.flash === `thread:${t.id}` ? ' nx-flash' : '')}>
+      <button type="button" class="nx-dl-main" aria-expanded={expanded} onFocus={onSelect} onClick={() => { onSelect(); act.thread(expanded ? null : t.id); }}>
+        <span class="rp-cm-head">
+          <Who id={root.by} /><b>{root.by === me ? 'You' : nameOf(root.by)}</b>
+          {t.title ? <span class="nx-dl-title">{t.title}</span> : null}
+          <span class="rp-cm-time">{root.ago}</span>
+        </span>
+        <span class="rp-cm-body"><Words text={root.body} light={act.light} /></span>
+        {root.evidence ? <Evidence ids={root.evidence} /> : null}
+        <span class="nx-dl-meta">
+          {t.replies.length > 1 ? <span class="rp-cm-replies"><span class="rp-avstack">{[...new Set(t.replies.slice(1).map((r) => r.by))].map((id) => <Who key={id} id={id} size={16} />)}</span>{repliesLine(t)}</span> : <span class="rp-cm-replies rp-quiet">No replies</span>}
+          {root.spoken ? <span class="nx-spoken">said in the call</span> : null}
+          {t.presence ? <span class="rp-pres rp-busy"><Who id={t.presence.personId} size={16} />{nameOf(t.presence.personId)} is {t.presence.mode === 'typing' ? 'writing' : 'reading'}</span> : offer && !expanded ? <span class="nx-offer-tag">{agentName()} suggests a decision</span> : null}
+        </span>
+      </button>
+      {expanded ? <ThreadReplies t={t} p={p} /> : null}
+    </div>
+  );
+}
+
+/** A conversation's right-click menu, in the app's menu style; focus moves in, Esc or a click outside closes it. */
+function ThreadMenu({ t, p, at, onClose }: { t: Thread; p: DeskProps; at: { x: number; y: number }; onClose(): void }) {
+  const { act, rec } = p;
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const back = document.activeElement as HTMLElement | null;
+    box.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); back?.focus(); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault(); e.stopPropagation();
+        const items = [...(box.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+      }
+    };
+    const down = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) onClose(); };
+    addEventListener('keydown', key, true);
+    addEventListener('pointerdown', down, true);
+    return () => { removeEventListener('keydown', key, true); removeEventListener('pointerdown', down, true); };
+  }, []);
+  const parts = partsOf(t.about, rec);
+  const plain = t.replies[0].body.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1');
+  const item = (icon: IconName, label: string, f: () => void, disabled = false) => (
+    <button type="button" role="menuitem" class="v-menu-item" disabled={disabled} onClick={() => { onClose(); f(); }}><Icon name={icon} /><span>{label}</span></button>
+  );
+  const reply = () => {
+    act.thread(t.id);
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-id="${CSS.escape(t.id)}"] .rp-cm-reply input`)?.focus());
+  };
+  return (
+    <div ref={box} class="v-menu nx-dl-menu" role="menu" aria-label={t.about.name}
+      style={`left:${Math.min(at.x, innerWidth - 236)}px;top:${Math.min(at.y, innerHeight - 170)}px`}>
+      {item('comment', 'Reply', reply)}
+      {parts.length ? item('canvas', 'Show on canvas', () => act.light(parts)) : null}
+      {item('copy', 'Copy text', () => { void navigator.clipboard.writeText(plain).then(() => act.toast('Copied')); })}
+      <div class="v-menu-sep" role="separator" />
+      {item('decision', 'Start a decision from this', () => act.draftFrom(t.id), !mayWrite(p.role))}
+    </div>
   );
 }
 
 export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim?: boolean; inline?: boolean }) {
   const { nameOf, agentName } = useNames();
   const { rec, me, act } = p;
-  const [text, setText] = useState('');
   const expanded = inline || p.openThread === t.id;
   const root = t.replies[0];
   const parts = partsOf(t.about, rec);
@@ -409,26 +567,35 @@ export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim
             {root.evidence ? <Evidence ids={root.evidence} /> : null}
           </button>
           <div class="rp-cm-foot">
-            {t.replies.length > 1 ? <span class="rp-cm-replies"><span class="rp-avstack">{[...new Set(t.replies.slice(1).map((r) => r.by))].map((id) => <Who key={id} id={id} size={16} />)}</span>{t.replies.length - 1} {t.replies.length === 2 ? 'reply' : 'replies'} · {t.replies[t.replies.length - 1].ago}</span> : <span class="rp-cm-replies rp-quiet">No replies</span>}
+            {t.replies.length > 1 ? <span class="rp-cm-replies"><span class="rp-avstack">{[...new Set(t.replies.slice(1).map((r) => r.by))].map((id) => <Who key={id} id={id} size={16} />)}</span>{repliesLine(t)}</span> : <span class="rp-cm-replies rp-quiet">No replies</span>}
             {t.presence ? <span class="rp-pres rp-busy"><Who id={t.presence.personId} size={16} />{nameOf(t.presence.personId)} is {t.presence.mode === 'typing' ? 'writing' : 'reading'}</span> : offer && !expanded ? <span class="nx-offer-tag">{agentName()} suggests a decision</span> : null}
           </div>
-          {expanded ? (
-            <div class="rp-cm-thread">
-              {t.replies.slice(1).map((r) => <ReplyRow key={r.id} r={r} t={t} p={p} />)}
-              {t.presence?.mode === 'typing' ? <div class="rp-cm-typing"><Who id={t.presence.personId} /><span class="rp-bubble"><span class="rp-dots"><i /><i /><i /></span></span></div> : null}
-              <label class="rp-cm-reply">
-                <Who id={me} /><span class="rp-sr">Reply</span>
-                <input type="text" placeholder={rec.vowe ? `Reply, @${agentName()} to ask it, or just say it on the call` : 'Reply, or @ someone in the room'} value={text} onInput={(e) => setText(e.currentTarget.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) { act.reply(t.id, text.trim()); setText(''); } }} />
-              </label>
-              <span class="nx-thread-foot">
-                {parts.length ? <button class="rp-link" type="button" onClick={() => act.light(parts)}>Show on canvas</button> : null}
-                {t.linked?.map((l, i) => <span key={i} class="nx-linked"><AboutGlyph a={l.kind} />also on {l.name}</span>)}
-              </span>
-            </div>
-          ) : null}
+          {expanded ? <ThreadReplies t={t} p={p} /> : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** An open conversation's replies, someone writing, the reply field and where it points. */
+function ThreadReplies({ t, p }: { t: Thread; p: DeskProps }) {
+  const { agentName } = useNames();
+  const { rec, me, act } = p;
+  const [text, setText] = useState('');
+  const parts = partsOf(t.about, rec);
+  return (
+    <div class="rp-cm-thread">
+      {t.replies.slice(1).map((r) => <ReplyRow key={r.id} r={r} t={t} p={p} />)}
+      {t.presence?.mode === 'typing' ? <div class="rp-cm-typing"><Who id={t.presence.personId} /><span class="rp-bubble"><span class="rp-dots"><i /><i /><i /></span></span></div> : null}
+      <label class="rp-cm-reply">
+        <Who id={me} /><span class="rp-sr">Reply</span>
+        <input type="text" placeholder={rec.vowe ? `Reply, @${agentName()} to ask it, or just say it on the call` : 'Reply, or @ someone in the room'} value={text} onInput={(e) => setText(e.currentTarget.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) { act.reply(t.id, text.trim()); setText(''); } }} />
+      </label>
+      <span class="nx-thread-foot">
+        {parts.length ? <button class="rp-link" type="button" onClick={() => act.light(parts)}>Show on canvas</button> : null}
+        {t.linked?.map((l, i) => <span key={i} class="nx-linked"><AboutGlyph a={l.kind} />also on {l.name}</span>)}
+      </span>
     </div>
   );
 }
