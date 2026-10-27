@@ -67,6 +67,13 @@ describe('directory', () => {
     assert.equal(directoryOf('me', null, '  ').agentName, 'Vowe');
     assert.equal(directoryOf('me', null, undefined).agentName, 'Vowe');
   });
+  it('keeps the record’s names for members access doesn’t cover', () => {
+    const d = directoryOf('me', access, undefined, [{ who: 'u2', role: 'member', name: 'Other' }, { who: 'jo', role: 'owner', name: 'John Park' }, { who: 'x', role: 'member' }]);
+    assert.equal(d.people.u2.name, 'Lee');
+    assert.equal(d.people.jo.name, 'John Park');
+    assert.equal(d.people.jo.initials, 'JP');
+    assert.equal(d.people.x, undefined);
+  });
 });
 
 describe('mentions', () => {

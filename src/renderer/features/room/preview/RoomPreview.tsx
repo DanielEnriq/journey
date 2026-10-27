@@ -1,14 +1,12 @@
 import { Fragment, h, type ComponentChildren } from '../../../vendor/preact.js';
 import { useEffect, useState } from '../../../vendor/preact-hooks.js';
-import { Store, useStore } from '../../../shared/store.js';
+import { useStore } from '../../../shared/store.js';
 import { ago } from '../../../shared/time.js';
 import type { CallSession } from '../../call/session.js';
 import { useLoaded } from '../../workspace/hooks.js';
-import type { RoomController } from '../controller.js';
 import type { RoomDataSource, RoomEvent, RoomPreview as Preview, WorkstreamDataSource } from '../data/sources.js';
 import { listNames, Who } from '../shell.js';
 import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
-import { Glimpse } from './Glimpse.js';
 import { WorkContext } from './WorkContext.js';
 import { pendingAnchor } from '../../../shared/nav.js';
 
@@ -17,7 +15,6 @@ import { pendingAnchor } from '../../../shared/nav.js';
 // opens in the call.
 
 type Sources = { room: RoomDataSource; work: WorkstreamDataSource };
-const NO_CANVAS = new Store({});
 
 function EventRow({ e }: { e: RoomEvent }) {
   return (
@@ -62,12 +59,10 @@ function CallCard({ p, roomId, session, onJoin, sheet }: { p: Preview; roomId: s
   );
 }
 
-export function RoomPreview({ sources, roomId, session, canvas, attachError, onJoin: join, joinSheet, people }: {
+export function RoomPreview({ sources, roomId, session, attachError, onJoin: join, joinSheet, people }: {
   sources: Sources;
   roomId: string;
   session: CallSession;
-  /** The room's canvas, if it has one, for the still of its last view. */
-  canvas: RoomController | null;
   /** Why the room's repository couldn't be attached when it was made. */
   attachError?: string;
   onJoin(): void;
@@ -83,7 +78,6 @@ export function RoomPreview({ sources, roomId, session, canvas, attachError, onJ
   const ctx = useLoaded(() => work.context(roomId), (fn) => room.subscribe(fn), roomId);
   const [openId, setOpen] = useState<string | null>(null);
   const [sinceShown, setSinceShown] = useState(true);
-  useStore<object>(canvas?.store ?? NO_CANVAS);
   // Leaving the preview counts as a visit: next time, "since you were last here" starts from now.
   useEffect(() => { setOpen(null); setSinceShown(true); return () => room.visited(roomId); }, [roomId]);
 
@@ -130,9 +124,9 @@ export function RoomPreview({ sources, roomId, session, canvas, attachError, onJ
               <span class="rk">Last shared view</span>
               {p.lastView && <span class="gl-meta"><b>{p.lastView.name}</b> · {p.lastView.by ? (p.lastView.by.tone === 'me' ? 'you' : p.lastView.by.name) + ' · ' : ''}{ago(p.lastView.at)}</span>}
             </div>
-            {p.lastView && (canvas || p.lastView.scene) ? (
+            {p.lastView?.scene ? (
               <>
-                {canvas ? <Glimpse ctrl={canvas} /> : <SceneGlimpse scene={p.lastView.scene!} />}
+                <SceneGlimpse scene={p.lastView.scene} />
                 <span class="gl-q">{p.lastView.question}</span>
               </>
             ) : (

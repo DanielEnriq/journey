@@ -11,7 +11,7 @@ import {
 } from '../../../shared/canvas/index.js';
 import { srOnly } from '../room/canvas/Part.js';
 import { STAGE_H, STAGE_W, toD } from '../room/geometry.js';
-import { KIND_LABEL } from '../room/model.js';
+import { KIND_LABEL } from '../room/types.js';
 import type { CanvasClient } from './client.js';
 import { BasisGlyph, Body, glyphFor } from './faces.js';
 import { anatomyOf, captionFor } from './faces-model.js';

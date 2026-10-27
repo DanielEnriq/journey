@@ -414,8 +414,6 @@ const room: RoomDataSource = {
   enter: enterRoom,
   exit: exitRoom,
   // The scripted canvas's cast; real rooms have members instead.
-  people: () => ({}) as ReturnType<RoomDataSource['people']>,
-  invite: () => Promise.reject(new Error('Inviting someone isn’t in this build yet.')),
   attach,
   repos: localRepos,
   addRepo: addLocalRepo,
@@ -797,25 +795,6 @@ const invites: InviteSource = {
 };
 
 /* ---------- Home: across your rooms, from what's already read, plus this machine's repositories. ---------- */
-
-/** A decision whose current version waits on your signature. */
-export interface SignatureNeed { id: string; roomId: string; roomName: string; title: string; version: number; proposedBy: string }
-/** The decision each room is working on, and whether its owners and members have all signed it. */
-export interface CurrentDecision { id: string; roomId: string; roomName: string; title: string; version: number; agreed: boolean; at: string }
-
-/** Read from the records the rooms list already loaded; no new reads. */
-export function acrossRooms(): { signatures: SignatureNeed[]; decisions: CurrentDecision[] } {
-  const signatures: SignatureNeed[] = [], decisions: CurrentDecision[] = [];
-  for (const id of order) {
-    const k = known.get(id);
-    const { d, needsMe } = current(k?.record ?? null, k?.room.role);
-    if (!k || !d) continue;
-    const by = peopleOf(k.members)(d.proposedBy.id, d.proposedBy);
-    if (needsMe) signatures.push({ id: d.id, roomId: id, roomName: k.room.name, title: d.title, version: d.version, proposedBy: by.tone === 'me' ? 'You' : by.name });
-    decisions.push({ id: d.id, roomId: id, roomName: k.room.name, title: d.title, version: d.version, agreed: decisionOf(d, k.members).status === 'agreed', at: d.updatedAt });
-  }
-  return { signatures, decisions };
-}
 
 /**
  * Your clone of each room's repository (rooms.checkout): the checkout, or null when this machine has

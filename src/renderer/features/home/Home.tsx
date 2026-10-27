@@ -1,5 +1,5 @@
 import { Fragment, h, type ComponentChildren } from '../../vendor/preact.js';
-import { useEffect, useMemo, useState } from '../../vendor/preact-hooks.js';
+import { useEffect, useState } from '../../vendor/preact-hooks.js';
 import type { Scene } from '../../../shared/canvas/index.js';
 import type { DetectedRepository, IncomingInvitation, InviteKey, Repository, RoomCheckout } from '../../../shared/api.js';
 import { account, cancelSignIn, firstName, initials, linkSignInMethod, loadSignInMethods, signInMethods, signOut, unlinkSignInMethod } from '../../shared/account.js';
@@ -11,7 +11,6 @@ import { AccountMenu, SignInMethodsSheet } from '../../ui/pass2/auth/Account.js'
 import { SessionSplash } from '../../ui/pass2/auth/SessionSplash.js';
 import { Sheet } from '../../ui/pass2/common.js';
 import { HomeFirst } from '../../ui/pass2/home/HomeFirst.js';
-import { HomeReturning } from '../../ui/pass2/home/HomeReturning.js';
 import { InboxHome } from '../inbox/ui/InboxHome.js';
 import { RoomsQuiet, YourRooms } from '../inbox/ui/YourRooms.js';
 import { activeInbox, type InboxSource } from '../inbox/source.js';
@@ -19,10 +18,10 @@ import { InvitationsIndex } from '../../ui/pass2/invites/InviteGate.js';
 import { FindRepositoriesSheet, ProjectsIndex } from '../../ui/pass2/projects/Projects.js';
 import { RoomsIndex } from '../../ui/pass2/rooms/RoomsIndex.js';
 import { AppShell, type ShellRoute } from '../../ui/pass2/shell/AppShell.js';
-import type { AccountView, CanvasPreview, CanvasSketch, DecisionItem, LocalRepoView, MissingRepoView, NeedItem, Person, RoomCard, WorkItem } from '../../ui/pass2/types.js';
+import type { AccountView, CanvasPreview, CanvasSketch, LocalRepoView, MissingRepoView, Person, RoomCard, WorkItem } from '../../ui/pass2/types.js';
 import type { NewRoom, RepoChoice } from '../room/data/sources.js';
 import type { PersonRef, RoomSummary } from '../room/types.js';
-import { acrossRooms, localWork, realStatus, realWorkspace, repositories, retryRooms, roomCheckouts, roomScene } from '../workspace/real/workspace.js';
+import { localWork, realStatus, realWorkspace, repositories, retryRooms, roomCheckouts, roomScene } from '../workspace/real/workspace.js';
 
 // Home, Rooms, Projects and Invitations (Design Pass 2), inside the Pass 2 shell. The components in
 // ui/pass2 never fetch: this reads what they show from the real workspace (rooms and their records,
@@ -187,12 +186,6 @@ export function Home(p: HomeProps) {
     };
   });
 
-  const across = useMemo(() => (real ? acrossRooms() : { signatures: [], decisions: [] }), [real, p.rooms]);
-  const needs: NeedItem[] = real
-    ? [...(invitations ?? []).map((invitation) => ({ kind: 'invitation' as const, invitation })), ...across.signatures.map((s) => ({ kind: 'signature' as const, ...s }))]
-    : p.rooms.filter((r) => r.needs).map((r) => ({ kind: 'room' as const, roomId: r.id, roomName: r.name, text: r.needs! }));
-  const decisions: DecisionItem[] | null = real ? across.decisions : null;
-
   const localViews: LocalRepoView[] | null = local && local.map((r) => ({
     id: r.id, name: r.name, pathLabel: pathLabel(r.path), lastOpenedAt: r.lastOpenedAt, remote: null,
     rooms: p.rooms.filter((x) => checkouts.get(x.id)?.repositoryId === r.id).map((x) => ({ id: x.id, name: x.name })),
@@ -243,15 +236,17 @@ export function Home(p: HomeProps) {
   } else if (cards && !cards.length) {
     page = <HomeFirst firstName={firstName(user)} composer={composer} invitations={invitations ?? []} onOpenInvite={p.onOpenInvite}
       repoCount={local?.length ?? 0} onAddRepo={addRepo} onFindRepos={findRepos} notice={notice} />;
-  } else if (inbox) {
-    page = <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
-      quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />} notice={notice}
-      idle={(st) => <YourRooms rooms={p.rooms} now={st.now} needs={needsByRoom(st.view.needs)} scene={(id) => inbox.context(id).then((c) => c.scene)}
-        onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} work={real ? work : null} missing={missingHere} />} />;
   } else {
-    page = <HomeReturning firstName={firstName(user)} rooms={cards} needs={needs} work={real ? work : null} decisions={decisions}
-      repos={real ? localViews : null} missing={missing} composer={composer} notice={notice} onOpenRoom={p.onOpenRoom} onOpenInvite={p.onOpenInvite}
-      onNewRoom={() => p.onNewRoom(null)} onSeeRooms={() => p.onNavigate('rooms')} onSeeProjects={() => p.onNavigate('projects')} onAddRepo={addRepo} />;
+    // The Inbox is bound as soon as you're signed in; until then, your rooms on their own.
+    const rooms = (needs?: Record<string, number>, now = new Date().toISOString()) => (
+      <YourRooms rooms={p.rooms} now={now} needs={needs ?? {}} scene={(id) => inbox ? inbox.context(id).then((c) => c.scene) : Promise.resolve(null)}
+        onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} work={real ? work : null} missing={missingHere} />
+    );
+    page = inbox
+      ? <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
+          quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />} notice={notice}
+          idle={(st) => rooms(needsByRoom(st.view.needs), st.now)} />
+      : rooms();
   }
 
   const overlay = (

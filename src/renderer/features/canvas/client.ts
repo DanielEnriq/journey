@@ -200,17 +200,18 @@ const DEV_KEY = 'vowe.canvas.dev';
 /**
  * A canvas kept in this window's local storage, shared with other windows of the same app through a
  * BroadcastChannel, so two windows on the harness are two people in one room. `actor` says who each
- * command is from; the harness switches it to Vowe for Vowe's steps. Development only.
+ * command is from; the harness switches it to Vowe for Vowe's steps. `key` keeps the demo's canvases apart
+ * from the harness's. Development and the demo only.
  */
-export function memoryTransport(actor: () => Actor): CanvasTransport & { forget(roomId: string): void } {
+export function memoryTransport(actor: () => Actor, key = DEV_KEY): CanvasTransport & { forget(roomId: string): void } {
   const read = (): Record<string, StoredCanvas> => {
-    try { return JSON.parse(localStorage.getItem(DEV_KEY) || '{}'); } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; }
   };
-  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(DEV_KEY) : null;
+  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(key) : null;
   const changed = new Set<(roomId: string, c: StoredCanvas) => void>();
   const presence = new Set<(roomId: string, id: string, name: string, p: CanvasPresence | null) => void>();
   const store = memoryStore({}, (roomId, c) => {
-    try { localStorage.setItem(DEV_KEY, JSON.stringify({ ...read(), [roomId]: c })); } catch { /* storage may be full or off */ }
+    try { localStorage.setItem(key, JSON.stringify({ ...read(), [roomId]: c })); } catch { /* storage may be full or off */ }
     changed.forEach((fn) => fn(roomId, c));
     channel?.postMessage({ t: 'changed', roomId });
   });
@@ -241,7 +242,7 @@ export function memoryTransport(actor: () => Actor): CanvasTransport & { forget(
     forget(roomId) {
       const all = read();
       delete all[roomId];
-      try { localStorage.setItem(DEV_KEY, JSON.stringify(all)); } catch { /* storage may be off */ }
+      try { localStorage.setItem(key, JSON.stringify(all)); } catch { /* storage may be off */ }
       delete store.rooms[roomId];
       channel?.postMessage({ t: 'changed', roomId });
     },

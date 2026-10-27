@@ -1,15 +1,11 @@
 import type { Scene } from '../../../../shared/canvas/index.js';
-import type {
-  AgentTarget, BoundDef, ChangedFile, Decision, LabelDef, Note, PartDef, Person, PersonId, PersonRef, RoomSummary, StepDef,
-  ViewDef, ViewId, WireDef, Workstream,
-} from '../types.js';
+import type { ChangedFile, PersonRef, RoomSummary } from '../types.js';
 import type { RoomPanelProps } from '../panel/types.js';
-import type { Scenario } from '../controller.js';
 
 // The seams between the app and the services behind it. Two workspaces implement them: the real one
 // (features/workspace/real: Supabase rooms and their record, Realtime presence, WorkContextService and
-// Claude Code transcripts over IPC) and the Payment Reliability demo (features/workspace/mock, plus
-// ../mock/ for its scripted canvas, call and coding agent). The components only ever see these shapes.
+// Claude Code transcripts over IPC) and the demo (features/workspace/mock: the same shapes, kept in this
+// window). The components only ever see these shapes.
 
 /* ---------- Rooms: persistent, listed by the workspace, previewed outside the call. ---------- */
 
@@ -58,9 +54,6 @@ export interface RoomDataSource {
   enter?(roomId: string): Promise<void>;
   /** You closed the room. */
   exit?(roomId: string): Promise<void>;
-  people(): Record<PersonId, Person>;
-  /** Asks a teammate to join; resolves once they have. Only ever called after the room said yes. */
-  invite(person: PersonId): Promise<void>;
   /** Repositories a room can be connected to; absent where rooms can't be (the demo). */
   repos?(): Promise<RepoChoice[]>;
   /** Adds a repository on this machine with a folder picker; null if cancelled. */
@@ -82,21 +75,6 @@ export interface PartState {
   capCls: string;
 }
 
-/** The system on the canvas and the views drawn of it. Real: Vowe's composer, bound to the repository. */
-export interface CanvasDataSource {
-  parts(): PartDef[];
-  /** Every view's wires, labels, boundaries and steps; the canvas fades in the current view's. */
-  wires(): WireDef[];
-  labels(): LabelDef[];
-  bounds(): BoundDef[];
-  steps(): StepDef[];
-  view(id: ViewId): ViewDef | undefined;
-  /** Vowe draws a new view mid-call from the building blocks, and says how. */
-  compose(id: 'timeout' | 'ui', parent: ViewId): ViewDef;
-  /** A part's own drawing for a view, given how far the handed-off work has got. */
-  describe(part: PartDef, view: ViewId, work: { progress: number; question: QuestionState }): PartState;
-}
-
 /** The call. Real: LiveKit for audio, ElevenLabs for Vowe's voice and captions. Never opens the mic by itself. */
 export interface CallDataSource {
   /** Joins the room's call, starting one if nobody is in it. Resolves once connected, muted. */
@@ -104,26 +82,6 @@ export interface CallDataSource {
   leave(roomId: string): Promise<void>;
   setMuted(muted: boolean): void;
   setCaptions(on: boolean): void;
-}
-
-/** What people meant and what they agreed. Real: the intent and decision service. */
-export interface IntentDataSource {
-  goal(): { text: string; by: PersonId };
-  notes(): Note[];
-  decision(): Decision;
-  /** The decision's fixed fields; only its checks get amended in this room. */
-  decisionText(): { what: string; goal: string; avoid: string; because: string; why: string };
-  /** A check Vowe suggests while the decision is amended. */
-  suggestedCheck(): string;
-}
-
-export type QuestionState = 'none' | 'open' | 'answered';
-
-export interface WorkEvents {
-  /** Stage index into stages(): started, reading, changing, testing, ready. */
-  progress(stage: number): void;
-  /** The agent hit something the decision doesn't settle. */
-  question(): void;
 }
 
 /* ---------- Work context: the coding activity behind a room. ---------- */
@@ -191,25 +149,6 @@ export interface WorkstreamDataSource {
   share?(roomId: string, streamId: string): Promise<void>;
   /** The latest of a workstream's most recent Claude Code session; absent where there are no transcripts. */
   transcript?(roomId: string, streamId: string): Promise<Transcript>;
-}
-
-/** The Payment Reliability call's scripted coding agent and its handoff. */
-export interface ScriptedWorkSource extends WorkstreamDataSource {
-  /** Work already running before this room's decision was handed off. */
-  running(scenario: Scenario): Workstream[];
-  stages(): string[];
-  files(): ChangedFile[];
-  branch(): string;
-  handoff(decision: Decision, target: AgentTarget, events: WorkEvents): void;
-  answer(text: string, events: WorkEvents): void;
-}
-
-export interface RoomSources {
-  room: RoomDataSource;
-  canvas: CanvasDataSource;
-  call: CallDataSource;
-  intent: IntentDataSource;
-  work: ScriptedWorkSource;
 }
 
 /* ---------- A room's record in its call: threads, replies, the decision. ---------- */

@@ -86,6 +86,7 @@ export interface ViewDef {
 }
 
 export type NoteKind = 'note' | 'concern' | 'avoid' | 'constraint' | 'question' | 'goal';
+export const KIND_LABEL: Record<NoteKind, string> = { note: 'Note', concern: 'Concern', avoid: 'Avoid', constraint: 'Constraint', question: 'Open question', goal: 'Goal' };
 
 export interface Note {
   id: string;

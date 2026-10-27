@@ -7,11 +7,12 @@ import { CanvasHarness } from './features/canvas/Harness.js';
 import { RoomPanelPreview } from './features/room/panel/RoomPanelPreview.js';
 import { RoomScreen } from './features/room/RoomScreen.js';
 import { useRooms } from './features/workspace/hooks.js';
+import { ipcTransport } from './features/canvas/client.js';
+import { clearDemo, demoLoaded, EXAMPLE_REPOS, loadDemo, resetWorkspace, workspace as demoWorkspace } from './features/workspace/mock/workspace.js';
+import { demoCanvas } from './features/workspace/mock/canvas.js';
+import { DEMO_ME, demoReply, demoVowe } from './features/workspace/mock/record.js';
 import {
-  clearDemo, demoCanvas, demoScenario, EXAMPLE_REPOS, loadDemo, resetWorkspace, workspace as demoWorkspace,
-} from './features/workspace/mock/workspace.js';
-import {
-  addLocalRepo, attachErrors, callEnded, localRepos, realStatus, realWorkspace, RoomUnavailable, startRealWorkspace, voice,
+  addLocalRepo, attachErrors, callEnded, localRepos, realStatus, realWorkspace, RoomUnavailable, selfCloudId, startRealWorkspace, voice,
 } from './features/workspace/real/workspace.js';
 import type { LandingState, MembershipError } from './features/membership/model.js';
 import { Home, type HomePage } from './features/home/Home.js';
@@ -52,6 +53,13 @@ const PREVIEW = !window.journey;
 const PAGES: HomePage[] = ['home', 'rooms', 'projects', 'invitations'];
 
 const demoSession = new CallSession(demoWorkspace.call);
+/** Your rooms' canvases: main's hub over IPC, acting as the signed-in person. */
+const realCanvas = PREVIEW ? null : ipcTransport(() => ({ kind: 'human', id: selfCloudId() ?? 'me', name: account.state.user?.name ?? 'You' }));
+/** The demo's rooms, as the room screen reads them; the same screens as your rooms' over example data. */
+const demoRoom = {
+  canvas: demoCanvas, vowe: demoVowe, self: () => DEMO_ME, example: true,
+  agentReply: async (roomId: string, threadId: string, body: string) => { const r = demoReply(roomId, threadId, body, 'vowe'); if (!r.ok) throw new Error(r.error.message); },
+};
 const realSession = new CallSession(realWorkspace.call);
 if (!PREVIEW) startRealWorkspace();
 // The call ending without you asking: a lost connection offers a rejoin; being taken off it leaves.
@@ -172,17 +180,16 @@ function DevMenu({ route, go, onClose }: { route: Route; go(r: Route): void; onC
   const flags = useStore(devFlags);
   const cs = useStore(demoSession.store);
   const on = (cond: boolean) => cond ? 'on' : '';
-  const scenario = demoScenario();
-  const demo = (s: 'live' | 'returning') => { void demoSession.leave(); loadDemo(s); go({ screen: 'room', id: 'payments', call: false, demo: true }); };
+  const loaded = demoLoaded();
+  const demo = () => { void demoSession.leave(); void loadDemo().then(() => go({ screen: 'home', demo: true })); };
   return (
     <div class="devmenu" role="dialog" aria-label="Developer menu">
       <h2>Developer<button type="button" onClick={onClose} aria-label="Close developer menu">Ctrl ⇧ D</button></h2>
       <div class="grp">
-        <b>Demo scenario</b>
-        <button type="button" class={on(scenario === 'live')} onClick={() => demo('live')}>Payment Reliability · live</button>
-        <button type="button" class={on(scenario === 'returning')} onClick={() => demo('returning')}>· returning later</button>
+        <b>Demo</b>
+        <button type="button" onClick={demo}>{loaded ? 'Reload Payment Reliability' : 'Load Payment Reliability'}</button>
         <button type="button" class={on(route.screen === 'home' && route.demo)} onClick={() => go({ screen: 'home', demo: true })}>Demo home</button>
-        {scenario && <button type="button" onClick={() => { void demoSession.leave(); clearDemo(); go({ screen: 'home', demo: true }); }}>Remove example rooms</button>}
+        {loaded && <button type="button" onClick={() => { void demoSession.leave(); clearDemo(); go({ screen: 'home', demo: true }); }}>Remove example rooms</button>}
       </div>
       <div class="grp">
         <b>Screens</b>
@@ -203,7 +210,7 @@ function DevMenu({ route, go, onClose }: { route: Route; go(r: Route): void; onC
       </div>
       <div class="grp">
         <b>Data</b>
-        <button type="button" onClick={() => { void demoSession.leave(); resetWorkspace(); go({ screen: 'home', demo: true }); }}>Clear the demo’s rooms</button>
+        <button type="button" onClick={() => { void demoSession.leave(); resetWorkspace(); go({ screen: 'home', demo: true }); }}>Reset the demo, with rooms you made in it</button>
         {!PREVIEW && <button type="button" onClick={() => { location.href = 'index.html'; }}>Earlier setup screen</button>}
       </div>
       <p class="note">{PREVIEW ? '' : 'Your rooms are real: Supabase rooms and their record, and Claude Code work on this machine. '}The demo’s rooms, calls, decisions and coding agents are mock data, kept in this window’s local storage, and never mix with real rooms. Mocks log what they pretend to do: filter the console by <code>[vowe mock]</code>.</p>
@@ -313,10 +320,13 @@ function App() {
   const overlay = newRoom ? <CreateRoomSheet repos={choices} repoNote={repoNote} onAddRepo={addRepo} onCreate={create} onClose={() => setNewRoom(null)} initialRepo={newRoom.repo} /> : null;
   const onNewRoom = (repo?: string | null) => setNewRoom({ repo: repo ?? null });
   const roomProps = (id: string) => ({
-    sources: ws, record: demo ? undefined : realWorkspace.record, roomId: id, session,
-    canvas: demo && id === 'payments' ? demoCanvas() : null, attachError: demo ? undefined : attachErrors.get(id), light,
+    sources: ws, roomId: id, session, light,
+    ...(demo || !realCanvas ? demoRoom : {
+      canvas: realCanvas, vowe: realWorkspace.vowe, self: () => selfCloudId() ?? '',
+      agentReply: (roomId: string, threadId: string, body: string) => realWorkspace.record.reply(roomId, threadId, body, 'vowe'),
+      attachError: attachErrors.get(id), membership: realWorkspace.membership, voice: voice(),
+    }),
     onOpenRoom: openRoom, onNewRoom, onHome: home,
-    membership: demo ? undefined : realWorkspace.membership, voice: demo ? undefined : voice(), vowe: demo ? undefined : realWorkspace.vowe,
     onJoin: (o?: { talk: boolean }) => askJoin(id, !!o?.talk), onLeave: leave,
   });
   // The room whose call you're in, mounted wherever you are; on screen only when the route shows it.

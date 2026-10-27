@@ -106,7 +106,7 @@ export function RealRoom(p: RealRoomProps) {
   const members = (p.access?.members ?? []).map((m) => `${m.userId}:${m.role}`).sort().join(',');
   const { store: record, status, retry } = useRecord(p.services, p.roomId, members);
   const rec = useStore(record);
-  const directory = useMemo(() => directoryOf(p.me, p.access, rec.agentName), [p.me, p.access, rec.agentName]);
+  const directory = useMemo(() => directoryOf(p.me, p.access, rec.agentName, rec.members), [p.me, p.access, rec.agentName, rec.members]);
   const [lit, setLit] = useState<string[]>([]);
   /** A comment placed on the canvas but not yet written. */
   const [draft, setDraft] = useState<{ x: number; y: number; on: { component: string; name: string } | null } | null>(null);
@@ -122,7 +122,7 @@ export function RealRoom(p: RealRoomProps) {
   }, [ask.reviewing, ask.error]);
   // Vowe joins a thread when someone @mentions it (by its displayed name or "vowe"): it answers in that
   // thread on this person's model sign-in, attributed to the agent. Nothing else in the Desk calls the model.
-  const services = useMemo(() => withMentions(p.services, p.roomId, () => record.state, () => names(directoryOf(p.me, p.access, record.state.agentName)).agentName(), p.asker, p.agentReply, setAskFailed), [p.services, p.roomId, p.asker]);
+  const services = useMemo(() => withMentions(p.services, p.roomId, () => record.state, () => names(directoryOf(p.me, p.access, record.state.agentName, record.state.members)).agentName(), p.asker, p.agentReply, setAskFailed), [p.services, p.roomId, p.asker]);
   const act = useMemo(() => createDeskActions({
     roomId: p.roomId, ui, record, services, names: names(directory), light: (parts) => setLit(parts ?? []),
     invite: p.openShare,

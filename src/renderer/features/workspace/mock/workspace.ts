@@ -1,20 +1,20 @@
 import { devFlags, wait } from '../../../shared/devflags.js';
 import { mockLog } from '../../../shared/mock.js';
 import { minutesBefore } from '../../../shared/time.js';
-import type { Scenario } from '../../room/controller.js';
 import { account, initials } from '../../../shared/account.js';
 import type {
-  CallDataSource, RepoChoice, RoomDataSource, RoomEvent, RoomPreview, RoomSources, RoomWorkContext, RoomWorkstream, ScriptedWorkSource,
-  WorkCheck,
+  CallDataSource, RepoChoice, RoomDataSource, RoomEvent, RoomPreview, RoomWorkContext, RoomWorkstream, WorkstreamDataSource,
 } from '../../room/data/sources.js';
-import { demoController, onDemoChange, resetDemo } from '../../room/demo.js';
-import * as payments from '../../room/mock/payment-reliability.js';
 import type { PersonRef, RoomSummary } from '../../room/types.js';
+import { AGENT, type RecordEvent, type VoweRecord } from '../../vowe-room/contracts/model.js';
 import { classify } from '../../work/status.js';
+import { clearCanvases, demoScene, seedCanvases } from './canvas.js';
+import { clearRecords, DEMO_ME, demoRecord, onRecords, seedRecords } from './record.js';
 
 // The demo workspace, as local mock data: the rooms made in the demo (kept in localStorage, so they
 // survive a restart), who is in each room's call, what happened there, and the coding work behind it.
-// The demo scenario, loaded from the developer menu, adds four example rooms around Payment Reliability.
+// Loading the demo from the developer menu adds four example rooms around Payment Reliability, each with
+// a record (./record.ts) and a canvas (./canvas.ts) that the real room and the real Inbox read.
 // Only the demo routes (#/demo/…) and the browser preview use it; the app's own rooms never do.
 // Nothing here talks to a service; every pretend action logs a "[vowe mock]" line.
 
@@ -22,8 +22,8 @@ const KEY = 'vowe.workspace';
 
 interface SavedRoom { id: string; name: string; goal: string; repo: string | null; createdAt: string }
 interface Saved {
-  /** The loaded demo scenario and when it was loaded; example times count back from then. */
-  demo: { scenario: Scenario; at: number } | null;
+  /** When the demo was loaded; example times count back from then. */
+  demo: { at: number } | null;
   rooms: SavedRoom[];
   /** When you last left each room. */
   visits: Record<string, string>;
@@ -50,17 +50,21 @@ function persist() {
 }
 function notify() { listeners.forEach((l) => l()); }
 function commit(patch: Partial<Saved>) { saved = { ...saved, ...patch }; persist(); notify(); }
-onDemoChange(notify);
+// A write to a room's record changes its summary (what needs you, its last activity).
+onRecords(notify);
 // A flipped dev flag (slow or failing work context) shows on the next read.
 devFlags.subscribe(notify);
 
 /** You, by the signed-in account's initials; the demo's cast plays everyone else. */
 const you = (): PersonRef => ({ name: 'You', initials: initials(account.state.user?.name || account.state.user?.email || 'You'), tone: 'me' });
-const JOHN: PersonRef = { name: 'John', initials: 'JM', tone: 'peer' };
-const SRIKAR: PersonRef = { name: 'Srikar', initials: 'SR', tone: 'p2' };
-const PRIYA: PersonRef = { name: 'Priya', initials: 'PK', tone: 'p3' };
-const MEI: PersonRef = { name: 'Mei', initials: 'ML', tone: 'p2' };
-const CLAUDE: PersonRef = { name: 'Claude Code', initials: 'CC', tone: 'p3' };
+const CAST: Record<string, PersonRef> = {
+  john: { name: 'John', initials: 'JM', tone: 'peer' },
+  srikar: { name: 'Srikar', initials: 'SR', tone: 'p2' },
+  priya: { name: 'Priya', initials: 'PK', tone: 'p3' },
+  mei: { name: 'Mei', initials: 'ML', tone: 'p2' },
+};
+const personRef = (who: string | null): PersonRef | null => (!who || who === AGENT ? null : who === DEMO_ME ? you() : CAST[who] ?? null);
+const nameOf = (who: string | null) => (who === DEMO_ME ? 'You' : who === AGENT ? 'Vowe' : who ? CAST[who]?.name ?? 'Someone' : '');
 
 /** Example repositories the demo's room picker offers; nothing is cloned or read. */
 export const EXAMPLE_REPOS: RepoChoice[] = ['acme/payments', 'acme/web', 'acme/ledger'].map((r) => ({ id: r, label: r }));
@@ -68,119 +72,36 @@ export const EXAMPLE_REPOS: RepoChoice[] = ['acme/payments', 'acme/web', 'acme/l
 const now = () => Date.now();
 const iso = () => new Date().toISOString();
 const ev = (id: string, at: string, text: string, who: PersonRef | null, tone?: RoomEvent['tone']): RoomEvent => ({ id, at, text, who, ...(tone ? { tone } : {}) });
+const byNewest = (a: RoomEvent, b: RoomEvent) => Date.parse(b.at) - Date.parse(a.at);
 
-/** The first time a demo state change was seen, so it keeps its time on later reads. */
-const firstSeen = new Map<string, string>();
-const seen = (key: string) => { if (!firstSeen.has(key)) firstSeen.set(key, iso()); return firstSeen.get(key)!; };
+/* ---------- The example rooms: what they are, and the coding work behind them. ---------- */
 
-/* ---------- Payment Reliability: its call, its canvas and its story live in the demo controller. ---------- */
-
-function paymentsSources(): RoomSources {
-  return { room, call, work, canvas: payments.canvas, intent: payments.intent };
-}
-
-/** The canvas for the loaded scenario; loading the other scenario replaces it, never the one in use. */
-function paymentsCtrl() {
-  return demoController(paymentsSources(), saved.demo?.scenario ?? 'live');
-}
-
-function paymentsState() {
-  const s = paymentsCtrl().state, d = s.dec;
-  const qOpen = s.handed && s.question === 'open';
-  const needsSign = !s.handed && !d.amending && d.sig.daniel !== d.v;
-  return { s, d, qOpen, needsSign };
-}
-
-function paymentsChecks(): WorkCheck[] {
-  const { s, d } = paymentsState();
-  return d.verify.split(';').map((t) => t.trim()).filter(Boolean).map((t) => {
-    const timeout = t.includes('timeout');
-    const result = timeout ? (s.p >= 4 ? 'pass' : s.p >= 3 ? 'running' : 'not-run') : (s.p >= 3 ? 'pass' : 'not-run');
-    return { text: t[0].toUpperCase() + t.slice(1), result };
-  });
-}
-
-function paymentsEvents(T: number, returning: boolean): RoomEvent[] {
-  const { s, d, qOpen } = paymentsState();
-  const list: RoomEvent[] = returning ? [
-    ev('p-q', minutesBefore(T, 18), 'Claude Code asked the room about refunds, on the provider.', CLAUDE, 'needs'),
-    ev('p-checks', minutesBefore(T, 35), '2 of 3 checks pass. Provider timeout is still running.', CLAUDE, 'pass'),
-    ev('p-files', minutesBefore(T, 70), 'Claude Code changed 4 files in its own worktree.', CLAUDE),
-    ev('p-v3', minutesBefore(T, 170), 'John signed decision v3; it went to Claude Code with all three checks.', JOHN),
-  ] : [
-    ev('p-sign', minutesBefore(T, 4), 'John signed decision v2: idempotent processing for concurrent workers.', JOHN),
-    ev('p-view', minutesBefore(T, 12), 'Vowe drew the Failure flow from job #4182.', null),
-    ev('p-note', minutesBefore(T, 26), 'You noted on the worker: a crash after the charge redelivers the job.', you()),
-    ev('p-retry', minutesBefore(T, 40), 'John shared the retry worker stream with the room.', JOHN),
-  ];
-  // What the room has done in the call since: the newest come first.
-  if (s.composed) list.push(ev('p-tmo', seen('tmo'), 'Vowe drew Provider timeout.', null));
-  if (s.srikar === 'present') list.push(ev('p-srikar', seen('srikar'), 'Srikar joined the call.', SRIKAR));
-  if (!returning && d.sig.daniel === d.v) list.push(ev('p-you' + d.v, seen('sign' + d.v), `You signed decision v${d.v}.`, you()));
-  if (s.handed && !returning) list.push(ev('p-hand', seen('hand'), `Decision v${d.v} went to ${s.handedTo}.`, you()));
-  if (qOpen && !returning) list.push(ev('p-q2', seen('q'), `${s.handedTo} asked the room about refunds, on the provider.`, CLAUDE, 'needs'));
-  if (s.question === 'answered') list.push(ev('p-ans', seen('ans'), `The room answered: ${s.qAnswer}`, you()));
-  if (s.handed && s.p >= 4) list.push(ev('p-pass', seen('pass'), 'All checks pass on the idempotency branch.', CLAUDE, 'pass'));
-  return list;
-}
-
-function paymentsWork(T: number, returning: boolean): RoomWorkstream[] {
-  const { s, d, qOpen } = paymentsState();
-  const stages = payments.script.stages();
-  const out: RoomWorkstream[] = [];
-  if (s.handed) {
-    const observed = stages.slice(0, s.p + 1).map((text, i) => ({ at: returning ? minutesBefore(T, 170 - i * 35) : seen('stage' + i), text })).reverse();
-    if (qOpen) observed.unshift({ at: returning ? minutesBefore(T, 18) : seen('q'), text: 'Asked the room about refunds, and paused.' });
-    const checks = paymentsChecks();
-    const item = {
-      id: 'idem', title: 'Idempotent processing', agent: s.handedTo, branch: payments.script.branch(), worktree: '~/code/acme-payments-idempotency',
-      lastActivityAt: observed[0].at, lastActivity: observed[0].text, changedFiles: s.p >= 2 ? payments.script.files().length : 0, sessions: 1,
-      visibility: 'room' as const, fromDecision: `v${d.v}`, checks, observed, files: s.p >= 2 ? payments.script.files() : [],
-      ...(qOpen ? { question: 'The provider won’t take an idempotency key on refunds. Leave refunds out of this change, or check the ledger first?' } : {}),
-    };
-    out.push({ ...item, status: classify(item) });
-  }
-  const retry = returning ? {
-    lastActivityAt: minutesBefore(T, 95), lastActivity: `Ran worker.test.ts: ${payments.retryTests('returning')}.`,
-    checks: [{ text: 'Retry worker tests', result: 'pass' as const }],
-    observed: [{ at: minutesBefore(T, 95), text: `Ran worker.test.ts: ${payments.retryTests('returning')}.` }, { at: minutesBefore(T, 130), text: 'Edited payments/retry/worker.ts' }],
-  } : {
-    lastActivityAt: minutesBefore(T, 3), lastActivity: `Ran worker.test.ts: ${payments.retryTests('live')}.`,
-    observed: [
-      { at: minutesBefore(T, 3), text: `Ran worker.test.ts: ${payments.retryTests('live')}.` }, { at: minutesBefore(T, 9), text: 'Edited payments/retry/worker.ts' },
-      { at: minutesBefore(T, 21), text: 'Edited payments/retry/backoff.ts' }, { at: minutesBefore(T, 40), text: 'Session started in the retry-worker worktree.' },
-    ],
-  };
-  const retryItem = { id: 'retry', title: 'Retry worker', agent: 'Claude Code', branch: 'payments/retry-worker', worktree: '~/code/acme-payments-retry', changedFiles: 3, sessions: 1, visibility: 'room' as const, ...retry };
-  out.push({ ...retryItem, status: classify(retryItem) });
-  const local = {
-    id: 'pay-local', title: 'Exploring refund webhooks', agent: 'Claude Code', branch: 'main', worktree: '~/code/acme-payments', changedFiles: 0, sessions: 2,
-    visibility: (saved.shared.includes('pay-local') ? 'room' : 'local') as 'room' | 'local',
-    lastActivityAt: minutesBefore(T, 130), lastActivity: 'Read payments/refunds/handler.ts',
-    observed: [{ at: minutesBefore(T, 130), text: 'Read payments/refunds/handler.ts' }, { at: minutesBefore(T, 142), text: 'Session started in your main worktree.' }],
-  };
-  out.push({ ...local, status: classify(local) });
-  return out;
-}
-
-/* ---------- The other example rooms: no canvas, just their call, story and work. ---------- */
-
-interface DemoRoom {
-  id: string; name: string; repo: string | null; goal: { text: string; by: PersonRef };
-  inCall(): PersonRef[]; events(T: number): RoomEvent[]; work(T: number): RoomWorkstream[]; needs(): string | null;
-}
+interface DemoRoom { id: string; name: string; repo: string | null; inCall(): PersonRef[]; work(T: number): RoomWorkstream[] }
 
 function stream(s: Omit<RoomWorkstream, 'status'>): RoomWorkstream { return { ...s, status: classify(s) }; }
+const visibility = (id: string) => (saved.shared.includes(id) ? 'room' : 'local') as 'room' | 'local';
 
-const OTHER_ROOMS: DemoRoom[] = [
+const DEMO_ROOMS: DemoRoom[] = [
   {
-    id: 'latency', name: 'Checkout latency', repo: 'acme/web', goal: { text: 'Checkout p95 back under 400 ms.', by: PRIYA },
-    inCall: () => [PRIYA], needs: () => null,
-    events: (T) => [
-      ev('l-call', minutesBefore(T, 2), 'Priya started a call.', PRIYA),
-      ev('l-bisect', minutesBefore(T, 34), 'Codex narrowed the regression to 6 commits.', null),
-      ev('l-goal', minutesBefore(T, 60 * 26), 'Priya set the goal: checkout p95 back under 400 ms.', PRIYA),
+    id: 'payments', name: 'Payment Reliability', repo: 'acme/payments', inCall: () => [],
+    work: (T) => [
+      stream({
+        id: 'retry', title: 'Retry worker backoff', agent: 'Claude Code', branch: 'payments/retry-worker', worktree: '~/code/acme-payments-retry', changedFiles: 3, sessions: 1, visibility: 'room',
+        lastActivityAt: minutesBefore(T, 3), lastActivity: 'Ran worker.test.ts: 14 passed.',
+        observed: [
+          { at: minutesBefore(T, 3), text: 'Ran worker.test.ts: 14 passed.' }, { at: minutesBefore(T, 9), text: 'Edited payments/retry/worker.ts' },
+          { at: minutesBefore(T, 21), text: 'Edited payments/retry/backoff.ts' }, { at: minutesBefore(T, 40), text: 'Session started in the retry-worker worktree.' },
+        ],
+      }),
+      stream({
+        id: 'pay-local', title: 'Exploring refund webhooks', agent: 'Claude Code', branch: 'main', worktree: '~/code/acme-payments', changedFiles: 0, sessions: 2, visibility: visibility('pay-local'),
+        lastActivityAt: minutesBefore(T, 130), lastActivity: 'Read payments/refunds/handler.ts',
+        observed: [{ at: minutesBefore(T, 130), text: 'Read payments/refunds/handler.ts' }, { at: minutesBefore(T, 142), text: 'Session started in your main worktree.' }],
+      }),
     ],
+  },
+  {
+    id: 'latency', name: 'Checkout latency', repo: 'acme/web', inCall: () => [CAST.priya],
     work: (T) => [stream({
       id: 'bisect', title: 'p95 regression bisect', agent: 'Codex', branch: 'perf/p95-bisect', worktree: '~/code/acme-web-bisect', changedFiles: 0, sessions: 1, visibility: 'room',
       lastActivityAt: minutesBefore(T, 1), lastActivity: 'Ran the checkout benchmark at a3f9c12.',
@@ -188,13 +109,7 @@ const OTHER_ROOMS: DemoRoom[] = [
     })],
   },
   {
-    id: 'ledger', name: 'Ledger migration', repo: 'acme/ledger', goal: { text: 'Move the ledger to double-entry without downtime.', by: JOHN },
-    inCall: () => [], needs: () => 'Claude Code has a schema question',
-    events: (T) => [
-      ev('g-q', minutesBefore(T, 50), 'Claude Code asked how reversed entries should be dated.', CLAUDE, 'needs'),
-      ev('g-hand', minutesBefore(T, 60 * 5), 'John handed the backfill to Claude Code.', JOHN),
-      ev('g-call', minutesBefore(T, 60 * 6), 'Call ended · John and you, 40 min.', null),
-    ],
+    id: 'ledger', name: 'Ledger migration', repo: 'acme/ledger', inCall: () => [],
     work: (T) => [
       stream({
         id: 'backfill', title: 'Backfill job', agent: 'Claude Code', branch: 'ledger/backfill', worktree: '~/code/acme-ledger-backfill', changedFiles: 5, sessions: 1, visibility: 'room',
@@ -203,56 +118,77 @@ const OTHER_ROOMS: DemoRoom[] = [
         observed: [{ at: minutesBefore(T, 50), text: 'Asked the room a question, and paused.' }, { at: minutesBefore(T, 75), text: 'Edited ledger/backfill/entries.ts' }],
       }),
       stream({
-        id: 'dual-write', title: 'Dual-write shim', agent: 'Claude Code', branch: 'ledger/dual-write', worktree: '~/code/acme-ledger',
-        changedFiles: 2, sessions: 1, visibility: saved.shared.includes('dual-write') ? 'room' : 'local',
-        lastActivityAt: minutesBefore(T, 60 * 5), lastActivity: 'Edited ledger/write/shim.ts',
-        observed: [{ at: minutesBefore(T, 60 * 5), text: 'Edited ledger/write/shim.ts' }],
+        id: 'dual-write', title: 'Dual-write shim', agent: 'Claude Code', branch: 'ledger/dual-write', worktree: '~/code/acme-ledger', changedFiles: 2, sessions: 1, visibility: visibility('dual-write'),
+        lastActivityAt: minutesBefore(T, 60 * 5), lastActivity: 'Edited ledger/write/shim.ts', observed: [{ at: minutesBefore(T, 60 * 5), text: 'Edited ledger/write/shim.ts' }],
       }),
     ],
   },
-  {
-    id: 'webhooks', name: 'Webhook signing', repo: null, goal: { text: 'Every webhook we send is signed and verifiable.', by: MEI },
-    inCall: () => [], needs: () => null,
-    events: (T) => [ev('w-dec', minutesBefore(T, 60 * 48), 'Mei and you agreed decision v1: sign with HMAC-SHA256.', MEI)],
-    work: () => [],
-  },
+  { id: 'webhooks', name: 'Webhook signing', repo: null, inCall: () => [], work: () => [] },
 ];
 
-/* ---------- Rooms. ---------- */
+/* ---------- What a record says, in the words the room list and preview use. ---------- */
 
-function demoRoomsAt() {
-  const d = saved.demo;
-  return d ? { T: d.at, returning: d.scenario === 'returning' } : null;
+const VERB: Record<string, string> = {
+  thread: 'started a thread', reply: 'replied', decision: 'drafted', review: 'asked for signatures on', signed: 'signed', agreed: 'agreed',
+  amended: 'started a new version of', changes: 'asked for changes', work: 'drafted the plan', authorized: 'authorized', resolved: 'resolved',
+};
+
+function sentence(e: RecordEvent): string {
+  if (!e.by || !VERB[e.kind]) return e.text;
+  const v = e.version ? ` v${e.version}` : '';
+  return e.kind === 'thread' || e.kind === 'reply' || e.kind === 'changes' ? `${nameOf(e.by)} ${VERB[e.kind]}: ${e.text}` : `${nameOf(e.by)} ${VERB[e.kind]} ${e.text}${v}.`;
 }
+
+/** What waits on you in a record: a signature, a coding agent's question, a thread asked of you. */
+function attentionOf(r: VoweRecord): RoomPreview['attention'] {
+  const out: RoomPreview['attention'] = [];
+  for (const d of r.decisions) {
+    const mine = d.approvers.find((a) => a.who === DEMO_ME);
+    if (d.state === 'review' && mine && mine.signed !== d.version) {
+      const signed = d.approvers.filter((a) => a.signed === d.version && a.who !== DEMO_ME).map((a) => nameOf(a.who));
+      out.push({ id: `sign:${d.id}`, text: `Decision v${d.version} needs your signature`, detail: `${signed.length ? `${signed.join(' and ')} signed it: ` : ''}${d.title.toLowerCase()}.` });
+    }
+  }
+  for (const w of r.work) {
+    if (w.question && w.question.for === DEMO_ME && !w.question.answer && !w.question.deferred) {
+      out.push({ id: `q:${w.id}`, text: `${w.doer?.name ?? 'The agent'} has a question`, detail: w.question.text });
+    }
+  }
+  for (const t of r.threads) {
+    if (t.status === 'open' && t.waiting === DEMO_ME) {
+      const first = t.replies[0];
+      out.push({ id: `t:${t.id}`, text: `${nameOf(first?.by ?? null)} is waiting on your reply`, detail: first?.body ?? '' });
+    }
+  }
+  return out;
+}
+
+function recordEvents(r: VoweRecord): RoomEvent[] {
+  return (r.log ?? []).map((e) => ev(e.id, e.at, sentence(e), personRef(e.by), e.kind === 'question' ? 'needs' : undefined));
+}
+
+/* ---------- Rooms. ---------- */
 
 function withYou(id: string, others: PersonRef[]) { return inCallYou === id ? [you(), ...others] : others; }
 
 function ownEvents(id: string) { return saved.events[id] || []; }
 
 function summaryOf(id: string): RoomSummary | null {
-  const demo = demoRoomsAt();
-  if (demo && id === 'payments') {
-    const { s, d, qOpen, needsSign } = paymentsState();
-    const others = demo.returning ? [] : [JOHN, ...(s.srikar === 'present' ? [SRIKAR] : [])];
-    const events = paymentsEvents(demo.T, demo.returning).concat(ownEvents(id)).sort(byNewest);
+  const example = saved.demo ? DEMO_ROOMS.find((r) => r.id === id) : null;
+  const rec = example ? demoRecord(id) : null;
+  if (example && rec) {
+    const events = recordEvents(rec).concat(ownEvents(id)).sort(byNewest);
+    const role = rec.members.find((m) => m.who === DEMO_ME)?.role ?? 'member';
     return {
-      id, name: 'Payment Reliability', repo: 'acme/payments', inCall: withYou(id, others), demo: 'payments',
-      needs: qOpen ? `${s.handedTo} has a question about refunds` : needsSign && !demo.returning ? `Decision v${d.v} needs your signature` : null,
-      activity: events[0]?.text ?? '', activityAt: events[0]?.at ?? null,
+      id, name: example.name, repo: example.repo, inCall: withYou(id, example.inCall()), role,
+      needs: attentionOf(rec)[0]?.text ?? null, activity: events[0]?.text ?? '', activityAt: events[0]?.at ?? null,
     };
-  }
-  const other = demo ? OTHER_ROOMS.find((r) => r.id === id) : null;
-  if (other && demo) {
-    const events = other.events(demo.T).concat(ownEvents(id)).sort(byNewest);
-    return { id, name: other.name, repo: other.repo, inCall: withYou(id, other.inCall()), needs: other.needs(), activity: events[0]?.text ?? '', activityAt: events[0]?.at ?? null };
   }
   const mine = saved.rooms.find((r) => r.id === id);
   if (!mine) return null;
   const events = ownEvents(id);
-  return { id, name: mine.name, repo: mine.repo, inCall: withYou(id, []), needs: null, activity: events[0]?.text ?? 'You created this room.', activityAt: events[0]?.at ?? mine.createdAt };
+  return { id, name: mine.name, repo: mine.repo, inCall: withYou(id, []), role: 'owner', needs: null, activity: events[0]?.text ?? 'You created this room.', activityAt: events[0]?.at ?? mine.createdAt };
 }
-
-const byNewest = (a: RoomEvent, b: RoomEvent) => Date.parse(b.at) - Date.parse(a.at);
 
 function record(roomId: string, text: string) {
   const list = [ev('e' + now(), iso(), text, you())].concat(ownEvents(roomId)).slice(0, 20);
@@ -261,7 +197,7 @@ function record(roomId: string, text: string) {
 
 const room: RoomDataSource = {
   list() {
-    const ids = saved.rooms.slice().reverse().map((r) => r.id).concat(saved.demo ? ['payments', ...OTHER_ROOMS.map((r) => r.id)] : []);
+    const ids = saved.rooms.slice().reverse().map((r) => r.id).concat(saved.demo ? DEMO_ROOMS.map((r) => r.id) : []);
     return ids.map(summaryOf).filter((r): r is RoomSummary => !!r);
   },
   subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
@@ -277,25 +213,16 @@ const room: RoomDataSource = {
   async preview(id) {
     const summary = summaryOf(id);
     if (!summary) throw new Error(`No room ${id}`);
-    const demo = demoRoomsAt(), last = saved.visits[id];
+    const rec = saved.demo ? demoRecord(id) : null;
+    const last = saved.visits[id];
     let goal: RoomPreview['goal'] = null, events: RoomEvent[] = ownEvents(id), lastView: RoomPreview['lastView'] = null;
-    const attention: RoomPreview['attention'] = [];
-    if (demo && id === 'payments') {
-      const ctrl = paymentsCtrl(), { s, d, qOpen, needsSign } = paymentsState(), def = ctrl.viewDef();
-      goal = { text: payments.intent.goal().text, by: JOHN };
-      events = paymentsEvents(demo.T, demo.returning).concat(events);
-      const view = ctrl.curView(), opening = view === 'failure';
-      lastView = {
-        name: def.name, question: def.question, by: opening ? JOHN : you(),
-        at: demo.returning ? minutesBefore(demo.T, 170) : opening ? minutesBefore(demo.T, 12) : seen('view:' + view),
-      };
-      if (needsSign && !demo.returning) attention.push({ id: 'sign', text: `Decision v${d.v} needs your signature`, detail: 'John signed it: use idempotent processing for concurrent worker execution. Sign it in the call, where the room can see the checks.' });
-      if (qOpen) attention.push({ id: 'q', text: `${s.handedTo} is asking about refunds`, detail: 'It paused on the provider: refunds don’t take an idempotency key. The room decides whether they stay out of this change.', streamId: 'idem' });
-    } else if (demo && OTHER_ROOMS.some((r) => r.id === id)) {
-      const other = OTHER_ROOMS.find((r) => r.id === id)!;
-      goal = other.goal;
-      events = other.events(demo.T).concat(events);
-      for (const w of other.work(demo.T)) if (w.question) attention.push({ id: w.id, text: `${w.agent} is asking about ${w.title.toLowerCase()}`, detail: w.question, streamId: w.id });
+    let attention: RoomPreview['attention'] = [];
+    if (rec) {
+      if (rec.goal) goal = { text: rec.goal.text, by: personRef(rec.goal.by) ?? you() };
+      events = recordEvents(rec).concat(events);
+      attention = attentionOf(rec);
+      const shown = await demoScene(id);
+      if (shown) lastView = { name: shown.scene.name, question: shown.scene.question, at: shown.at, by: personRef(shown.by), scene: shown.scene };
     } else {
       const mine = saved.rooms.find((r) => r.id === id);
       if (mine?.goal) goal = { text: mine.goal, by: you() };
@@ -308,8 +235,6 @@ const room: RoomDataSource = {
     saved = { ...saved, visits: { ...saved.visits, [id]: iso() } };
     persist();
   },
-  people: payments.people,
-  invite: payments.invite,
 };
 
 /* ---------- Calls: temporary, joined on purpose, always muted at first. ---------- */
@@ -340,15 +265,13 @@ const call: CallDataSource = {
 
 /* ---------- Work context. ---------- */
 
-const work: ScriptedWorkSource = {
+const work: WorkstreamDataSource = {
   async context(roomId) {
     const f = devFlags.state;
     if (f.slowWork) await wait(1800);
     if (f.failWork) throw new Error('Work context unavailable (dev flag)');
-    const summary = summaryOf(roomId), demo = demoRoomsAt();
-    let workstreams: RoomWorkstream[] = [];
-    if (demo && roomId === 'payments') workstreams = paymentsWork(demo.T, demo.returning);
-    else if (demo) workstreams = OTHER_ROOMS.find((r) => r.id === roomId)?.work(demo.T) ?? [];
+    const summary = summaryOf(roomId);
+    const workstreams = saved.demo ? DEMO_ROOMS.find((r) => r.id === roomId)?.work(saved.demo.at) ?? [] : [];
     mockLog('work', `context for ${roomId}: ${workstreams.length} example workstreams; no repository, worktree or session was read`);
     const ctx: RoomWorkContext = { repo: summary?.repo ?? null, generatedAt: iso(), workstreams: summary?.repo ? workstreams : [] };
     return ctx;
@@ -357,49 +280,35 @@ const work: ScriptedWorkSource = {
     mockLog('work', `shared ${streamId} with ${roomId} (local only: no one else sees it)`);
     if (!saved.shared.includes(streamId)) commit({ shared: saved.shared.concat([streamId]) });
   },
-  ...payments.script,
 };
 
 /* ---------- What the app and the developer menu use. ---------- */
 
 export const workspace = { room, call, work };
 
-/** The canvas sources for a room's call; only Payment Reliability has a scripted canvas. */
-export function callSources(roomId: string): RoomSources | null {
-  return saved.demo && roomId === 'payments' ? paymentsSources() : null;
-}
+export const demoLoaded = () => !!saved.demo;
 
-export function demoCanvas() {
-  return saved.demo ? paymentsCtrl() : null;
-}
-
-export const demoScenario = () => saved.demo?.scenario ?? null;
-
-/** Loads the example rooms; "returning" moves your last visit to before what happened since. */
-export function loadDemo(scenario: Scenario) {
-  mockLog('workspace', `loaded the Payment Reliability demo (${scenario})`);
-  resetDemo();
-  firstSeen.clear();
+/** Loads the example rooms: their records, Payment Reliability's canvas, and fresh visits. */
+export async function loadDemo(): Promise<void> {
+  mockLog('workspace', 'loaded the Payment Reliability demo');
   inCallYou = null;
   const at = now();
-  const visits = { ...saved.visits };
-  OTHER_ROOMS.concat([{ id: 'payments' } as DemoRoom]).forEach((r) => { delete visits[r.id]; });
-  if (scenario === 'returning') { visits.payments = minutesBefore(at, 240); visits.ledger = minutesBefore(at, 60 * 4); }
-  const events = { ...saved.events };
-  ['payments', ...OTHER_ROOMS.map((r) => r.id)].forEach((id) => { delete events[id]; });
-  commit({ demo: { scenario, at }, visits, events, shared: [] });
-  paymentsCtrl();
+  const visits = { ...saved.visits }, events = { ...saved.events };
+  DEMO_ROOMS.forEach((r) => { delete visits[r.id]; delete events[r.id]; });
+  seedRecords(at);
+  await seedCanvases();
+  commit({ demo: { at }, visits, events, shared: [] });
 }
 
 export function clearDemo() {
-  resetDemo();
   inCallYou = null;
+  clearRecords();
+  clearCanvases();
   commit({ demo: null });
 }
 
 export function resetWorkspace() {
-  resetDemo();
-  inCallYou = null;
+  clearDemo();
   saved = { ...EMPTY };
   persist();
   notify();
