@@ -2,6 +2,7 @@ import { Fragment, h } from '../../../vendor/preact.js';
 import { useState } from '../../../vendor/preact-hooks.js';
 import { ago } from '../../../shared/time.js';
 import { STATUS_WORDS } from '../../work/status.js';
+import { Icon } from '../../../ui/icons.js';
 import type { Loaded } from '../../workspace/hooks.js';
 import type { RepoChoice, RoomWorkContext, RoomWorkstream, Transcript, WorkCheck } from '../data/sources.js';
 
@@ -77,7 +78,7 @@ function Stream({ w, open, toggle, share, transcript, onJoin }: {
   return (
     <div class={'stream wstream' + (w.status === 'attention' ? ' needs' : '') + (open ? ' open' : '')}>
       <button class="wtop" type="button" aria-expanded={open} onClick={toggle}>
-        <span class="top"><span class={DOT[w.status]}></span>{w.title}<span class="who">{w.agent}</span></span>
+        <span class="top"><span class={DOT[w.status]}></span><span class="wt">{w.title}</span><span class="who">{w.agent}</span></span>
         <span class="line">
           {w.status === 'attention' ? 'Paused on a question for the room.' : w.lastActivity ?? 'No activity observed.'}
           {w.lastActivityAt && <span class="when"> · {ago(w.lastActivityAt)}</span>}
@@ -129,7 +130,8 @@ export function WorkContext({ work, repo, openId, setOpen, share, transcript, co
   onJoin(): void;
 }) {
   const ctx = work.value;
-  const head = <span class="rk">Work<span>{repo ?? 'no repository'}</span></span>;
+  // The repository is the window's subtitle already; the inspector doesn't say it again.
+  const head = <span class="rk">Work</span>;
   if (work.state === 'loading') {
     return <div class="rsec">{head}<span class="wnote"><span class="spinlet"></span>Looking for work in {repo ?? 'this room'}…</span></div>;
   }
@@ -165,7 +167,7 @@ export function WorkContext({ work, repo, openId, setOpen, share, transcript, co
       </div>
       {local.length > 0 && (
         <div class="rsec">
-          <span class="rk">On your machine<span>only you see these</span></span>
+          <span class="rk" title="Only you see these">On your machine<Icon name="lock" size={14} /></span>
           {local.map(row)}
         </div>
       )}

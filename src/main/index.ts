@@ -8,6 +8,7 @@ import { disconnectAllRooms } from '../integrations/supabase/realtime.js';
 import { getVoiceAgentProvider } from '../integrations/voice/index.js';
 import { applySettings, registerIpc, voice } from './ipc.js';
 import { createMainWindow, restrictPermissions } from './window.js';
+import { setAppMenu } from './menu.js';
 
 app.on('window-all-closed', () => {
   // Rooms are joined from the UI; with no window left (macOS keeps running), stop appearing present.
@@ -34,6 +35,7 @@ async function main() {
   startClaudeCodeObserver(); // reads hook events, including any that arrived while the app was closed
   startTranscriptWatcher(); // follows Claude Code transcripts, from where it left off
   restrictPermissions();
+  setAppMenu();
 
   const user = await restoreSession();
   if (process.argv.includes('--sign-out')) {

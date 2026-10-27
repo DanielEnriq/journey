@@ -24,7 +24,7 @@ import { agentNameOf } from '../workspace/real/vowe-services.js';
 import type { CallControls } from './call/CallBar.js';
 import { Captions, captionText, type CaptionLine } from './captions.js';
 import type { CallDataSource, RoomDataSource, WorkstreamDataSource } from './data/sources.js';
-import { RoomPreview } from './preview/RoomPreview.js';
+import { CallButton, RoomPreview } from './preview/RoomPreview.js';
 import { Chrome, Lights, Who } from './shell.js';
 import type { VoweServices } from '../vowe-room/contracts/services.js';
 import { RealRoom } from '../vowe-room/host/RealRoom.js';
@@ -143,42 +143,59 @@ function RoomSidebar(p: { rooms: RoomSummary[]; current: string; side: boolean; 
   );
 }
 
+/** The room's inspector, shown or not; kept on this machine (storage may be unavailable). */
+const INSPECTOR_KEY = 'vowe.room.inspector';
+const readInspector = () => { try { return localStorage.getItem(INSPECTOR_KEY) !== '0'; } catch { return true; } };
+const keepInspector = (on: boolean) => { try { localStorage.setItem(INSPECTOR_KEY, on ? '1' : '0'); } catch { /* lasts this session */ } };
+
 function PreviewRoom(props: InnerProps) {
   const { sources, roomId, light, onOpenRoom, onNewRoom, onHome, session, onJoin, ui, membership } = props;
   const rooms = useRooms(sources.room);
   const side = useStore(shellPrefs).sidebar;
   useSidebarKey();
+  const [inspector, setInspector] = useState(readInspector);
+  const toggleInspector = () => setInspector((on) => { keepInspector(!on); return !on; });
+  // "]" shows or hides it, as it does the call's panel (not while typing, and not while this room is kept hidden).
+  const shown = useShownRef();
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!shown.current || e.key !== ']' || e.metaKey || e.ctrlKey || e.altKey || (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable))) return;
+      e.preventDefault();
+      toggleInspector();
+    };
+    addEventListener('keydown', key);
+    return () => removeEventListener('keydown', key);
+  }, []);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const summary = rooms.find((r) => r.id === roomId);
   const others = summary?.inCall.filter((p) => p.tone !== 'me') ?? [];
   const access = ui.access;
-  const joinSheet = membership && props.voice ? (close: () => void) => (
+  const joinSheet = membership && props.voice ? (
     <PreJoinSheet talking={others.map((p) => p.name)} canTalk={can(summary?.role, 'talk')} micDenied={micRefused}
-      onJoin={(o) => { close(); onJoin(o); }} onCancel={close} onOpenSystemSettings={() => { void window.journey.calls.openMicrophoneSettings(); }} />
+      onJoin={(o) => { setSheetOpen(false); onJoin(o); }} onCancel={() => setSheetOpen(false)} onOpenSystemSettings={() => { void window.journey.calls.openMicrophoneSettings(); }} />
   ) : undefined;
+  // Joining asks how first (muted or talking) where there's a sheet for it; otherwise it's immediate.
+  const join = joinSheet ? () => setSheetOpen(!sheetOpen) : () => onJoin();
+  const call = summary ? <CallButton room={summary} session={session} onJoin={join} sheet={sheetOpen ? joinSheet : undefined} /> : null;
   return (
     <div class={`win ${light ? 'light ' : ''}${side ? 'side-open' : ''} outside`}>
       <Lights />
       {props.overlay}
       {ui.toasts}
-      <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} actions={ui.share} />
+      <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} actions={<>{call}{ui.share}</>}
+        desk={summary ? inspector : null} deskName="inspector" toggleDesk={toggleInspector} />
       <RoomSidebar rooms={rooms} current={roomId} side={side} onOpenRoom={onOpenRoom} onNewRoom={onNewRoom} />
       <main class="room">
         <div class="room-identity">
           <h1>{summary?.name ?? 'Room'}</h1>
           {summary?.repo && <span class="meta">{summary.repo}</span>}
-          {others.length > 0 && (
-            <div class="presence">
-              <span class="who-label">In the call</span>
-              <Who people={others} vowe />
-            </div>
-          )}
         </div>
         {summary ? (
-          <RoomPreview sources={sources} roomId={roomId} session={session} attachError={props.attachError} onJoin={() => onJoin()}
-            joinSheet={joinSheet}
+          <RoomPreview sources={sources} roomId={roomId} session={session} attachError={props.attachError} onJoin={join} inspector={inspector}
             people={membership && access ? <PeopleSection source={membership} access={access} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} /> : undefined} />
         ) : (
-          <section class="lobby"><div class="lobby-in"><p class="wnote">This room isn’t in your workspace any more. <button class="linkish" type="button" onClick={onHome}>Back to your rooms</button></p></div></section>
+          <section class="lobby"><div class="lobby-main"><div class="lobby-col"><p class="wnote">This room isn’t in your workspace any more. <button class="linkish" type="button" onClick={onHome}>Back to your rooms</button></p></div></div></section>
         )}
       </main>
     </div>

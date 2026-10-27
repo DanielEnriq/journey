@@ -28,6 +28,8 @@ export interface ChromeProps {
   toggleDesk?(): void;
   /** On the band's right, before the desk toggle: the room's Share. */
   actions?: ComponentChildren;
+  /** What the right toggle shows and hides: the call's panel, "where we are" (default), or the room's inspector. */
+  deskName?: string;
   /** What the left toggle shows and hides: Journey's rooms panel (default) or the shared sidebar. */
   sideName?: 'rooms' | 'sidebar';
   /** Draws the call cluster first in the band's right end (Vowe rooms). `looking` is this room; with its canvas
@@ -35,8 +37,8 @@ export interface ChromeProps {
   call?: { looking: string; canvasShown: boolean };
 }
 
-export function Chrome({ side, desk = null, deskUnseen, toggleSide, toggleDesk, nav, actions, sideName = 'rooms', call }: ChromeProps) {
-  const sideLabel = `${side ? 'Hide' : 'Show'} ${sideName}`, deskLabel = desk ? 'Hide where we are' : 'Show where we are';
+export function Chrome({ side, desk = null, deskUnseen, toggleSide, toggleDesk, nav, actions, sideName = 'rooms', deskName = 'where we are', call }: ChromeProps) {
+  const sideLabel = `${side ? 'Hide' : 'Show'} ${sideName}`, deskLabel = `${desk ? 'Hide' : 'Show'} ${deskName}`;
   return (
     <header class="top-chrome">
       {/* The same buttons, sizes and spacing as Home's band (AppShell), so the corner doesn't shift on entering a room. */}
