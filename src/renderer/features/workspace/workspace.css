@@ -81,7 +81,40 @@
 
   /* What happened. */
   .evlist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
-  .ev{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:10px;padding:5px 2px;font-size:12px;line-height:1.45;color:var(--ink-3)}
+  .ev{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:baseline;gap:8px;padding:5px 2px;font-size:12px;line-height:1.45;color:var(--ink-3)}
+  .ev .ek{align-self:start;display:grid;place-items:center;height:17px;color:var(--ink-7)}
+  .ev .ek .v-icon{width:13px;height:13px}
+  .ev .when{cursor:default}
+
+  /* Code-shaped text: mono, and copies on click. */
+  .cp{position:relative;display:inline-flex;align-items:center;max-width:100%;padding:0 4px;margin:0 1px;border:0;border-radius:4px;background:var(--fill-1);font:inherit;font-family:var(--mono);font-size:11px;line-height:17px;color:var(--ink-3);vertical-align:baseline;cursor:pointer}
+  .cp .cpt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* The copy icon floats over the chip's end on hover, so chips at rest are only as wide as their text. */
+  .cp .v-icon{position:absolute;right:0;top:0;box-sizing:border-box;width:17px;height:17px;padding:3px;border-radius:0 4px 4px 0;background:var(--menu);box-shadow:-6px 0 6px var(--menu);opacity:0;transition:opacity .12s}
+  .cp:hover{background:var(--menu);box-shadow:0 0 0 1px var(--hairline);color:var(--ink-1)}
+  .cp:hover .v-icon,.cp:focus-visible .v-icon,.cp.done .v-icon{opacity:1}
+  .cp.done .v-icon{color:var(--good)}
+
+  /* A work row's line underneath: its branch, how big the diff is, how its checks stand. */
+  .wmeta{display:flex;align-items:center;gap:8px;min-width:0;padding:0 8px 9px;margin-top:-4px;font-size:11px;color:var(--ink-8)}
+  .wmeta:empty{display:none}
+  .wmeta .cp{margin:0 0 0 -4px;flex:0 1 auto;min-width:0}
+  .wdiff{display:inline-flex;gap:5px;flex:none;font-variant-numeric:tabular-nums}
+  .wdiff .fa{color:var(--good)}.wdiff .fd{color:var(--bad)}
+  .wglyphs{display:inline-flex;gap:8px;flex:none;margin-left:auto;font-variant-numeric:tabular-nums}
+  .wg{display:inline-flex;align-items:center;gap:3px;cursor:default}
+  .wring{width:7px;height:7px;border-radius:50%;border:1.3px dashed currentColor;animation:wspin 3s linear infinite}
+  @keyframes wspin{to{transform:rotate(1turn)}}
+  .wg.pass{color:var(--good)}.wg.fail{color:var(--bad)}.wg.running{color:var(--ink-6)}
+  .wlog li > span:first-child:has(.cp){display:flex;align-items:baseline;gap:4px;min-width:0;white-space:nowrap}
+  .wlog li > span:first-child:has(.cp) .cp{flex:0 1 auto;min-width:0;margin:0}
+  .wpath{font-size:11px;color:var(--ink-8)}
+  .wpath .cp{margin-left:-4px}
+  .wstream.stale:not(.open){opacity:.55;transition:opacity .15s}
+  .wstream.stale:not(.open):hover,.wstream.stale:focus-within{opacity:1}
+
+  /* "Changed since you were here" on the canvas caption. */
+  .gl-new{display:inline-block;margin-right:8px;padding:0 6px;border-radius:999px;background:var(--v-info-wash);font-size:10.5px;line-height:17px;font-weight:550;color:var(--v-info-fg)}
   .when{font-size:11px;color:var(--ink-8);white-space:nowrap}
 
   /* What waits on someone. */

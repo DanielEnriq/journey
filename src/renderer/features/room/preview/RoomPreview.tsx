@@ -4,12 +4,13 @@ import { useStore } from '../../../shared/store.js';
 import { ago } from '../../../shared/time.js';
 import type { CallSession } from '../../call/session.js';
 import { useLoaded } from '../../workspace/hooks.js';
-import type { RoomDataSource, RoomEvent, WorkstreamDataSource } from '../data/sources.js';
+import type { EventKind, RoomDataSource, RoomEvent, WorkstreamDataSource } from '../data/sources.js';
 import type { RoomSummary } from '../types.js';
-import { Icon } from '../../../ui/icons.js';
+import { Icon, type IconName } from '../../../ui/icons.js';
 import { listNames, Who } from '../shell.js';
 import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 import { WorkContext } from './WorkContext.js';
+import { CodeText } from './code.js';
 import { pendingAnchor } from '../../../shared/nav.js';
 
 // A room from outside its call, laid out the way a Mac window would: the call is an action, so it sits in the
@@ -19,11 +20,21 @@ import { pendingAnchor } from '../../../shared/nav.js';
 
 type Sources = { room: RoomDataSource; work: WorkstreamDataSource };
 
+/** What kind of thing happened, read at a glance down the log's left edge. */
+const KIND_ICON: Record<EventKind, IconName> = {
+  call: 'phone', thread: 'comment', reply: 'reply', decision: 'decision', signed: 'pen', work: 'branch',
+  resolved: 'check', question: 'question', repo: 'folder', people: 'people', room: 'room',
+};
+
+/** The exact time, for a tooltip under an "ago". */
+export const exact = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
 function EventRow({ e }: { e: RoomEvent }) {
   return (
     <li class={e.tone ? 'ev ' + e.tone : 'ev'}>
-      <span class="et">{e.text}</span>
-      <span class="when">{ago(e.at)}</span>
+      <span class="ek">{e.kind && <Icon name={KIND_ICON[e.kind]} size={14} />}</span>
+      <span class="et"><CodeText text={e.text} /></span>
+      <span class="when" title={exact(e.at)}>{ago(e.at)}</span>
     </li>
   );
 }
@@ -117,7 +128,7 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
           {sinceShown && p.since.length > 0 && (
             <div class="since" role="status">
               <b>Since you were last here</b>
-              <ul>{p.since.map((e) => <li key={e.id}><span class={'dot' + (e.tone === 'needs' ? ' needs' : e.tone === 'pass' ? ' live' : e.who ? ' ask' : '')}></span><span>{e.text}</span></li>)}</ul>
+              <ul>{p.since.map((e) => <li key={e.id}><span class={'dot' + (e.tone === 'needs' ? ' needs' : e.tone === 'pass' ? ' live' : e.who ? ' ask' : '')}></span><span><CodeText text={e.text} /></span></li>)}</ul>
               <div style="display:flex;gap:8px;justify-content:flex-end">
                 <button class="mini ghost" type="button" onClick={() => setSinceShown(false)}>Dismiss</button>
               </div>
@@ -148,7 +159,10 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
               <>
                 <SceneGlimpse scene={p.lastView.scene} />
                 <span class="gl-cap"><b>{p.lastView.name}</b>{p.lastView.question ? <> · {p.lastView.question}</> : null}
-                  <span class="gl-meta">{p.lastView.by ? (p.lastView.by.tone === 'me' ? 'You' : p.lastView.by.name) + ', ' : ''}{ago(p.lastView.at)}</span></span>
+                  <span class="gl-meta" title={exact(p.lastView.at)}>
+                    {p.seenAt && Date.parse(p.lastView.at) > Date.parse(p.seenAt) && p.lastView.by?.tone !== 'me' && <span class="gl-new">New since you were here</span>}
+                    {p.lastView.by ? `Edited by ${p.lastView.by.tone === 'me' ? 'you' : p.lastView.by.name}, ` : 'Edited '}{ago(p.lastView.at)}
+                  </span></span>
               </>
             ) : (
               <div class="gl-empty">Nothing has been drawn here yet. Vowe draws on the shared canvas once the room starts talking in a call.</div>

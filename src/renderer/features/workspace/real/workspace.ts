@@ -8,7 +8,7 @@ import { account, initials } from '../../../shared/account.js';
 import { Store } from '../../../shared/store.js';
 import { shortAgo } from '../../../shared/time.js';
 import type {
-  CallDataSource, NewRoom, RepoChoice, RoomDataSource, RoomEvent, RoomPreview, RoomRecordSource, RoomRecordView,
+  CallDataSource, NewRoom, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomRecordSource, RoomRecordView,
   RoomWorkContext, Transcript, TranscriptLine, WorkstreamDataSource,
 } from '../../room/data/sources.js';
 import type { Person as PanelPerson, PersonTone, Stream } from '../../room/panel/types.js';
@@ -113,6 +113,11 @@ function peopleOf(members: RoomMember[]) {
 
 const quote = (s: string | null, n = 80) => !s ? '' : s.length > n ? `“${s.slice(0, n - 1)}…”` : `“${s}”`;
 
+const EVENT_KIND: Record<RoomActivity['kind'], EventKind> = {
+  thread: 'thread', reply: 'reply', decision: 'decision', amended: 'decision', signed: 'signed', repository: 'repo',
+  'call-started': 'call', 'call-left': 'call', joined: 'people', left: 'people', removed: 'people', role: 'people',
+};
+
 function eventOf(a: RoomActivity, who: (id: string, fallback?: RoomAuthor) => PersonRef): RoomEvent {
   const p = a.actor ? who(a.actor.id, a.actor) : null;
   const name = p ? (p.tone === 'me' ? 'You' : p.name) : 'Someone';
@@ -130,7 +135,7 @@ function eventOf(a: RoomActivity, who: (id: string, fallback?: RoomAuthor) => Pe
     removed: `${name} removed ${a.subject ?? 'someone'} from the room.`,
     role: `${name} changed ${(a.subject ?? '').replace(' · ', '’s role to ')}.`,
   }[a.kind];
-  return { id: a.id, at: a.createdAt, text, who: p, ...(a.kind === 'call-started' || a.kind === 'call-left' ? { presence: true as const } : {}) };
+  return { id: a.id, kind: EVENT_KIND[a.kind], at: a.createdAt, text, who: p, ...(a.kind === 'call-started' || a.kind === 'call-left' ? { presence: true as const } : {}) };
 }
 
 /** The decision being worked on, and whether it waits on your signature (never a viewer's: they can't sign). */
@@ -406,6 +411,7 @@ const room: RoomDataSource = {
       since,
       recent: events.filter((e) => !since.includes(e)).slice(0, 5),
       attention,
+      seenAt: last ?? null,
       lastView: await lastViewOf(roomId, who),
     };
   },
