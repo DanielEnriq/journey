@@ -2,7 +2,7 @@
 
 This is written so you can paste it to your coding agent (Claude Code or similar) as-is:
 
-> Follow `docs/ENGINEER_SETUP.md` in the `DanielEnriq/journey` repo, branch `integration/vowe-complete-mvp`,
+> Follow `docs/ENGINEER_SETUP.md` in the `DanielEnriq/journey` repo, branch `main`,
 > to install and open the Vowe desktop app on this Mac. Stop and ask me when you need a value for `.env`,
 > and when the app is open and waiting for me to sign in.
 
@@ -32,15 +32,14 @@ Ground rules:
 | Node.js | **24.x** (tested on 24.16) | `node -v` | `brew install node@24`, or nvm: `nvm install 24` |
 | pnpm | **10.x** (tested on 10.34) | `pnpm -v` | `corepack enable && corepack prepare pnpm@10 --activate`, or `npm i -g pnpm@10` |
 
-You also need **read access to the GitHub repo `DanielEnriq/journey`**. If `git clone` says "Repository not
-found", ask Daniel to add your GitHub account as a collaborator.
+The GitHub repo `DanielEnriq/journey` is public, so cloning needs no GitHub access or collaborator invite.
 
 ### 2. Get the code
 
 ```sh
-git clone git@github.com:DanielEnriq/journey.git vowe   # or https://github.com/DanielEnriq/journey.git
+git clone https://github.com/DanielEnriq/journey.git vowe   # or git@github.com:DanielEnriq/journey.git with an SSH key
 cd vowe
-git checkout integration/vowe-complete-mvp
+git checkout main
 ```
 
 ### 3. Install
