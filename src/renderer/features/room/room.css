@@ -156,7 +156,7 @@
   .note p{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-2);text-wrap:pretty}
   .note .by{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--ink-7)}
   .mav{width:14px;height:14px;flex:0 0 14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:var(--v-bg);background:var(--me)}
-  .mav.peer{background:var(--peer)}.mav.p2{background:var(--peer2)}.mav.vowe{background:var(--ask)}
+  .mav.peer{background:var(--peer)}.mav.p2{background:var(--peer2)}.mav.vowe{background:var(--v-agent-face),var(--v-info)}
   .note .link{border:0;background:transparent;padding:0;font-size:11px;color:var(--good);text-decoration:underline;text-underline-offset:2px}
   .note.suggested{background:transparent;box-shadow:none;border:1px dashed var(--v-proposed-line)}
   .note.fresh{box-shadow:0 0 0 1.5px var(--me),var(--studio-shadow)}

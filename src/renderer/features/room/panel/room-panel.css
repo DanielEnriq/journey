@@ -44,7 +44,7 @@
 .rp-av-20 { width: 20px; height: 20px; flex: 0 0 20px; font-size: 8px; }
 .rp-av-18 { width: 18px; height: 18px; flex: 0 0 18px; font-size: 7px; }
 .rp-av-16 { width: 16px; height: 16px; flex: 0 0 16px; font-size: 6.5px; }
-.rp-orb { border-radius: 50%; background: radial-gradient(circle, var(--v-info) 0 31%, transparent 34%); box-shadow: inset 0 0 0 1.25px var(--v-info-line); }
+.rp-orb { border-radius: 50%; background: var(--v-agent-face), var(--v-info); }
 .rp-orb.rp-av-20 { width: 18px; height: 18px; flex: 0 0 18px; margin: 0 1px; }
 .rp-orb.rp-av-18 { width: 16px; height: 16px; flex: 0 0 16px; margin: 0 1px; }
 .rp-orb.rp-av-16 { width: 14px; height: 14px; flex: 0 0 14px; margin: 0 1px; }

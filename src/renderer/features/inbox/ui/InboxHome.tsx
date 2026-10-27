@@ -30,7 +30,8 @@ export interface InboxHomeProps {
   idle?(st: InboxState): ComponentChildren;
   /** Something Home itself couldn't do (adding a repository, say), shown under the greeting. */
   notice?: string | null;
-  /** Opens an invite from a pasted link (email invitations arrive as items); absent in the demo. */
+  /** Opens an invite from a pasted link (email invitations arrive as items). Absent in the demo, where the field
+      is still there but says links open in your own workspace: the demo never reads a real invite. */
   onOpenInvite?(key: InviteKey): void;
 }
 
@@ -134,7 +135,7 @@ export function InboxHome(p: InboxHomeProps) {
           <span class="vi-tb-acts">
             <IconButton icon="check" label="Done today" tip={`Done today${doneToday.length ? ` · ${doneToday.length}` : ''}`} active={foot === 'done'} onClick={() => setFoot(foot === 'done' ? null : 'done')} />
             <IconButton icon="snooze" label="Snoozed" tip={`Snoozed${v.snoozed.length ? ` · ${v.snoozed.length}` : ''}`} active={foot === 'snoozed'} onClick={() => setFoot(foot === 'snoozed' ? null : 'snoozed')} />
-            {p.onOpenInvite ? <IconButton icon="link" label="Open an invite link" tip="Invite link" tipEnd active={foot === 'link'} onClick={() => setFoot(foot === 'link' ? null : 'link')} /> : null}
+            <IconButton icon="link" label="Open an invite link" tip="Invite link" tipEnd active={foot === 'link'} onClick={() => setFoot(foot === 'link' ? null : 'link')} />
           </span>
         </div>
         {p.notice ? <div class="vi-notice" role="alert"><Icon name="warn" /><span>{p.notice}</span></div> : null}
@@ -142,11 +143,11 @@ export function InboxHome(p: InboxHomeProps) {
           <div class="vi-error" role="alert"><Icon name="warn" /><span>Couldn’t read your rooms{st.error ? `: ${st.error}` : ''}.{ids.length ? ' Showing what was read last.' : ''}</span>
             <button type="button" class="v-btn v-btn-sm" onClick={() => p.source.refresh()}>Retry</button></div>
         ) : null}
-        {foot === 'link' && p.onOpenInvite ? (
+        {foot === 'link' ? (
           <section class="vi-sec" aria-label="Open an invite link">
-            <div class="vi-link"><JoinByLink onOpen={p.onOpenInvite} autoFocus /></div>
+            <div class="vi-link"><JoinByLink onOpen={p.onOpenInvite ?? (() => setToast({ text: 'Invite links open in your own workspace, not in the demo.' }))} autoFocus /></div>
           </section>
-        ) : foot && foot !== 'link' ? (
+        ) : foot ? (
           <section class="vi-sec" aria-label={FOOT_TITLE[foot]}>
             {foot === 'done'
               ? (doneToday.length ? <div class="vi-box">{doneToday.map((r) => <Row key={r.item.id} it={r.item} st={st} selected={r.item.id === sel} note={r.how} onSelect={() => select(r.item.id)} onOpen={() => acts.open(r.item)} />)}</div> : <p class="vi-none">Nothing done today</p>)
