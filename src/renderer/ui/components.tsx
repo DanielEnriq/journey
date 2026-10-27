@@ -254,9 +254,15 @@ export function Typing() {
   return <span class="v-typing" aria-hidden="true"><i /><i /><i /></span>;
 }
 
-/** Vowe as a presence: a slate instrument. Never a glowing orb. */
+/** Vowe as a presence: a slate face, two eyes and a small smile, with a spark at its shoulder that says it's the
+    room's AI. A colleague, never a glowing orb. The spark drops out below 16px. */
 export function AgentMark({ speaking, size = 22 }: { speaking?: boolean; size?: number }) {
-  return <span class={cx('v-agent', speaking && 'is-speaking')} style={{ '--s': `${size}px` } as JSX.CSSProperties} aria-hidden="true" />;
+  return (
+    <span class={cx('v-agent', speaking && 'is-speaking')} style={{ '--s': `${size}px` } as JSX.CSSProperties} aria-hidden="true">
+      <svg class="v-agent-face" viewBox="0 0 24 24"><rect x="7.4" y="8.2" width="2.8" height="4.6" rx="1.4" /><rect x="13.8" y="8.2" width="2.8" height="4.6" rx="1.4" /><path d="M8.6 15.4c2 1.9 4.8 1.9 6.8 0" /></svg>
+      {size >= 16 ? <svg class="v-agent-spark" viewBox="0 0 10 10"><path d="M5 0c.4 2.6 1.4 3.6 5 5-3.6 1.4-4.6 2.4-5 5-.4-2.6-1.4-3.6-5-5 3.6-1.4 4.6-2.4 5-5z" /></svg> : null}
+    </span>
+  );
 }
 
 export function Presence({ children }: { children: ComponentChildren }) {
@@ -269,7 +275,7 @@ export function Presence({ children }: { children: ComponentChildren }) {
  */
 export function Provenance({ by, person, note }: { by: 'agent' | 'person'; person?: Pick<AvatarProps, 'initials' | 'tone'> & { name: string }; note?: string }) {
   if (by === 'agent') {
-    return <span class="v-prov v-prov-agent"><span class="v-agent" aria-hidden="true" />Vowe{note ? ` · ${note}` : ''}</span>;
+    return <span class="v-prov v-prov-agent"><AgentMark size={12} />Vowe{note ? ` · ${note}` : ''}</span>;
   }
   return (
     <span class="v-prov">

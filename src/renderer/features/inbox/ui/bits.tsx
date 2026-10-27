@@ -21,7 +21,7 @@ export const nameIn = (people: People, me: PersonId | null) => (id: PersonId | n
 
 /** A face: the agent's mark for the agent, a quiet glyph for the system, initials for people. */
 export function Face({ id, people, size = 24 }: { id: PersonId | null; people: People; size?: 16 | 20 | 24 | 28 }) {
-  if (id === AGENT) return <AgentMark size={size - 4} />;
+  if (id === AGENT) return <AgentMark size={size} />;
   const p = id ? people[id] : undefined;
   if (!p) return <span class="vi-sysav" style={`width:${size}px;height:${size}px`} aria-hidden="true"><Icon name="canvas" size={14} /></span>;
   return <Avatar initials={p.initials} tone={TONE[p.tone]} size={size} name={p.name} />;

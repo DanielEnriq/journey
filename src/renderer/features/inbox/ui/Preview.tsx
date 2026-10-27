@@ -12,7 +12,7 @@ import { SOURCE_LABEL, SOURCE_TODAY, type InboxItem } from '../model.js';
 import type { InboxSource, ItemContext } from '../source.js';
 import { bodyKind, canMarkDone, canOpen } from './body.js';
 import { Face, ItemMenu, nameIn, type ItemMenuActs, type People } from './bits.js';
-import { ago, waiting } from './time.js';
+import { ago } from './time.js';
 
 // The reading page for one Inbox item: enough of its context to understand it and, where it's a small, safe
 // act, to do it here (sign, answer, reply, authorize, allow, join). Anything bigger opens the room at the exact
@@ -102,7 +102,7 @@ function Where({ it, scene }: { it: InboxItem; scene: Scene | null }) {
   if (!scene || !it.anchor.parts?.length) return null;
   return (
     <div class="vi-block">
-      <div class="vi-block-h">Where it lives<em>{it.room.name}’s canvas</em></div>
+      <div class="vi-block-h">Where it lives</div>
       <figure class="vi-glimpse">
         <SceneGlimpse scene={scene} lit={it.anchor.parts} height={220} />
         <figcaption><Icon name="canvas" />Opens at {it.anchor.label}</figcaption>
@@ -144,11 +144,10 @@ function SignDecision({ it, d, rec, now, me, people, source, loading }: BodyProp
   const signedPrev = !!me && !!prev?.approvers.some((a) => a.who === me && a.signed === prev.version);
   const mine = d.approvers.find((a) => a.who === me);
   const signed = mine?.signed === d.version;
-  const challenged = d.lines.find((l) => l.overturned);
   void loading;
   return (
     <>
-      <Kicker tone="needs" when={waiting(it.waitingSince ?? it.at, now)}>Needs your signature</Kicker>
+      <Kicker tone="needs" when={ago(it.waitingSince ?? it.at, now)}>Needs your signature</Kicker>
       <h2 class="vi-title">{d.title}</h2>
       <p class="vi-lede"><b>{name(d.by.who)}</b> asked you to sign <b>v{d.version}</b>.{d.revises ? <> It revises v{d.revises.version}{signedPrev ? ', which you signed' : ''}: {d.revises.why}</> : null}</p>
       <div class="vi-signers" aria-label="Signatures">
@@ -181,8 +180,8 @@ function SignDecision({ it, d, rec, now, me, people, source, loading }: BodyProp
       {signed ? <div class="vi-done"><Icon name="check" />You signed v{d.version}{d.state === 'agreed' ? '. It’s agreed.' : '.'}</div>
         : changes !== null ? (
           <div class="vi-compose">
-            <textarea aria-label="What should change" placeholder={`What should change before you sign? ${name(d.by.who)} sees this on the decision.`} value={changes} onInput={(e) => setChanges(e.currentTarget.value)} ref={(el) => { if (el && !el.dataset.f) { el.dataset.f = '1'; el.focus(); } }} />
-            <div class="vi-crow"><span class="vi-hint">Leaves v{d.version} unsigned by you</span>
+            <textarea aria-label="What should change" placeholder="What should change?" value={changes} onInput={(e) => setChanges(e.currentTarget.value)} ref={(el) => { if (el && !el.dataset.f) { el.dataset.f = '1'; el.focus(); } }} />
+            <div class="vi-crow">
               <button type="button" class="v-btn v-btn-quiet v-btn-sm" onClick={() => setChanges(null)}>Cancel</button>
               <button type="button" class="v-btn v-btn-ink v-btn-sm" disabled={!changes.trim() || !!act.busy} onClick={() => act.run('changes', () => source.requestChanges(it, changes.trim()))}>{act.busy === 'changes' ? 'Sending…' : 'Request changes'}</button></div>
           </div>
@@ -190,7 +189,6 @@ function SignDecision({ it, d, rec, now, me, people, source, loading }: BodyProp
           <div class="vi-acts">
             <button type="button" class="v-btn v-btn-ink" disabled={!!act.busy} onClick={() => act.run('sign', () => source.sign(it))}>{act.busy === 'sign' ? 'Signing…' : `Sign v${d.version}`}</button>
             <button type="button" class="v-btn" disabled={!!act.busy} onClick={() => setChanges('')}>Request changes</button>
-            {challenged ? <span class="vi-note">One line is challenged. You can still sign, or ask for it to be settled first.</span> : null}
           </div>
         )}
       <Failure error={act.error} />
@@ -212,14 +210,13 @@ function AgentQuestion({ it, w, now, me, people, source }: BodyProps & { w: Work
   const mine = q.for === me;
   return (
     <>
-      <Kicker tone="agent" when={waiting(it.waitingSince ?? it.at, now)}>{asker} {mine ? 'is waiting on you' : 'asked'}</Kicker>
+      <Kicker tone="agent" when={ago(it.waitingSince ?? it.at, now)}>{asker} {mine ? 'is waiting on you' : 'asked'}</Kicker>
       <h2 class="vi-title is-q">{head}</h2>
       {rest.length ? <p class="vi-lede">{rest.join(' ')}</p> : null}
       <dl class="vi-facts">
-        <dt>Why you</dt><dd>{it.why}</dd>
         {step ? <><dt>Paused at</dt><dd>Step {n}: {step.text}</dd></> : null}
         <dt>The plan</dt><dd>{w.title} · {w.plan.filter((s) => s.state === 'done').length} of {w.plan.length} steps done</dd>
-        <dt>Owner</dt><dd>{name(w.owner)}{w.owner !== me ? ', who sees your answer in the plan' : ''}</dd>
+        <dt>Owner</dt><dd>{name(w.owner)}</dd>
       </dl>
       {q.answer ? <div class="vi-done"><Icon name="check" />{name(q.answer.by)} answered: {q.answer.text}</div> : mine ? (
         <div class="vi-block">
@@ -234,8 +231,8 @@ function AgentQuestion({ it, w, now, me, people, source }: BodyProps & { w: Work
             </div>
           ) : null}
           <div class="vi-compose">
-            <textarea aria-label={q.options.length ? 'A note with your answer' : 'Your answer'} placeholder={q.options.length ? `Add a note for ${asker} (optional)` : `Answer ${asker}…`} value={note} onInput={(e) => setNote(e.currentTarget.value)} />
-            <div class="vi-crow"><span class="vi-hint">It stays inside the approved plan; a bigger change needs a new version.</span>
+            <textarea aria-label={q.options.length ? 'A note with your answer' : 'Your answer'} placeholder={q.options.length ? 'Note' : `Answer ${asker}…`} value={note} onInput={(e) => setNote(e.currentTarget.value)} />
+            <div class="vi-crow">
               <button type="button" class="v-btn v-btn-ink v-btn-sm" disabled={!text || !!act.busy} onClick={() => act.run('answer', () => source.answer(it, text))}>{act.busy ? 'Answering…' : 'Answer'}</button></div>
           </div>
         </div>
@@ -259,13 +256,13 @@ function Conversation({ it, t, now, me, people, source }: BodyProps & { t: Threa
   const last = t.replies[t.replies.length - 1];
   return (
     <>
-      <Kicker tone={needs ? 'needs' : undefined} when={needs ? waiting(it.waitingSince ?? it.at, now) : ago(it.at, now)}>{needs ? `${name(it.actor)} asked you` : it.raised ?? 'A conversation you’re in'}</Kicker>
+      <Kicker tone={needs ? 'needs' : undefined} when={ago(needs ? it.waitingSince ?? it.at : it.at, now)}>{needs ? `${name(it.actor)} asked you` : it.raised ?? 'A conversation you’re in'}</Kicker>
       <h2 class="vi-title">{t.title && !['Question', 'Note'].includes(t.title) ? t.title : `On ${/^the /i.test(t.about.name) ? '' : 'the '}${t.about.name}`}</h2>
-      <p class="vi-lede">{t.about.kind === 'line' && t.quote ? <>About a line in a decision: <b>“{t.quote}”</b></> : <>On <b>{t.about.name}</b> in {it.room.name}.</>}</p>
+      {t.about.kind === 'line' && t.quote ? <p class="vi-lede"><b>“{t.quote}”</b></p> : null}
       <div class="vi-block vi-convo">
         {t.replies.map((r, i) => (
           <Fragment key={r.id}>
-            {i === firstNew && i > 0 ? <div class="vi-newline">New since you looked</div> : null}
+            {i === firstNew && i > 0 ? <div class="vi-newline">New</div> : null}
             <div class={'vi-msg' + (firstNew > 0 && i < firstNew ? ' is-old' : '')}>
               <Face id={r.by} people={people} size={24} />
               <div class="vi-b"><div class="vi-n"><b>{name(r.by)}</b><span>{r.ago}</span></div>{refText(r.body)}</div>
@@ -273,10 +270,10 @@ function Conversation({ it, t, now, me, people, source }: BodyProps & { t: Threa
           </Fragment>
         ))}
       </div>
-      <div class="vi-compose">
+      <div class="vi-compose is-reply">
         <textarea ref={ta} aria-label="Reply" placeholder={`Reply to ${name(it.actor ?? last?.by)}…`} value={body} onInput={(e) => setBody(e.currentTarget.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } }} />
-        <div class="vi-crow"><span class="vi-hint">Replies in the room’s thread · ⌘↵ to send</span><button type="button" class="v-btn v-btn-ink v-btn-sm" disabled={!body.trim() || !!act.busy} onClick={send}>{act.busy ? 'Sending…' : 'Reply'}</button></div>
+        <div class="vi-crow"><button type="button" class="v-btn v-btn-ink v-btn-sm vi-open" disabled={!body.trim() || !!act.busy} onClick={send}>{act.busy ? 'Sending…' : <>Reply<kbd class="v-kbd">⌘↵</kbd></>}</button></div>
       </div>
       <Failure error={act.error} />
     </>
@@ -288,7 +285,7 @@ function PlanAsk({ it, w, allow, now, me, people, source }: BodyProps & { w: Wor
   const act = useAct();
   return (
     <>
-      <Kicker tone="needs" when={waiting(it.waitingSince ?? it.at, now)}>{allow ? 'Asks for more scope' : 'Needs your authorization'}</Kicker>
+      <Kicker tone="needs" when={ago(it.waitingSince ?? it.at, now)}>{allow ? 'Asks for more scope' : 'Needs your authorization'}</Kicker>
       <h2 class="vi-title">{w.title}</h2>
       <p class="vi-lede">{it.why}.</p>
       {allow && w.scopeAsk ? (
@@ -313,7 +310,6 @@ function PlanAsk({ it, w, allow, now, me, people, source }: BodyProps & { w: Wor
       ) : w.authorized ? <div class="vi-done"><Icon name="check" />{name(w.authorized.by)} authorized it ({w.authorized.scope}).</div> : (
         <div class="vi-acts">
           <button type="button" class="v-btn v-btn-ink" disabled={!!act.busy} onClick={() => act.run('authorize', () => source.authorize(it))}>{act.busy ? 'Authorizing…' : `Authorize plan v${w.version}`}</button>
-          <span class="vi-note">It runs only inside this plan; a change needs a new version.</span>
         </div>
       )}
       <Failure error={act.error} />
@@ -333,7 +329,6 @@ function Invitation({ it, now, me, people, source, onJoined }: BodyProps) {
       <div class="vi-acts">
         <button type="button" class="v-btn v-btn-ink" disabled={!!act.busy} onClick={() => act.run('yes', () => source.acceptInvitation(it, true).then((id) => { if (id) onJoined(id); }))}>{act.busy === 'yes' ? 'Joining…' : 'Join the room'}</button>
         <button type="button" class="v-btn" disabled={!!act.busy} onClick={() => act.run('no', () => source.acceptInvitation(it, false))}>Decline</button>
-        <span class="vi-note">Joining doesn’t start or join a call.</span>
       </div>
       <Failure error={act.error} />
     </>
@@ -346,15 +341,15 @@ function Generic({ it, now, me, people, rec, loading }: BodyProps) {
     <>
       <Kicker tone={it.tier === 'needs' ? 'needs' : undefined} when={ago(it.at, now)}>{it.tier === 'needs' ? 'Needs you' : it.tier === 'activity' ? 'In your rooms' : it.raised ?? 'Following'}</Kicker>
       <h2 class="vi-title is-sm">{it.headline}</h2>
-      <p class="vi-lede">{it.why}.</p>
+      {it.why === `In ${it.room.name}` ? null : <p class="vi-lede">{it.why}.</p>}
       {it.excerpt ? <div class="vi-block vi-convo"><div class="vi-msg"><Face id={it.excerpt.by} people={people} /><div class="vi-b"><div class="vi-n"><b>{name(it.excerpt.by)}</b></div>{refText(it.excerpt.text)}</div></div></div> : null}
       {it.progress ? (
         <div class="vi-block"><div class="vi-progress is-lg" aria-label={`${it.progress.done} of ${it.progress.of} steps done`}>{Array.from({ length: it.progress.of }, (_, i) => <i key={i} class={i < it.progress!.done ? 'is-done' : i === it.progress!.done ? 'is-wait' : ''} />)}</div></div>
       ) : null}
-      {it.digest?.length ? <p class="vi-lede is-sm">{it.digest.map((d) => `${d.n} ${d.label}`).join(' · ')}</p> : null}
-      {it.events.length ? (
+      {it.digest?.length && it.events.length > 1 ? <p class="vi-lede is-sm">{it.digest.map((d) => `${d.n} ${d.label}`).join(' · ')}</p> : null}
+      {it.events.length > 1 ? (
         <div class="vi-block">
-          <div class="vi-block-h">{it.events.length} update{it.events.length === 1 ? '' : 's'}<em>gathered into this one item, newest first</em></div>
+          <div class="vi-block-h">{it.events.length} updates</div>
           <ul class="vi-events">{it.events.map((e) => <li key={e.id}><i aria-hidden="true" /><span>{e.text}</span><em>{ago(e.at, now)}</em></li>)}</ul>
         </div>
       ) : null}

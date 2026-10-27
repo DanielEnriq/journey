@@ -1,72 +1,81 @@
 /* Home as the Inbox (features/inbox/ui): the list on the sunken ground, the reading page on paper. Ink, Paper &
    Signal tokens only; the signal colour marks what needs you and nothing else. */
-/* Below the window band (traffic lights, history, the call cluster), as in the design: nothing of Home sits under it. */
-.vi-home { position: relative; flex: 1; min-height: 0; margin-top: 40px; display: grid; grid-template-columns: minmax(380px, 456px) minmax(0, 1fr); font-family: var(--v-font-sans); color: var(--v-fg); }
-.vi-list { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; background: var(--v-bg); box-shadow: inset -1px 0 0 var(--v-line); }
+/* Each column's top 40px is its part of the window's toolbar, on the row of the traffic lights and the shell's band:
+   the list's title over the list, the item's path and actions over the reading page. Buttons there opt out of the
+   band's window dragging. */
+.vi-home { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: var(--vi-list-w, 380px) minmax(0, 1fr); font-family: var(--v-font-sans); color: var(--v-fg); }
+.vi-list { container: vi-list / inline-size; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; background: var(--v-bg); box-shadow: inset -1px 0 0 var(--v-line); }
+.vi-edge { position: absolute; z-index: 5; top: 0; bottom: 0; left: calc(var(--vi-list-w, 380px) - 3px); width: 6px; cursor: col-resize; touch-action: none; outline: none; -webkit-app-region: no-drag; }
+.vi-edge::after { content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 1px; background: var(--v-line-strong); opacity: 0; transition: opacity var(--v-dur-2) var(--v-ease); }
+.vi-edge:focus-visible::after, body.vh-sb-resizing .vi-edge:hover::after, .vi-edge:active::after { opacity: 1; }
 .vi-page { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--v-surface); }
 
-.vi-head { padding: 22px 28px 14px; }
-.vi-eyebrow { font: 500 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
+.vi-tb { position: sticky; top: 0; z-index: 2; flex: none; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px 0 24px; background: var(--v-bg); transition: padding-left var(--v-dur-3) var(--v-ease); }
+.vi-tb b { flex: 1; min-width: 0; font: 600 13px/16px var(--v-font-ui); color: var(--v-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vi-tb-acts { display: flex; gap: 2px; }
+/* With the sidebar hidden, the band's sidebar and history buttons sit over the list's corner. */
+.vh-app.is-hidden .vi-tb { padding-left: 196px; }
+:is(.vi-tb, .vi-bar, .vi-sec-h) :is(button, a, input, [role=button]), .vi-sec-h { -webkit-app-region: no-drag; }
+
+.vi-head { padding: 32px 0 4px; }
 .vi-hello { margin: 10px 0 0; font: 400 34px/1.05 var(--v-font-serif); letter-spacing: -.015em; }
 .vi-hello em { font-style: italic; color: var(--v-fg-3); }
-.vi-away { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--v-fg-2); }
-.vi-away b { font-weight: 500; color: var(--v-fg); }
 .vi-loading { display: flex; align-items: center; gap: 10px; padding: 28px 24px; font-size: 13px; color: var(--v-fg-3); }
 .vi-error { display: flex; align-items: center; gap: 10px; margin: 0 16px 12px; padding: 10px 12px; border-radius: var(--v-radius-md); background: var(--v-fault-wash); color: var(--v-fault-fg); font-size: 12.5px; line-height: 1.45; }
 .vi-error > span { flex: 1; }
 .vi-error .v-btn { flex: none; }
 
-.vi-secs { display: flex; flex-direction: column; }
-.vi-sec { display: flex; flex-direction: column; padding-bottom: 6px; }
-.vi-sec-h { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 14px 28px 8px; background: var(--v-bg); box-shadow: inset -1px 0 0 var(--v-line); font: 600 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
-.vi-sec-h b { font-weight: 500; letter-spacing: 0; font-variant-numeric: tabular-nums; color: var(--v-fg-2); }
-.vi-sec-h em { margin-left: auto; font: 400 11.5px/1 var(--v-font-ui); font-style: normal; color: var(--v-fg-4); }
-.vi-sec.is-needs .vi-sec-h { color: var(--v-signal-fg); }
-.vi-back { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--v-fg-3); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
-.vi-back:hover { color: var(--v-fg); }
-.vi-none { margin: 4px 28px 10px; font-size: 13px; color: var(--v-fg-3); }
-.vi-quietline { margin: 0; padding: 6px 28px 10px; font-size: 12.5px; line-height: 1.5; color: var(--v-fg-3); }
+/* Sections as macOS groups them: a heading whose chevron folds it, then its rows. The chevron shows on
+   hover, focus, or while the section is folded; what needs you is marked by a signal dot after the count. */
+.vi-secs { display: flex; flex-direction: column; padding: 0 0 4px; }
+.vi-sec { display: flex; flex-direction: column; padding-bottom: 12px; }
+.vi-sec-h { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 16px 0 18px; border: 0; border-radius: 0; background: var(--v-bg); font: 500 12px/1 var(--v-font-ui); color: var(--v-fg-3); text-align: left; cursor: default; }
+.vi-sec-h:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); }
+.vi-sec-chev { position: absolute; left: 2px; display: inline-flex; color: var(--v-fg-4); opacity: 0; transition: transform var(--v-dur-2) var(--v-ease), opacity var(--v-dur-2) var(--v-ease); }
+.vi-sec-h:hover .vi-sec-chev, .vi-sec-h:focus-visible .vi-sec-chev, .vi-sec-h[aria-expanded="false"] .vi-sec-chev { opacity: 1; }
+.vi-sec-h[aria-expanded="true"] .vi-sec-chev { transform: rotate(90deg); }
+.vi-sec-h b { font-weight: 400; font-variant-numeric: tabular-nums; color: var(--v-fg-4); }
+.vi-sec.is-needs .vi-sec-h b::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--v-signal); vertical-align: 1px; }
+.vi-box { display: flex; flex-direction: column; }
+.vi-sec > section > .vi-box, section[aria-label] > .vi-box { margin: 2px 0 0; }
+.vi-none { margin: 4px 18px 10px; font-size: 13px; color: var(--v-fg-3); }
 
-/* A row: face, then title (verb + headline) with the time on the right, then why it rose, the excerpt, steps and where it is. */
-.vi-row { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 3px; align-items: start; padding: 10px 28px 11px 24px; color: var(--v-fg-2); cursor: default; outline: 0; }
+/* A row, one line as Linear lists issues: the unread dot in the gutter, who, the headline, then where, and the
+   glyph (signal when it needs you) over when on the right. Following adds the line that was said. No fills, no hairlines:
+   a row is tinted only on hover and when selected (slate while the list has focus). */
+.vi-row { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-rows: 44px; column-gap: 10px; align-items: center; margin: 0 6px; padding: 0 10px 0 12px; border-radius: 6px; color: var(--v-fg-2); cursor: default; outline: 0; }
 .vi-row:hover { background: var(--v-surface-hover); }
-.vi-row[aria-selected="true"] { background: var(--v-surface); margin-right: -1px; }
-.vi-row[aria-selected="true"]::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; border-radius: 1px; background: var(--v-fg); }
-.vi-row:focus-visible { box-shadow: var(--v-focus-ring); }
-.vi-face { grid-row: 1 / span 4; padding-top: 1px; }
-.vi-t { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 13.5px; line-height: 1.35; color: var(--v-fg); }
-.vi-row.is-read .vi-t { color: var(--v-fg-2); }
-.vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vi-row.is-unread .vi-hl { font-weight: 550; }
-.vi-verb { flex: none; font: 600 12px/1 var(--v-font-ui); color: var(--v-signal-fg); transform: translateY(-1px); }
-.vi-r { grid-column: 3; grid-row: 1; padding-top: 2px; font-size: 11.5px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.vi-newn { display: inline-block; margin-right: 6px; padding: 1px 5px; border-radius: 4px; background: var(--v-info-wash); color: var(--v-info-fg); font-weight: 500; }
-.vi-raised { grid-column: 2; display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: 11.5px; color: var(--v-info-fg); }
-.vi-raised .v-icon { flex: none; width: 12px; height: 12px; }
-.vi-ex { grid-column: 2; font-size: 12.5px; line-height: 1.45; color: var(--v-fg-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vi-row[aria-selected="true"] { background: var(--v-surface-selected); }
+.vi-row[aria-selected="true"]:focus { background: var(--v-selection); }
+.vi-row.is-unread:not(.is-needs)::before { content: ''; position: absolute; left: 3px; top: 19px; width: 6px; height: 6px; border-radius: 50%; background: var(--v-info-fg); }
+.vi-glyph { display: inline-flex; color: var(--v-fg-4); }
+.vi-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 26px; }
+.vi-row.is-needs .vi-glyph { color: var(--v-signal-fg); }
+.vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--v-fg-2); }
+.vi-row.is-unread .vi-hl { color: var(--v-fg); }
+.vi-r { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: var(--v-fg-4); white-space: nowrap; }
+.vi-where { max-width: 96px; overflow: hidden; text-overflow: ellipsis; color: var(--v-fg-3); }
+/* A narrow list keeps the headline: the room steps out (the reading page's path still names it). */
+@container vi-list (max-width: 360px) { .vi-where { display: none; } }
+.vi-face { display: inline-flex; }
+.vi-at { font-size: 11px; line-height: 1; font-variant-numeric: tabular-nums; }
+.vi-raised { display: inline-flex; color: var(--v-info-fg); }
+.vi-ex { grid-column: 2 / -1; margin: -6px 0 8px; font-size: 12px; line-height: 1.35; color: var(--v-fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vi-ex b { font-weight: 500; color: var(--v-fg-2); }
-.vi-meta { grid-column: 2; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; line-height: 1.4; color: var(--v-fg-3); white-space: nowrap; overflow: hidden; }
-.vi-meta span { overflow: hidden; text-overflow: ellipsis; }
-.vi-meta i { font-style: normal; color: var(--v-fg-4); }
-.vi-row.is-activity { padding-top: 9px; padding-bottom: 9px; }
-.vi-row.is-activity .vi-t { font-size: 13px; color: var(--v-fg-2); }
-.vi-progress { grid-column: 2; display: flex; gap: 3px; margin-top: 3px; }
+.vi-progress { display: flex; gap: 3px; }
 .vi-progress i { width: 14px; height: 3px; border-radius: 2px; background: var(--v-line-2); }
 .vi-progress i.is-done { background: var(--v-fg-3); }
 .vi-progress i.is-wait { background: var(--v-signal); }
 .vi-progress.is-lg i { flex: 1; width: auto; max-width: 40px; height: 5px; }
 .vi-progress.is-lg i.is-done { background: var(--v-success); }
-.vi-snoozed { display: flex; align-items: center; gap: 4px; padding-right: 16px; }
+.vi-snoozed { position: relative; display: flex; align-items: center; gap: 4px; padding-right: 6px; }
 .vi-snoozed .vi-row { flex: 1; min-width: 0; }
 
-.vi-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; padding: 16px 28px 24px; font-size: 12px; color: var(--v-fg-3); }
-.vi-footbtn { padding: 0; border: 0; background: none; color: var(--v-fg-3); font: 400 12px/1.4 var(--v-font-sans); cursor: pointer; }
-.vi-footbtn:hover, .vi-footbtn[aria-pressed="true"] { color: var(--v-fg); }
-.vi-footbtn:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); border-radius: 4px; }
-.vi-unavail { flex-basis: 100%; font-size: 11px; color: var(--v-fg-4); }
 
 /* The reading page. */
-.vi-bar { flex: none; display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 20px 0 32px; box-shadow: inset 0 -1px 0 var(--v-line); }
+.vi-bar { flex: none; display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 16px 0 28px; box-shadow: inset 0 -1px 0 var(--v-line); transition: padding-right var(--v-dur-2) var(--v-ease); }
+/* In a call, the band's call cluster sits at the bar's right end. */
+.vh-app:has(.vh-band-r > *) .vi-bar { padding-right: var(--vi-call-w, 220px); }
 .vi-path { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; font-size: 12.5px; color: var(--v-fg-3); }
 .vi-path b { font-weight: 500; color: var(--v-fg-2); }
 .vi-path i { font-style: normal; color: var(--v-fg-4); }
@@ -83,7 +92,7 @@
 .vi-page-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; outline: 0; }
 .vi-doc { max-width: 680px; margin: 0 auto; padding: 36px clamp(20px, 6%, 48px) 64px; }
 .vi-kicker { display: flex; align-items: center; gap: 8px; font: 600 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
-.vi-kicker.is-needs { color: var(--v-signal-fg); }
+.vi-kicker.is-needs::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
 .vi-kicker i { font-style: normal; color: var(--v-fg-4); }
 .vi-when { letter-spacing: .04em; text-transform: none; font-family: var(--v-font-sans); color: var(--v-fg-3); }
 .vi-title { margin: 12px 0 0; font: 400 30px/1.15 var(--v-font-serif); letter-spacing: -.012em; text-wrap: balance; }
@@ -139,13 +148,14 @@
 .vi-newline { display: flex; align-items: center; gap: 10px; font: 600 11px/1 var(--v-font-ui); color: var(--v-info-fg); }
 .vi-newline::after { content: ''; flex: 1; height: 1px; background: var(--v-info-line); }
 
-.vi-compose { margin-top: 18px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--v-line-2); background: var(--v-bg); }
+.vi-compose { margin-top: 18px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--v-line-2); background: transparent; transition: box-shadow var(--v-dur-2) var(--v-ease); }
 .vi-compose:focus-within { box-shadow: inset 0 0 0 1px var(--v-line-strong); }
+/* A reply's Send waits until there's something to send. */
+.vi-compose.is-reply:has(textarea:placeholder-shown) .vi-crow > .v-btn { opacity: 0; pointer-events: none; }
+.vi-compose.is-reply .vi-crow > .v-btn { transition: opacity var(--v-dur-2) var(--v-ease); }
 .vi-compose textarea { display: block; width: 100%; min-height: 72px; padding: 12px 14px 4px; border: 0; background: transparent; color: var(--v-fg); font: 400 14px/1.5 var(--v-font-sans); resize: vertical; outline: 0; box-sizing: border-box; }
-.vi-crow { display: flex; align-items: center; gap: 8px; padding: 6px 8px 8px 14px; }
-.vi-hint { flex: 1; min-width: 0; font-size: 11.5px; color: var(--v-fg-4); }
+.vi-crow { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 8px 8px 14px; }
 .vi-acts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
-.vi-note { font-size: 12px; color: var(--v-fg-3); }
 .vi-done { display: flex; align-items: center; gap: 10px; margin: 24px 0; padding: 12px 14px; border-radius: 10px; background: var(--v-success-wash); color: var(--v-fg); font-size: 13.5px; }
 .vi-done svg { color: var(--v-success); }
 .vi-doc > .vi-done:first-child { margin-top: 0; }
@@ -164,9 +174,11 @@
 .vi-glimpse .node.is-dim { opacity: .35; }
 .vi-glimpse .node.is-lit { box-shadow: 0 0 0 3px var(--v-signal-line); border-radius: 6px; }
 
+.vi-idle { display: flex; flex-direction: column; }
+.vi-idle > .vi-head { box-sizing: border-box; width: 100%; max-width: 760px; margin: 0 auto; padding: 36px clamp(20px, 6%, 48px) 0; }
+.vi-idle > .vi-rooms { overflow: visible; padding-top: 28px; }
 .vi-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 32px; text-align: center; font: italic 400 17px/1.5 var(--v-font-serif); color: var(--v-fg-3); }
 .vi-empty p { margin: 0; max-width: 360px; }
-.vi-keys { font: 400 12px/1 var(--v-font-sans) !important; font-style: normal; display: flex; align-items: center; gap: 4px; }
 
 .vi-sysav { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--v-bg-sunken); color: var(--v-fg-3); box-shadow: inset 0 0 0 1px var(--v-line); }
 .vi-toast { position: absolute; left: 50%; bottom: 20px; z-index: 50; transform: translateX(-50%); }
@@ -180,7 +192,6 @@
 /* Your rooms: the reading page with nothing selected. */
 .vi-rooms { box-sizing: border-box; width: 100%; max-width: 760px; margin: 0 auto; padding: 32px clamp(20px, 6%, 48px) 56px; overflow-y: auto; scrollbar-gutter: stable; }
 .vi-rooms h2 { margin: 0; font: 600 15px/1.2 var(--v-font-ui); color: var(--v-fg); }
-.vi-rooms-sub { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--v-fg-3); }
 .vi-lead { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 20px; border-radius: 14px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--v-line-2, var(--v-line)); background: var(--v-bg); }
 .vi-lead .glimpse-view { border-radius: 0; box-shadow: none; }
 .vi-lead-blank { display: grid; place-items: center; height: 180px; padding: 0 16px; text-align: center; font: italic 400 15px/1.4 var(--v-font-serif); color: var(--v-fg-4); }
@@ -199,12 +210,11 @@
 .vi-roomrow-st b { font-weight: 500; color: var(--v-signal-fg); }
 .vi-roomrow-parts { margin-top: 5px; font: 400 11.5px/1.4 var(--v-font-ui); color: var(--v-fg-4); }
 .vi-roomrow-ts { font-size: 11.5px; color: var(--v-fg-4); }
-.vi-miss { font-style: normal; color: var(--v-fg-4); }
+.vi-miss { display: inline-flex; vertical-align: -2px; margin-left: 6px; color: var(--v-fg-4); }
 
 /* Ongoing work: Claude Code sessions in your repositories on this machine. */
 .vi-work { margin-top: 36px; }
 .vi-work-h { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; font: 600 12px/1 var(--v-font-ui); color: var(--v-fg-3); }
-.vi-work-h em { font: 400 11.5px/1 var(--v-font-sans); font-style: normal; letter-spacing: 0; text-transform: none; color: var(--v-fg-4); }
 .vi-work-row { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--v-line); }
 .vi-work-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--v-fg-4); }
 .vi-work-dot.is-live { background: var(--v-success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--v-success) 22%, transparent); }
@@ -212,7 +222,6 @@
 .vi-work-main { min-width: 0; }
 .vi-work-t { font-size: 13.5px; line-height: 1.35; color: var(--v-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vi-work-m { margin-top: 2px; font-size: 12px; color: var(--v-fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vi-work-none { margin: 0; padding: 10px 0; border-top: 1px solid var(--v-line); font-size: 12.5px; line-height: 1.5; color: var(--v-fg-3); }
 .vi-notice { display: flex; align-items: center; gap: 10px; margin: 0 28px 12px; padding: 10px 12px; border-radius: var(--v-radius-md); background: var(--v-fault-wash); color: var(--v-fault-fg); font-size: 12.5px; line-height: 1.45; }
 .vi-notice > span { flex: 1; }
 

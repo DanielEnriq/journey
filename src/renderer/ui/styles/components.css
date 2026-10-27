@@ -149,15 +149,17 @@
 .v-typing i:nth-child(2) { animation-delay: 0.15s; } .v-typing i:nth-child(3) { animation-delay: 0.3s; }
 
 /* Vowe's mark as a presence: a quiet slate instrument, never a glowing orb. */
-.v-agent { --s: 22px; position: relative; width: var(--s); height: var(--s); flex: 0 0 var(--s); display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--v-info); box-shadow: inset 0 0 0 1.25px var(--v-info-line); }
-.v-agent::after { content: ''; width: 34%; height: 34%; border-radius: 50%; background: var(--v-info); }
+.v-agent { --s: 22px; position: relative; width: var(--s); height: var(--s); flex: 0 0 var(--s); display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--v-info); color: var(--v-surface); }
+.v-agent-face { width: 100%; height: 100%; fill: currentColor; stroke: currentColor; stroke-width: 0; }
+.v-agent-face path { fill: none; stroke-width: 1.7; stroke-linecap: round; }
+.v-agent-spark { position: absolute; top: -10%; right: -14%; width: 44%; height: 44%; fill: var(--v-signal); filter: drop-shadow(0 0 0 var(--v-bg)) drop-shadow(0 0 1px var(--v-bg)); }
 .v-agent.is-speaking::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 1.25px solid var(--v-info-line); animation: v-breathe-ring 1.8s ease-out infinite; }
 @keyframes v-breathe-ring { from { transform: scale(0.85); opacity: 1; } to { transform: scale(1.25); opacity: 0; } }
 
 /* Provenance: who made something, independent of whether it's confirmed.
    A Vowe-drawn part that's been accepted is solid and keeps this mark. */
 .v-prov { display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 6px 0 3px; border-radius: 999px; font-family: var(--v-font-mono); font-size: 10px; letter-spacing: 0.02em; color: var(--v-fg-3); background: var(--v-surface-hover); white-space: nowrap; }
-.v-prov .v-agent { --s: 12px; box-shadow: inset 0 0 0 1px var(--v-info-line); }
+.v-prov .v-agent { --s: 12px; }
 .v-prov .v-av { --s: 12px; font-size: 6px; }
 .v-prov-agent { color: var(--v-info-fg); background: var(--v-info-wash); }
 /* Fault notice: an error that already happened. Not an action. */

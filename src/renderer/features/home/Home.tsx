@@ -11,7 +11,7 @@ import { SessionSplash } from '../../ui/pass2/auth/SessionSplash.js';
 import { Sheet } from '../../ui/pass2/common.js';
 import { HomeFirst } from '../../ui/pass2/home/HomeFirst.js';
 import { InboxHome } from '../inbox/ui/InboxHome.js';
-import { RoomsQuiet, YourRooms } from '../inbox/ui/YourRooms.js';
+import { YourRooms } from '../inbox/ui/YourRooms.js';
 import { activeInbox, type InboxSource } from '../inbox/source.js';
 import { FindRepositoriesSheet } from '../../ui/pass2/projects/Projects.js';
 import { AppShell, type ShellRoute } from '../../ui/pass2/shell/AppShell.js';
@@ -142,7 +142,7 @@ export function Home(p: HomeProps) {
     );
     page = inbox
       ? <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
-          quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />} notice={notice} onOpenInvite={p.onOpenInvite}
+          notice={notice} onOpenInvite={p.onOpenInvite}
           idle={(st) => rooms(needsByRoom(st.view.needs), st.now)} />
       : rooms();
   }
