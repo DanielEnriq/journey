@@ -1,14 +1,15 @@
-/* Home as the Inbox (features/inbox/ui): the list on the sunken ground, the reading page on paper. Ink, Paper &
-   Signal tokens only; the signal colour marks what needs you and nothing else. */
+/* Home as the Inbox (features/inbox/ui). Two materials, the way a Mac mail app has them: the sidebar, and the content
+   (the list and the reading page together, on one paper, split by a hairline). Only fields you type into sit lighter,
+   as text fields do on macOS. Ink, Paper & Signal tokens only; the signal colour marks what needs you and nothing else. */
 /* Each column's top 40px is its part of the window's toolbar, on the row of the traffic lights and the shell's band:
    the list's title over the list, the item's path and actions over the reading page. Buttons there opt out of the
    band's window dragging. */
 .vi-home { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: var(--vi-list-w, 380px) minmax(0, 1fr); font-family: var(--v-font-sans); color: var(--v-fg); }
-.vi-list { container: vi-list / inline-size; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; background: var(--v-bg); box-shadow: inset -1px 0 0 var(--v-line); }
+.vi-list { container: vi-list / inline-size; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; background: var(--v-bg); }
 .vi-edge { position: absolute; z-index: 5; top: 0; bottom: 0; left: calc(var(--vi-list-w, 380px) - 3px); width: 6px; cursor: col-resize; touch-action: none; outline: none; -webkit-app-region: no-drag; }
 .vi-edge::after { content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 1px; background: var(--v-line-strong); opacity: 0; transition: opacity var(--v-dur-2) var(--v-ease); }
 .vi-edge:focus-visible::after, body.vh-sb-resizing .vi-edge:hover::after, .vi-edge:active::after { opacity: 1; }
-.vi-page { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--v-surface); }
+.vi-page { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--v-bg); box-shadow: inset 1px 0 0 var(--v-line); }
 
 .vi-tb { position: sticky; top: 0; z-index: 2; flex: none; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px 0 24px; background: var(--v-bg); transition: padding-left var(--v-dur-3) var(--v-ease); }
 .vi-tb b { flex: 1; min-width: 0; font: 600 13px/16px var(--v-font-ui); color: var(--v-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -149,7 +150,7 @@
 .vi-newline { display: flex; align-items: center; gap: 10px; font: 600 11px/1 var(--v-font-ui); color: var(--v-info-fg); }
 .vi-newline::after { content: ''; flex: 1; height: 1px; background: var(--v-info-line); }
 
-.vi-compose { margin-top: 18px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--v-line-2); background: transparent; transition: box-shadow var(--v-dur-2) var(--v-ease); }
+.vi-compose { margin-top: 18px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--v-line-2); background: var(--v-surface); transition: box-shadow var(--v-dur-2) var(--v-ease); }
 .vi-compose:focus-within { box-shadow: inset 0 0 0 1px var(--v-line-strong); }
 /* A reply's Send waits until there's something to send. */
 .vi-compose.is-reply:has(textarea:placeholder-shown) .vi-crow > .v-btn { opacity: 0; pointer-events: none; }
