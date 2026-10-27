@@ -955,9 +955,6 @@ body.nx-resizing .room-screen .win{transition:none}
 .room-screen .win.nx-fws.nx-small .nx-ins-bar{right:calc(178px + 34%)}
 
 /* Back / forward, after the rooms and new-room controls */
-.room-screen .nx-navbtns{position:absolute;z-index:34;top:7px;left:158px;display:flex;gap:2px}
-.room-screen .nx-navbtns .panel-toggle:disabled{opacity:.35;cursor:default}
-.room-screen .win.side-open .nx-navbtns{left:158px}
 .room-screen .win.nx-fws .nx-ins-bar{left:226px}
 .room-screen .nx-crumbsep{font-style:normal;color:var(--v-fg-4);margin:0 -2px}
 

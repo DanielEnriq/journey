@@ -1,5 +1,6 @@
 import { h, type ComponentChildren } from '../../vendor/preact.js';
-import { Compose, Home, PanelLeft, PanelRight } from '../../shared/components/icons.js';
+import { PanelRight } from '../../shared/components/icons.js';
+import { IconButton } from '../../ui/components.js';
 import { AccountFoot } from '../../shared/components/Account.js';
 import type { PersonRef, RoomSummary } from './types.js';
 import { CallCluster } from './call/CallControls.js';
@@ -20,9 +21,8 @@ export function Lights() {
 export interface ChromeProps {
   side: boolean;
   toggleSide(): void;
-  onNewRoom(): void;
-  /** Outside the call only: back to the workspace. */
-  onHome?(): void;
+  /** What the arrows step through; the window's history when absent (as on Home). */
+  nav?: { back(): void; fwd(): void; backLabel: string | null; fwdLabel: string | null };
   desk?: boolean | null;
   deskUnseen?: boolean;
   toggleDesk?(): void;
@@ -35,14 +35,17 @@ export interface ChromeProps {
   call?: { looking: string; canvasShown: boolean };
 }
 
-export function Chrome({ side, desk = null, deskUnseen, toggleSide, toggleDesk, onNewRoom, onHome, actions, sideName = 'rooms', call }: ChromeProps) {
+export function Chrome({ side, desk = null, deskUnseen, toggleSide, toggleDesk, nav, actions, sideName = 'rooms', call }: ChromeProps) {
   const sideLabel = `${side ? 'Hide' : 'Show'} ${sideName}`, deskLabel = desk ? 'Hide where we are' : 'Show where we are';
   return (
     <header class="top-chrome">
+      {/* The same buttons, sizes and spacing as Home's band (AppShell), so the corner doesn't shift on entering a room. */}
       <div class="chrome-controls">
-        <button class={'panel-toggle' + (side ? ' open' : '')} type="button" aria-label={sideLabel} title={`${sideLabel} · [`} aria-expanded={side} onClick={toggleSide}><PanelLeft /></button>
-        <button class="panel-toggle" type="button" aria-label="New room" title="New room" onClick={onNewRoom}><Compose /></button>
-        {onHome && <button class="panel-toggle" type="button" aria-label="Home" title="Back to your rooms" onClick={onHome}><Home /></button>}
+        <IconButton icon="sidebar" label={sideLabel} tip={`${sideLabel} · [`} aria-pressed={side} onClick={toggleSide} />
+        <span class="vh-band-nav" role="group" aria-label="History">
+          <IconButton icon="chevron-l" label="Back" tip={nav?.backLabel ? `Back to ${nav.backLabel} · ⌘[` : 'Back · ⌘['} aria-disabled={nav && !nav.backLabel ? 'true' : undefined} onClick={nav ? () => { if (nav.backLabel) nav.back(); } : () => history.back()} />
+          <IconButton icon="chevron-r" label="Forward" tip={nav?.fwdLabel ? `Forward to ${nav.fwdLabel} · ⌘]` : 'Forward · ⌘]'} aria-disabled={nav && !nav.fwdLabel ? 'true' : undefined} onClick={nav ? () => { if (nav.fwdLabel) nav.fwd(); } : () => history.forward()} />
+        </span>
       </div>
       {(desk !== null || actions || call) && (
         <div class="chrome-actions">

@@ -165,18 +165,8 @@ export function VoweRoom(p: VoweRoomProps) {
         <div style={style} class={cls}>
           <Lights />
           {p.windowOverlay}
-          {p.nav ? (
-            <div class="nx-navbtns" role="group" aria-label="History">
-              <button type="button" class="panel-toggle" disabled={!p.nav.backLabel} aria-label="Back" title={p.nav.backLabel ? `Back to ${p.nav.backLabel} · ⌘[` : 'Back'} onClick={p.nav.back}>
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>
-              </button>
-              <button type="button" class="panel-toggle" disabled={!p.nav.fwdLabel} aria-label="Forward" title={p.nav.fwdLabel ? `Forward to ${p.nav.fwdLabel} · ⌘]` : 'Forward'} onClick={p.nav.fwd}>
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" /></svg>
-              </button>
-            </div>
-          ) : null}
           <Chrome side={side} sideName="sidebar" desk={u.deskOpen} deskUnseen={!u.deskOpen && !!top} toggleSide={toggleSidebar} toggleDesk={() => p.ui.setState(u.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' })}
-            onNewRoom={() => p.onNewRoom(null)} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
+            nav={p.nav} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
           <aside class="sidebar vh-sb-host" aria-hidden={!side} inert={!side}>
             <ShellSidebar place={null} rooms={rooms} current={p.room.id} onRoom={p.onOpenRoom} onNew={(repo) => p.onNewRoom(repo)} foot={<AccountFoot />} />
           </aside>
