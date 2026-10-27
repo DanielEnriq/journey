@@ -48,7 +48,8 @@ export function createMainWindow({ preview = false }: WindowOptions = {}): Brows
     minHeight: 680,
     title: 'Vowe',
     // The room draws its own 40px band; on macOS the real traffic lights sit where the design puts them.
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 18, y: 14 } } : {}),
+    // The sidebar is a little translucent: the window is clear behind it and macOS's sidebar material shows through.
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 18, y: 14 }, vibrancy: 'sidebar' as const, backgroundColor: '#00000000' } : {}),
     webPreferences: {
       // CommonJS: sandboxed preloads can't be ES modules.
       ...(preview ? {} : { preload: join(import.meta.dirname, '..', 'preload', 'index.cjs') }),

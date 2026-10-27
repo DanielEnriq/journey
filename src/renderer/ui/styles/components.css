@@ -43,7 +43,7 @@
 .v-icon-14 { width: 14px; height: 14px; stroke-width: 1.6; }
 
 /* ---------------------------------------------------------------- buttons */
-.v-btn { --h: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--h); padding: 0 14px; border: 0; border-radius: var(--v-radius-sm); font-size: 13px; font-weight: 500; letter-spacing: -0.003em; white-space: nowrap; background: var(--v-surface); color: var(--v-fg); box-shadow: inset 0 0 0 1px var(--v-line-2), var(--v-shadow-1); transition: background var(--v-dur-1) ease, box-shadow var(--v-dur-1) ease, transform var(--v-dur-1) var(--v-ease), color var(--v-dur-1) ease; }
+.v-btn { --h: 32px; font-family: var(--v-font-ui); display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--h); padding: 0 14px; border: 0; border-radius: var(--v-radius-sm); font-size: 13px; font-weight: 500; letter-spacing: -0.003em; white-space: nowrap; background: var(--v-surface); color: var(--v-fg); box-shadow: inset 0 0 0 1px var(--v-line-2), var(--v-shadow-1); transition: background var(--v-dur-1) ease, box-shadow var(--v-dur-1) ease, transform var(--v-dur-1) var(--v-ease), color var(--v-dur-1) ease; }
 .v-btn:hover, .v-btn.is-hover { background: color-mix(in srgb, var(--v-surface) 92%, var(--v-fg)); box-shadow: inset 0 0 0 1px var(--v-line-strong), var(--v-shadow-1); }
 .v-btn:active, .v-btn.is-press { transform: translateY(0.5px) scale(0.99); }
 .v-btn:focus-visible, .v-btn.is-focus { outline: 0; box-shadow: var(--v-focus-ring); }
@@ -167,7 +167,7 @@
 
 /* --------------------------------------------------------- dialogs, menus */
 .v-popover { border-radius: var(--v-radius-lg); background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
-.v-menu { min-width: 220px; padding: 5px; border-radius: 11px; background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
+.v-menu { font-family: var(--v-font-ui); min-width: 220px; padding: 5px; border-radius: 11px; background: var(--v-surface-raised); box-shadow: var(--v-shadow-3); }
 .v-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; height: 30px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: var(--v-fg-2); text-align: left; }
 .v-menu-item .v-icon { color: var(--v-fg-3); }
 .v-menu-item:hover, .v-menu-item.is-hover { background: var(--v-surface-hover); color: var(--v-fg); }
@@ -207,7 +207,7 @@
    window's right), data-tip-start to its left edge (the sidebar). Never the only place a name lives:
    every such control also has an aria-label. */
 [data-tip] { position: relative; }
-[data-tip]:hover::after, [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; z-index: 90; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 8px; border-radius: 6px; background: var(--v-fg); color: var(--v-fg-inverse); font: 500 11.5px/1.3 var(--v-font-sans); letter-spacing: 0; text-transform: none; white-space: nowrap; pointer-events: none; opacity: 0; animation: v-tip 1ms linear 450ms forwards; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; z-index: 90; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 8px; border-radius: 6px; background: var(--v-fg); color: var(--v-fg-inverse); font: 500 11.5px/1.3 var(--v-font-ui); letter-spacing: 0; text-transform: none; white-space: nowrap; pointer-events: none; opacity: 0; animation: v-tip 1ms linear 450ms forwards; }
 [data-tip][data-tip-end]:hover::after, [data-tip][data-tip-end]:focus-visible::after { left: auto; right: 0; transform: none; }
 [data-tip][data-tip-start]:hover::after, [data-tip][data-tip-start]:focus-visible::after { left: 0; transform: none; }
 [data-tip][aria-expanded="true"]::after { display: none; }

@@ -1,8 +1,8 @@
 /* The sidebar (ui/pass2/shell/Sidebar.tsx): sunken, global, the same on Home and in rooms. Ink, Paper & Signal
    tokens only. Its host (AppShell's .vh-side, the room's .sidebar) places it; this styles what's inside. */
-.vh-sb { position: relative; display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; font-family: var(--v-font-sans); }
+.vh-sb { position: relative; display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; font-family: var(--v-font-ui); }
 .vh-sb-places { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px 10px; }
-.vh-sb-row { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--v-fg-2); font: 500 13px/1 var(--v-font-sans); text-align: left; cursor: pointer; transition: background var(--v-dur-1) ease, color var(--v-dur-1) ease; }
+.vh-sb-row { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--v-fg-2); font: 500 13px/1 var(--v-font-ui); text-align: left; cursor: pointer; transition: background var(--v-dur-1) ease, color var(--v-dur-1) ease; }
 .vh-sb-row:hover { background: var(--v-surface-hover); color: var(--v-fg); }
 .vh-sb-row[aria-current="page"] { background: var(--v-surface-selected); color: var(--v-fg); }
 .vh-sb-row:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); }
@@ -11,14 +11,14 @@
 .vh-sb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The one number: what needs you, with the signal dot before it. */
-.vh-sb-count { display: inline-flex; align-items: center; gap: 5px; min-width: 18px; height: 18px; padding: 0 4px; font: 500 11.5px/1 var(--v-font-sans); font-variant-numeric: tabular-nums; color: var(--v-fg); }
+.vh-sb-count { display: inline-flex; align-items: center; gap: 5px; min-width: 18px; height: 18px; padding: 0 4px; font: 500 11.5px/1 var(--v-font-ui); font-variant-numeric: tabular-nums; color: var(--v-fg); }
 .vh-sb-count::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--v-signal); }
 .vh-sb-state { display: inline-flex; align-items: center; flex: none; padding-right: 4px; }
 .vh-sb-needsdot, .vh-sb-livedot { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
 .vh-sb-livedot { background: var(--v-success); }
 
 /* "Spaces": a quiet heading in the rows' own face, lined up with their icons. */
-.vh-sb-h { padding: 14px 8px 4px 16px; font: 400 12px/18px var(--v-font-sans); color: var(--v-fg-3); }
+.vh-sb-h { padding: 14px 8px 4px 16px; font: 400 12px/18px var(--v-font-ui); color: var(--v-fg-3); }
 .vh-sb-rooms { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 8px; display: flex; flex-direction: column; gap: 1px; scrollbar-gutter: stable; }
 .vh-sb-none { margin: 4px 8px; font-size: 12px; line-height: 1.5; color: var(--v-fg-3); }
 .vh-sb-repo { display: flex; flex-direction: column; gap: 1px; }
@@ -59,7 +59,7 @@
 .vh-sb-foot .account .nm { font-size: 12px; }
 
 /* In a room: the window's .sidebar column hosts it, on the same sunken surface as Home's. */
-.win .sidebar.vh-sb-host { background: var(--v-bg-sunken); box-shadow: inset -1px 0 0 var(--v-line); padding-top: 44px; }
+.win .sidebar.vh-sb-host { background: var(--vh-sidebar-bg); box-shadow: inset -1px 0 0 var(--v-line); padding-top: 44px; }
 .win .sidebar.vh-sb-host > * { min-width: var(--vh-sidebar-w, 236px); }
 .win .sidebar.vh-sb-host .account-foot { border-top: 0; }
 
@@ -70,3 +70,8 @@
 .vh-sb-edge:focus-visible::after, body.vh-sb-resizing .vh-sb-edge::after { opacity: 1; }
 body.vh-sb-resizing { cursor: col-resize; user-select: none; }
 body.vh-sb-resizing .vh-app, body.vh-sb-resizing .win { transition: none; }
+
+/* The sidebar's own colour, a little see-through: on macOS the window's sidebar material shows behind it. The room's
+   window is clear only under the sidebar's column; its panes keep their own paint. */
+:root { --vh-sidebar-bg: color-mix(in srgb, var(--v-bg-sunken) 55%, transparent); }
+.win.side-open:has(> .vh-sb-host) { background: linear-gradient(to right, transparent var(--left-column), var(--pane) 0); }

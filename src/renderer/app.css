@@ -2,6 +2,9 @@
    drawn one, and the developer screens (reference sheets, dev menu) that are not part of the design. */
 
 html,body{margin:0;height:100%;overflow:hidden;background:var(--v-bg)}
+/* Where the app's sidebar is drawn, the page is clear so the window's sidebar material can show through it;
+   each layout paints its own panes (see .vh-app and .win). */
+html:has(.vh-app, .win.side-open),html:has(.vh-app, .win.side-open) body,#app:has(.vh-app, .win.side-open){background:transparent}
 #app,.room-screen,.welcome-screen{height:100%}
 
 /* The design draws a 1440×900 window with rounded corners; here the window is real. */

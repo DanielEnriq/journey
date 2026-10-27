@@ -60,6 +60,8 @@
   /* -------------------------------------------------------------- type */
   --v-font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   --v-font-serif: 'Instrument Serif', 'New York', 'Iowan Old Style', Georgia, serif;
+  /* The app's chrome (sidebar, account, buttons, menus, tips): the system's own face, as Mac apps use. */
+  --v-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   --v-font-mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, Menlo, monospace;
 
   /* ------------------------------------------------------ shape & motion */
