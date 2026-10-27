@@ -235,6 +235,7 @@ export function createInboxSource(deps: InboxDeps): InboxController {
       return { record, scene };
     },
     seen(item) { marks?.seen(item.id, item.events.length); },
+    unread(item) { marks?.unseen(item.id); },
     done(item) {
       if (item.tier === 'needs' || !marks) return () => {};
       const key = doneKey(item);

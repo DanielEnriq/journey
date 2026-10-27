@@ -32,6 +32,7 @@ export interface ItemMenuActs {
   done(it: InboxItem): void;
   follow(it: InboxItem, on: boolean): void;
   open(it: InboxItem): void;
+  read(it: InboxItem, on: boolean): void;
 }
 
 /**
@@ -72,6 +73,7 @@ export function ItemMenu({ it, now, at, only, acts, onClose }: { it: InboxItem; 
       {!only ? (
         <>
           <div class="v-menu-sep" role="separator" />
+          {item('mail', it.unseen ? 'Mark as read' : 'Mark as unread', () => acts.read(it, !!it.unseen), 'U')}
           {canMarkDone(it) ? item('check', 'Done', () => acts.done(it), 'E') : null}
           {item(following ? 'unfollow' : 'follow', following ? 'Unfollow' : 'Follow', () => acts.follow(it, !following))}
           {canOpen(it) ? item('external', 'Open in room', () => acts.open(it), '↵') : null}

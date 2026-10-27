@@ -16,7 +16,8 @@ import { ago, inOrder, nextAfter, partOfDay, step } from './time.js';
 // Home as the Inbox: on the left, what's addressed to you (Needs you), what you're part of (Following) and what
 // moved in your rooms (In your rooms); on the right, the selected item's reading page. Everything comes from the
 // workspace's InboxSource: the list never invents an item, a count or a time, and every act goes through it.
-// Keys (outside text fields): j/k or the arrows move, Enter opens in the room, E marks done, Esc clears.
+// Keys (outside text fields): j/k or the arrows move, Enter opens in the room, E marks done, U marks read or unread,
+// Esc clears.
 
 export interface InboxHomeProps {
   source: InboxSource;
@@ -76,8 +77,8 @@ export function InboxHome(p: InboxHomeProps) {
   const it = sel ? all.find((x) => x.id === sel) ?? null : null;
   const resolved = it && view && !ids.includes(it.id) ? view.resolved.find((r) => r.item.id === it.id) : undefined;
 
-  // Selecting what you follow or saw in your rooms clears its new events; what needs you stays until it's done.
-  useEffect(() => { if (it && it.tier !== 'needs' && it.unseen > 0) p.source.seen(it); }, [it?.id]);
+  // Selecting an item reads it (what needs you stays in the list until it's done); U marks it read or unread.
+  useEffect(() => { if (it && it.unseen > 0) p.source.seen(it); }, [it?.id]);
 
   const acts: ItemMenuActs = {
     snooze: (x, until, label) => {
@@ -94,6 +95,7 @@ export function InboxHome(p: InboxHomeProps) {
       setToast({ text: 'Marked done', undo });
     },
     follow: (x, on) => { p.source.follow(x, on); setToast({ text: on ? 'Following. New activity shows here.' : 'Unfollowed. It leaves Following.' }); },
+    read: (x, on) => { if (on) p.source.seen(x); else p.source.unread(x); },
     open: (x) => { if (!canOpen(x)) return; requestAnchor(x.anchor); p.source.seen(x); p.onOpenRoom(x.anchor.roomId); },
   };
 
@@ -109,6 +111,7 @@ export function InboxHome(p: InboxHomeProps) {
         if (id) { select(id); list.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`)?.focus(); }
       } else if (k === 'Enter' && it && inList && canOpen(it)) { e.preventDefault(); acts.open(it); }
       else if ((k === 'e' || k === 'E') && it && canMarkDone(it) && !resolved) { e.preventDefault(); acts.done(it); }
+      else if ((k === 'u' || k === 'U') && it && !resolved) { e.preventDefault(); acts.read(it, !!it.unseen); }
       else if (k === 'Escape' && sel) { e.preventDefault(); select(null); }
       else if (k === 'Escape' && foot) { e.preventDefault(); setFoot(null); }
     };
@@ -247,12 +250,16 @@ function Row({ it, st, selected, note, onSelect, onMenu, onOpen }: { it: InboxIt
   const needs = it.tier === 'needs';
   const verb = needs && it.obligation ? OBLIGATION_VERB[it.obligation] : null;
   const when = ago(needs && it.waitingSince ? it.waitingSince : it.at, st.now);
-  const unread = needs || it.unseen > 0;
+  const unread = it.unseen > 0;
   const p = it.progress;
-  // One line: unread dot, who, headline, where, then the glyph over when. Following adds the line that was said.
+  // Two lines. First: who, the headline, and the glyph for what it is (signal when it's yours to do). Second: what
+  // happened, in a phrase (what was said, for Following), then the room, and when.
+  const said = it.excerpt && it.tier === 'following' ? `${name(it.excerpt.by)}: ${it.excerpt.text.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1')}` : null;
+  const on = it.path[1] && !it.headline.includes(it.path[1]) ? it.path[1] : null;
+  const what = note ?? said ?? (needs ? it.why.split(' · ')[0] : on ?? it.whyShort ?? null);
   return (
     <div id={`vi-row-${it.id}`} data-id={it.id} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
-      aria-label={[verb, it.headline, it.room.name, when].filter(Boolean).join(', ')}
+      aria-label={[verb, it.headline, what, it.room.name, when].filter(Boolean).join(', ')}
       class={'vi-row' + (needs ? ' is-needs' : '') + (unread ? ' is-unread' : '')}
       onClick={onSelect} onDblClick={() => canOpen(it) && onOpen()} onContextMenu={onMenu} onFocus={() => !selected && onSelect()}>
       <span class="vi-face"><Face id={it.actor} people={st.people} size={24} /></span>
@@ -260,13 +267,10 @@ function Row({ it, st, selected, note, onSelect, onMenu, onOpen }: { it: InboxIt
       <span class="vi-r">
         {it.raised ? <span class="vi-raised" title={it.raised}><Icon name="raise" size={14} /></span> : null}
         {p ? <span class="vi-progress" aria-label={`${p.done} of ${p.of} steps done`}>{Array.from({ length: p.of }, (_, i) => <i key={i} class={i < p.done ? 'is-done' : i === p.done && needs ? 'is-wait' : ''} />)}</span> : null}
-        <span class="vi-where">{note ?? it.room.name}</span>
-        <span class="vi-stack">
-          <span class="vi-glyph" title={verb ?? undefined} aria-hidden="true"><Icon name={it.obligation && needs ? OWED[it.obligation] : KIND[it.subject.kind]} size={14} /></span>
-          <span class="vi-at">{when}</span>
-        </span>
+        <span class="vi-glyph" title={verb ?? undefined} aria-hidden="true"><Icon name={it.obligation && needs ? OWED[it.obligation] : KIND[it.subject.kind]} size={14} /></span>
       </span>
-      {it.excerpt && it.tier === 'following' ? <span class="vi-ex"><b>{name(it.excerpt.by)}</b> {it.excerpt.text.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1')}</span> : null}
+      <span class="vi-sub">{what ? <span class="vi-what">{what}</span> : null}<span class="vi-where">{it.room.name}</span></span>
+      <span class="vi-at">{when}</span>
     </div>
   );
 }

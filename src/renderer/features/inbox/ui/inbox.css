@@ -40,28 +40,29 @@
 .vi-sec > section > .vi-box, section[aria-label] > .vi-box { margin: 2px 0 0; }
 .vi-none { margin: 4px 18px 10px; font-size: 13px; color: var(--v-fg-3); }
 
-/* A row, one line as Linear lists issues: the unread dot in the gutter, who, the headline, then where, and the
-   glyph (signal when it needs you) over when on the right. Following adds the line that was said. No fills, no hairlines:
-   a row is tinted only on hover and when selected (slate while the list has focus). */
-.vi-row { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-rows: 44px; column-gap: 10px; align-items: center; margin: 0 6px; padding: 0 10px 0 12px; border-radius: 6px; color: var(--v-fg-2); cursor: default; outline: 0; }
+/* A row, two lines: who, the headline and the glyph for what it is (signal when it's yours to do); then what happened
+   and where, with when at the right. An unread dot sits in the gutter. No fills, no hairlines: a row is tinted only on
+   hover and when selected (slate while the list has focus). */
+.vi-row { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; margin: 0 6px; padding: 8px 10px 8px 12px; border-radius: 6px; color: var(--v-fg-2); cursor: default; outline: 0; }
 .vi-row:hover { background: var(--v-surface-hover); }
 .vi-row[aria-selected="true"] { background: var(--v-surface-selected); }
 .vi-row[aria-selected="true"]:focus { background: var(--v-selection); }
-.vi-row.is-unread:not(.is-needs)::before { content: ''; position: absolute; left: 3px; top: 19px; width: 6px; height: 6px; border-radius: 50%; background: var(--v-info-fg); }
+.vi-row.is-unread::before { content: ''; position: absolute; left: 3px; top: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--v-info-fg); }
+.vi-face { grid-row: 1 / span 2; display: inline-flex; }
+.vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--v-fg-2); }
+.vi-row.is-unread .vi-hl { color: var(--v-fg); font-weight: 500; }
+.vi-r { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .vi-glyph { display: inline-flex; color: var(--v-fg-4); }
-.vi-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 26px; }
 .vi-row.is-needs .vi-glyph { color: var(--v-signal-fg); }
-.vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--v-fg-2); }
-.vi-row.is-unread .vi-hl { color: var(--v-fg); }
-.vi-r { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: var(--v-fg-4); white-space: nowrap; }
-.vi-where { max-width: 96px; overflow: hidden; text-overflow: ellipsis; color: var(--v-fg-3); }
-/* A narrow list keeps the headline: the room steps out (the reading page's path still names it). */
-@container vi-list (max-width: 360px) { .vi-where { display: none; } }
-.vi-face { display: inline-flex; }
-.vi-at { font-size: 11px; line-height: 1; font-variant-numeric: tabular-nums; }
 .vi-raised { display: inline-flex; color: var(--v-info-fg); }
-.vi-ex { grid-column: 2 / -1; margin: -6px 0 8px; font-size: 12px; line-height: 1.35; color: var(--v-fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vi-ex b { font-weight: 500; color: var(--v-fg-2); }
+.vi-sub { display: flex; gap: 6px; min-width: 0; font-size: 12px; line-height: 16px; color: var(--v-fg-3); white-space: nowrap; overflow: hidden; }
+.vi-what { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* The room gives way first: it shrinks, fading out, before what happened is cut. */
+.vi-where { flex: 0 1 auto; min-width: 0; padding-right: 18px; margin-right: -18px; overflow: hidden; white-space: nowrap; color: var(--v-fg-4); -webkit-mask-image: linear-gradient(to left, transparent, #000 18px); mask-image: linear-gradient(to left, transparent, #000 18px); }
+/* A narrow list keeps what happened whole: the room steps out (the reading page's path still names it). */
+@container vi-list (max-width: 440px) { .vi-where { display: none; } }
+.vi-what + .vi-where::before { content: '· '; }
+.vi-at { justify-self: end; font-size: 11.5px; line-height: 16px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .vi-progress { display: flex; gap: 3px; }
 .vi-progress i { width: 14px; height: 3px; border-radius: 2px; background: var(--v-line-2); }
 .vi-progress i.is-done { background: var(--v-fg-3); }
