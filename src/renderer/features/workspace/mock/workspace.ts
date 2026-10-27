@@ -3,7 +3,7 @@ import { mockLog } from '../../../shared/mock.js';
 import { minutesBefore } from '../../../shared/time.js';
 import { account, initials } from '../../../shared/account.js';
 import type {
-  CallDataSource, RepoChoice, RoomDataSource, RoomEvent, RoomPreview, RoomWorkContext, RoomWorkstream, WorkstreamDataSource,
+  CallDataSource, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomWorkContext, RoomWorkstream, WorkstreamDataSource,
 } from '../../room/data/sources.js';
 import type { PersonRef, RoomSummary } from '../../room/types.js';
 import { AGENT, type RecordEvent, type VoweRecord } from '../../vowe-room/contracts/model.js';
@@ -77,7 +77,7 @@ export const EXAMPLE_REPOS: RepoChoice[] = ['acme/payments', 'acme/web', 'acme/l
 
 const now = () => Date.now();
 const iso = () => new Date().toISOString();
-const ev = (id: string, at: string, text: string, who: PersonRef | null, tone?: RoomEvent['tone'], presence?: boolean): RoomEvent => ({ id, at, text, who, ...(tone ? { tone } : {}), ...(presence ? { presence: true as const } : {}) });
+const ev = (id: string, at: string, text: string, who: PersonRef | null, tone?: RoomEvent['tone'], presence?: boolean, kind?: EventKind): RoomEvent => ({ id, at, text, who, ...(kind ? { kind } : {}), ...(tone ? { tone } : {}), ...(presence ? { presence: true as const } : {}) });
 /** What last changed in a room, for its one-line summary: comings and goings in its call don't count. */
 const changed = (events: RoomEvent[]) => events.find((e) => !e.presence)?.text ?? '';
 const byNewest = (a: RoomEvent, b: RoomEvent) => Date.parse(b.at) - Date.parse(a.at);
@@ -96,6 +96,8 @@ const DEMO_ROOMS: DemoRoom[] = [
       stream({
         id: 'retry', title: 'Retry worker backoff', agent: 'Claude Code', branch: 'payments/retry-worker', worktree: '~/code/acme-payments-retry', changedFiles: 3, sessions: 1, visibility: 'room',
         lastActivityAt: minutesBefore(T, 3), lastActivity: 'Ran worker.test.ts: 14 passed.',
+        checks: [{ text: 'worker.test.ts', result: 'pass' }, { text: 'backoff.test.ts', result: 'pass' }, { text: 'Typecheck', result: 'pass' }, { text: 'Lint', result: 'running' }],
+        files: [{ path: 'payments/retry/worker.ts', a: '88', d: '21' }, { path: 'payments/retry/backoff.ts', a: '46', d: '17' }, { path: 'payments/retry/worker.test.ts', a: '8', d: '0' }],
         observed: [
           { at: minutesBefore(T, 3), text: 'Ran worker.test.ts: 14 passed.' }, { at: minutesBefore(T, 9), text: 'Edited payments/retry/worker.ts' },
           { at: minutesBefore(T, 21), text: 'Edited payments/retry/backoff.ts' }, { at: minutesBefore(T, 40), text: 'Session started in the retry-worker worktree.' },
@@ -113,6 +115,7 @@ const DEMO_ROOMS: DemoRoom[] = [
     work: (T) => [stream({
       id: 'bisect', title: 'p95 regression bisect', agent: 'Codex', branch: 'perf/p95-bisect', worktree: '~/code/acme-web-bisect', changedFiles: 0, sessions: 1, visibility: 'room',
       lastActivityAt: minutesBefore(T, 1), lastActivity: 'Ran the checkout benchmark at a3f9c12.',
+      checks: [{ text: 'Checkout benchmark at a3f9c12', result: 'running' }, { text: 'Checkout benchmark at 7e21b04', result: 'fail' }, { text: 'Checkout benchmark at 51c0d9e', result: 'pass' }],
       observed: [{ at: minutesBefore(T, 1), text: 'Ran the checkout benchmark at a3f9c12.' }, { at: minutesBefore(T, 34), text: 'Narrowed the range to 6 commits.' }],
     })],
   },
@@ -123,6 +126,7 @@ const DEMO_ROOMS: DemoRoom[] = [
         id: 'backfill', title: 'Backfill job', agent: 'Claude Code', branch: 'ledger/backfill', worktree: '~/code/acme-ledger-backfill', changedFiles: 5, sessions: 1, visibility: 'room',
         fromDecision: 'v1', question: 'Should reversed entries keep their original timestamp, or take the time of the reversal?',
         lastActivityAt: minutesBefore(T, 50), lastActivity: 'Asked the room a question, and paused.',
+        checks: [{ text: 'entries.test.ts', result: 'pass' }, { text: 'reversals.test.ts', result: 'fail' }, { text: 'Typecheck', result: 'pass' }],
         observed: [{ at: minutesBefore(T, 50), text: 'Asked the room a question, and paused.' }, { at: minutesBefore(T, 75), text: 'Edited ledger/backfill/entries.ts' }],
       }),
       stream({
@@ -171,15 +175,22 @@ function attentionOf(r: VoweRecord): RoomPreview['attention'] {
   return out;
 }
 
+/** A record's kinds of event, as the room's lists draw them. */
+const KIND: Record<string, EventKind> = {
+  thread: 'thread', changes: 'thread', reply: 'reply', decision: 'decision', review: 'decision', amended: 'decision',
+  signed: 'signed', agreed: 'signed', authorized: 'signed', work: 'work', resolved: 'resolved', question: 'question',
+};
+
 function recordEvents(r: VoweRecord): RoomEvent[] {
-  return (r.log ?? []).map((e) => ev(e.id, e.at, sentence(e), personRef(e.by), e.kind === 'question' ? 'needs' : undefined, /^call-/.test(e.kind)));
+  return (r.log ?? []).map((e) => ev(e.id, e.at, sentence(e), personRef(e.by), e.kind === 'question' ? 'needs' : undefined, /^call-/.test(e.kind), /^call-/.test(e.kind) ? 'call' : KIND[e.kind]));
 }
 
 /* ---------- Rooms. ---------- */
 
 function withYou(id: string, others: PersonRef[]) { return inCallYou === id ? [you(), ...others] : others; }
 
-function ownEvents(id: string) { return saved.events[id] || []; }
+// Events saved before they had a kind: a call's comings and goings are the only presence events kept here.
+function ownEvents(id: string) { return (saved.events[id] || []).map((e) => (e.kind ? e : { ...e, kind: e.presence ? 'call' as const : 'room' as const })); }
 
 function summaryOf(id: string): RoomSummary | null {
   const example = saved.demo ? DEMO_ROOMS.find((r) => r.id === id) : null;
@@ -198,8 +209,8 @@ function summaryOf(id: string): RoomSummary | null {
   return { id, name: mine.name, repo: mine.repo, inCall: withYou(id, []), role: 'owner', needs: null, activity: changed(events), activityAt: events[0]?.at ?? mine.createdAt };
 }
 
-function record(roomId: string, text: string, presence = false) {
-  const list = [ev('e' + now(), iso(), text, you(), undefined, presence)].concat(ownEvents(roomId)).slice(0, 20);
+function record(roomId: string, text: string, kind: EventKind, presence = false) {
+  const list = [ev('e' + now(), iso(), text, you(), undefined, presence, kind)].concat(ownEvents(roomId)).slice(0, 20);
   commit({ events: { ...saved.events, [roomId]: list } });
 }
 
@@ -215,7 +226,7 @@ const room: RoomDataSource = {
     const id = `${base}-${now().toString(36).slice(-4)}`;
     mockLog('room', `created room "${name}" (stored in localStorage, not shared with anyone)`, { goal, repo });
     saved = { ...saved, rooms: saved.rooms.concat([{ id, name, goal, repo, createdAt: iso() }]) };
-    record(id, 'You created this room.');
+    record(id, 'You created this room.', 'room');
     return summaryOf(id)!;
   },
   async preview(id) {
@@ -237,7 +248,7 @@ const room: RoomDataSource = {
     }
     events.sort(byNewest);
     const since = last ? events.filter((e) => e.who?.tone !== 'me' && Date.parse(e.at) > Date.parse(last)) : [];
-    return { room: summary, goal, since, recent: events.filter((e) => !since.includes(e)).slice(0, 5), attention, lastView };
+    return { room: summary, goal, since, recent: events.filter((e) => !since.includes(e)).slice(0, 5), attention, seenAt: last ?? null, lastView };
   },
   visited(id) {
     saved = { ...saved, visits: { ...saved.visits, [id]: iso() } };
@@ -255,7 +266,7 @@ const call: CallDataSource = {
     if (f.failCall) throw new Error('Couldn’t reach the call. Nothing was joined.');
     const started = !summaryOf(roomId)?.inCall.length;
     inCallYou = roomId;
-    if (started) { callStarted[roomId] = now(); record(roomId, 'You started a call.', true); } else notify();
+    if (started) { callStarted[roomId] = now(); record(roomId, 'You started a call.', 'call', true); } else notify();
   },
   async leave(roomId) {
     mockLog('call', `left the call in ${roomId}`);
@@ -264,8 +275,8 @@ const call: CallDataSource = {
     const others = summaryOf(roomId)?.inCall.length ?? 0;
     const min = callStarted[roomId] ? Math.max(1, Math.round((now() - callStarted[roomId]) / 60_000)) : 0;
     delete callStarted[roomId];
-    if (others) record(roomId, 'You left the call.', true);
-    else record(roomId, min ? `Call ended · ${min} min.` : 'Call ended.', true);
+    if (others) record(roomId, 'You left the call.', 'call', true);
+    else record(roomId, min ? `Call ended · ${min} min.` : 'Call ended.', 'call', true);
   },
   setMuted: (muted) => mockLog('call', muted ? 'microphone muted' : 'microphone on (simulated: nothing is recorded)'),
   setCaptions: (on) => mockLog('call', on ? 'captions on' : 'captions off'),

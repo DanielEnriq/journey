@@ -2,8 +2,10 @@ import { Fragment, h } from '../../../vendor/preact.js';
 import { useState } from '../../../vendor/preact-hooks.js';
 import { ago } from '../../../shared/time.js';
 import { STATUS_WORDS } from '../../work/status.js';
+import { Icon } from '../../../ui/icons.js';
 import type { Loaded } from '../../workspace/hooks.js';
 import type { RepoChoice, RoomWorkContext, RoomWorkstream, Transcript, WorkCheck } from '../data/sources.js';
+import { CodeText, Copy } from './code.js';
 
 // The coding work behind a room, read without joining the call: what is shared with the room, and
 // what was only seen on your machine. Each workstream opens in place to show its evidence. Nothing
@@ -70,23 +72,56 @@ function ConnectRepo({ c }: { c: Connect }) {
   );
 }
 
+/** Work with nothing observed for this long fades back, so what's moving stands out. */
+const STALE_MS = 3 * 3600_000;
+
+const num = (s: string) => Number(s.replace(/[^\d]/g, '')) || 0;
+
+/** The diff, as line counts where they're known and a file count where only that is. */
+function Diff({ w }: { w: RoomWorkstream }) {
+  if (w.files?.length) {
+    const a = w.files.reduce((n, f) => n + num(f.a), 0), d = w.files.reduce((n, f) => n + num(f.d), 0);
+    return <span class="wdiff" title={`${w.files.length} ${w.files.length === 1 ? 'file' : 'files'} changed`}><span class="fa">+{a}</span><span class="fd">−{d}</span></span>;
+  }
+  return w.changedFiles ? <span class="wdiff">{w.changedFiles} {w.changedFiles === 1 ? 'file' : 'files'}</span> : null;
+}
+
+const GLYPH = { pass: '✓', fail: '✕', running: '' } as const;
+
+/** Checks by result, each count named in its tooltip. Checks not run yet aren't counted. */
+function Checks({ checks }: { checks: WorkCheck[] }) {
+  return (
+    <span class="wglyphs">
+      {(['pass', 'fail', 'running'] as const).map((r) => {
+        const of = checks.filter((c) => c.result === r);
+        return of.length ? <span key={r} class={'wg ' + r} data-tip={of.map((c) => c.text).join(', ')}>{r === 'running' ? <span class="wring"></span> : GLYPH[r]}{of.length}</span> : null;
+      })}
+    </span>
+  );
+}
+
 function Stream({ w, open, toggle, share, transcript, onJoin }: {
   w: RoomWorkstream; open: boolean; toggle(): void; share?: () => void; transcript?: () => Promise<Transcript>; onJoin(): void;
 }) {
-  const passing = w.checks?.filter((c) => c.result === 'pass').length ?? 0;
+  const stale = w.status !== 'attention' && !!w.lastActivityAt && Date.now() - Date.parse(w.lastActivityAt) > STALE_MS;
   return (
-    <div class={'stream wstream' + (w.status === 'attention' ? ' needs' : '') + (open ? ' open' : '')}>
+    <div class={'stream wstream' + (w.status === 'attention' ? ' needs' : '') + (open ? ' open' : '') + (stale ? ' stale' : '')}>
       <button class="wtop" type="button" aria-expanded={open} onClick={toggle}>
-        <span class="top"><span class={DOT[w.status]}></span>{w.title}<span class="who">{w.agent}</span></span>
+        <span class="top"><span class={DOT[w.status]}></span><span class="wt">{w.title}</span><span class="who">{w.agent}</span></span>
         <span class="line">
           {w.status === 'attention' ? 'Paused on a question for the room.' : w.lastActivity ?? 'No activity observed.'}
           {w.lastActivityAt && <span class="when"> · {ago(w.lastActivityAt)}</span>}
         </span>
-        {w.checks && w.checks.length > 0 && <span class="line">{passing} of {w.checks.length} checks pass</span>}
       </button>
+      {/* Outside the row's button: the branch copies on its own. */}
+      <span class="wmeta">
+        {w.branch && <Copy text={w.branch} label={`the branch ${w.branch}`} />}
+        <Diff w={w} />
+        {w.checks && w.checks.length > 0 && <Checks checks={w.checks} />}
+      </span>
       {open && (
         <div class="winspect">
-          <span class="mono">{w.branch ?? 'detached'} · {w.worktree}</span>
+          <span class="wpath">{w.branch ? null : 'Detached · '}<Copy text={w.worktree} label="the worktree's path" /></span>
           <span class="wstate">{STATUS_WORDS[w.status]}{w.status === 'unknown' && w.lastActivityAt ? `: nothing observed for ${ago(w.lastActivityAt).replace(' ago', '')}, so it may have stopped` : ''}{w.fromDecision ? ` · from decision ${w.fromDecision}` : ''}</span>
           {w.question && (
             <div class="wq">
@@ -96,11 +131,11 @@ function Stream({ w, open, toggle, share, transcript, onJoin }: {
           )}
           {w.checks && w.checks.length > 0 && <div class="wchecks">{w.checks.map((c) => <Check key={c.text} c={c} />)}</div>}
           {w.files && w.files.length > 0 && (
-            <div class="files">{w.files.map((f) => <div key={f.path} class="file"><span class="fn">{f.path}</span><span class="fa">+{f.a}</span><span class="fd">{f.d}</span></div>)}</div>
+            <div class="files">{w.files.map((f) => <div key={f.path} class="file"><span class="fn">{f.path}</span><span class="fa">+{num(f.a)}</span><span class="fd">−{num(f.d)}</span></div>)}</div>
           )}
           <div class="wlog">
             <span class="rk2">Observed</span>
-            <ul>{w.observed.slice(0, 4).map((o, i) => <li key={i}><span>{o.text}</span><span class="when">{ago(o.at)}</span></li>)}</ul>
+            <ul>{w.observed.slice(0, 4).map((o, i) => <li key={i}><span><CodeText text={o.text} /></span><span class="when">{ago(o.at)}</span></li>)}</ul>
           </div>
           <span class="wfoot">
             {w.changedFiles !== null && <span>{w.changedFiles} {w.changedFiles === 1 ? 'file' : 'files'} changed</span>}
@@ -129,7 +164,8 @@ export function WorkContext({ work, repo, openId, setOpen, share, transcript, co
   onJoin(): void;
 }) {
   const ctx = work.value;
-  const head = <span class="rk">Work<span>{repo ?? 'no repository'}</span></span>;
+  // The repository is the window's subtitle already; the inspector doesn't say it again.
+  const head = <span class="rk">Work</span>;
   if (work.state === 'loading') {
     return <div class="rsec">{head}<span class="wnote"><span class="spinlet"></span>Looking for work in {repo ?? 'this room'}…</span></div>;
   }
@@ -165,7 +201,7 @@ export function WorkContext({ work, repo, openId, setOpen, share, transcript, co
       </div>
       {local.length > 0 && (
         <div class="rsec">
-          <span class="rk">On your machine<span>only you see these</span></span>
+          <span class="rk" title="Only you see these">On your machine<Icon name="lock" size={14} /></span>
           {local.map(row)}
         </div>
       )}

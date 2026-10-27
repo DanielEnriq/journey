@@ -15,9 +15,14 @@ export interface RepoChoice { id: string; label: string }
 /** `repo` is a RepoChoice id. */
 export interface NewRoom { name: string; goal: string; repo: string | null }
 
+/** What kind of thing happened, so a list can draw it with its icon. */
+export type EventKind = 'call' | 'thread' | 'reply' | 'decision' | 'signed' | 'work' | 'resolved' | 'question' | 'repo' | 'people' | 'room';
+
 /** Something that happened in a room, newest first wherever it is listed. */
 export interface RoomEvent {
   id: string;
+  /** Absent where the source can't say. */
+  kind?: EventKind;
   /** ISO 8601. */
   at: string;
   text: string;
@@ -37,6 +42,8 @@ export interface RoomPreview {
   recent: RoomEvent[];
   /** What waits on a person: a signature, an agent's question. Each is amber. */
   attention: { id: string; text: string; detail: string; streamId?: string }[];
+  /** When you were last here (ISO 8601); null on a first visit. */
+  seenAt?: string | null;
   /** The view last shared on the call, if anything has been drawn here. */
   lastView: { name: string; question: string; at: string; by: PersonRef | null; /** A real room's view, laid out from its saved canvas. */ scene?: Scene } | null;
 }

@@ -4,75 +4,91 @@ import { useStore } from '../../../shared/store.js';
 import { ago } from '../../../shared/time.js';
 import type { CallSession } from '../../call/session.js';
 import { useLoaded } from '../../workspace/hooks.js';
-import type { RoomDataSource, RoomEvent, RoomPreview as Preview, WorkstreamDataSource } from '../data/sources.js';
+import type { EventKind, RoomDataSource, RoomEvent, WorkstreamDataSource } from '../data/sources.js';
+import type { RoomSummary } from '../types.js';
+import { Icon, type IconName } from '../../../ui/icons.js';
 import { listNames, Who } from '../shell.js';
 import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 import { WorkContext } from './WorkContext.js';
+import { CodeText } from './code.js';
 import { pendingAnchor } from '../../../shared/nav.js';
 
-// A room from outside its call: what it is for, who is talking in it, what changed, what waits on
-// someone, and the coding work behind it. It answers "do I want to join?"; the canvas itself only
-// opens in the call.
+// A room from outside its call, laid out the way a Mac window would: the call is an action, so it sits in the
+// toolbar (who's there, and a phone); the page is the room itself (its goal, what waits on you, where the
+// canvas was left); and what's been going on (the work behind it, its history) is in an inspector on the right.
+// It answers "do I want to join?"; the canvas itself only opens in the call.
 
 type Sources = { room: RoomDataSource; work: WorkstreamDataSource };
+
+/** What kind of thing happened, read at a glance down the log's left edge. */
+const KIND_ICON: Record<EventKind, IconName> = {
+  call: 'phone', thread: 'comment', reply: 'reply', decision: 'decision', signed: 'pen', work: 'branch',
+  resolved: 'check', question: 'question', repo: 'folder', people: 'people', room: 'room',
+};
+
+/** The exact time, for a tooltip under an "ago". */
+export const exact = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 function EventRow({ e }: { e: RoomEvent }) {
   return (
     <li class={e.tone ? 'ev ' + e.tone : 'ev'}>
-      <span class={'dot' + (e.tone === 'needs' ? ' needs' : e.tone === 'pass' ? ' live' : '')}></span>
-      <span class="et">{e.text}</span>
-      <span class="when">{ago(e.at)}</span>
+      <span class="ek">{e.kind && <Icon name={KIND_ICON[e.kind]} size={14} />}</span>
+      <span class="et"><CodeText text={e.text} /></span>
+      <span class="when" title={exact(e.at)}>{ago(e.at)}</span>
     </li>
   );
 }
 
-function CallCard({ p, roomId, session, onJoin, sheet }: { p: Preview; roomId: string; session: CallSession; onJoin(): void; sheet?: ComponentChildren }) {
+const MIC_NOTE = 'Your microphone stays off until you turn it on.';
+
+/** The call, in the toolbar: who's in it (Vowe last, since it joins every call) and a phone to start or join it. */
+export function CallButton({ room, session, onJoin, sheet }: { room: RoomSummary; session: CallSession; onJoin(): void; sheet?: ComponentChildren }) {
   const cs = useStore(session.store);
-  const mine = cs.roomId === p.room.id;
-  const connecting = mine && cs.status === 'connecting', failed = mine && cs.status === 'failed';
-  const others = p.room.inCall.filter((x) => x.tone !== 'me');
+  const connecting = cs.roomId === room.id && cs.status === 'connecting';
+  const others = room.inCall.filter((x) => x.tone !== 'me');
   const live = others.length > 0;
-  // Where an Inbox item asked to land: the Desk only exists in a call, so it waits here until you join.
-  const pending = useStore(pendingAnchor).anchor;
-  const anchor = pending?.roomId === roomId ? pending : null;
+  const tip = live ? `Join ${listNames(others.map((x) => x.name))} in the call · ${MIC_NOTE}` : `Start a call · Vowe joins every call. ${MIC_NOTE}`;
   return (
-    <div class={'callcard' + (live ? ' live' : '')}>
-      <div class="cc-who">
-        {live ? <Who people={others} vowe /> : <span class="orb small" title="Vowe"></span>}
-        <div class="cc-txt">
-          <b>{live ? `${listNames(others.map((x) => x.name))} in the call` : 'No one is in the call'}</b>
-          <span>{live ? 'Vowe is with them. Join to see the canvas and talk it through.' : 'Start one to open the canvas. Vowe joins every call.'}</span>
-          {anchor ? (
-            <span class="cc-anchor">Joining opens <b>{anchor.label}</b>
-              <button class="linkish" type="button" onClick={() => pendingAnchor.setState({ anchor: null })}>Not now</button></span>
-          ) : null}
-        </div>
-      </div>
-      <div class="cc-act vm-prejoin-anchor">
-        {sheet && <div class="vm-prejoin-pop">{sheet}</div>}
-        <button class="cta" type="button" disabled={connecting} aria-expanded={sheet ? true : undefined} onClick={onJoin}>
-          {connecting ? <><span class="spinlet"></span>Connecting…</> : live ? 'Join call' : 'Start call'}
-        </button>
-        <span class="cc-fine">{failed ? <span class="err">{cs.error}</span> : 'Your microphone stays off until you turn it on.'}</span>
-      </div>
+    <div class="tb-call vm-prejoin-anchor">
+      {live ? <Who people={others} vowe /> : null}
+      <button class={'tb-callbtn' + (live ? ' live' : '')} type="button" disabled={connecting} aria-label={live ? 'Join the call' : 'Start a call'}
+        data-tip={sheet || connecting ? undefined : tip} data-tip-end="" aria-expanded={sheet ? true : undefined} onClick={onJoin}>
+        {connecting ? <span class="spinlet"></span> : <Icon name="phone" />}
+        {live ? <span>{connecting ? 'Joining…' : 'Join'}</span> : connecting ? <span>Connecting…</span> : null}
+      </button>
+      {sheet && <div class="vm-prejoin-pop">{sheet}</div>}
     </div>
   );
 }
 
-export function RoomPreview({ sources, roomId, session, attachError, onJoin: join, joinSheet, people }: {
+/** What the toolbar's call can't say: that it failed, or where joining will land. */
+function CallNote({ roomId, session }: { roomId: string; session: CallSession }) {
+  const cs = useStore(session.store);
+  const failed = cs.roomId === roomId && cs.status === 'failed';
+  // Where an Inbox item asked to land: the Desk only exists in a call, so it waits here until you join.
+  const pending = useStore(pendingAnchor).anchor;
+  const anchor = pending?.roomId === roomId ? pending : null;
+  if (failed) return <p class="lnote err" role="alert"><Icon name="warn" size={14} />Couldn’t join the call: {cs.error}</p>;
+  if (!anchor) return null;
+  return (
+    <p class="lnote"><Icon name="info" size={14} /><span>Joining the call opens <b>{anchor.label}</b></span>
+      <button class="linkish" type="button" onClick={() => pendingAnchor.setState({ anchor: null })}>Not now</button></p>
+  );
+}
+
+export function RoomPreview({ sources, roomId, session, attachError, onJoin, inspector = true, people }: {
   sources: Sources;
   roomId: string;
   session: CallSession;
   /** Why the room's repository couldn't be attached when it was made. */
   attachError?: string;
+  /** Starts or joins the call (through the join sheet, where there is one). */
   onJoin(): void;
-  /** How to join, chosen before joining (muted or talking); without it, joining is immediate. */
-  joinSheet?(close: () => void): ComponentChildren;
-  /** The room's people, at the top of the side column. */
+  /** Whether the inspector (the room's people, work and history) is shown. */
+  inspector?: boolean;
+  /** The room's people, at the top of the inspector. */
   people?: ComponentChildren;
 }) {
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const onJoin = joinSheet ? () => setSheetOpen(true) : join;
   const { room, work } = sources;
   const preview = useLoaded(() => room.preview(roomId), (fn) => room.subscribe(fn), roomId);
   const ctx = useLoaded(() => work.context(roomId), (fn) => room.subscribe(fn), roomId);
@@ -85,80 +101,79 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin: joi
   if (!p) {
     return (
       <section class="lobby" aria-busy={preview.state === 'loading'}>
-        <div class="lobby-in">{preview.state === 'failed' && <p class="wnote">Couldn’t open this room: {preview.error}</p>}</div>
+        <div class="lobby-main"><div class="lobby-col">{preview.state === 'failed' && <p class="wnote">Couldn’t open this room: {preview.error}</p>}</div></div>
       </section>
     );
   }
   const inspect = (id?: string) => { if (id) setOpen(id); document.getElementById('work')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  const live = p.room.inCall.some((x) => x.tone !== 'me');
 
   return (
-    <section class="lobby" aria-label={`${p.room.name}, outside the call`}>
-      <div class="lobby-in">
-        <div class="lobby-main">
+    <section class={'lobby' + (inspector ? '' : ' no-inspector')} aria-label={`${p.room.name}, outside the call`}>
+      <div class="lobby-main">
+        <div class="lobby-col">
           <div class="lhead">
-            <span class="eyebrow">{p.room.repo ?? 'No repository'}</span>
             {p.goal ? (
               <>
                 <h2 class="goal-line">{p.goal.text}</h2>
-                <span class="goal-by"><span class={'mav' + (p.goal.by.tone === 'me' ? '' : ' ' + p.goal.by.tone)}>{p.goal.by.initials}</span>{p.goal.by.tone === 'me' ? 'Your' : p.goal.by.name + '’s'} goal for this room</span>
+                <span class="goal-by"><span class={'mav' + (p.goal.by.tone === 'me' ? '' : ' ' + p.goal.by.tone)}>{p.goal.by.initials}</span>{p.goal.by.tone === 'me' ? 'Your' : p.goal.by.name + '’s'} goal</span>
               </>
             ) : (
               <h2 class="goal-line quiet">No goal written down yet. The first call usually finds one.</h2>
             )}
           </div>
 
-          <CallCard p={p} roomId={roomId} session={session} onJoin={sheetOpen ? () => setSheetOpen(false) : onJoin} sheet={sheetOpen && joinSheet ? joinSheet(() => setSheetOpen(false)) : undefined} />
+          <CallNote roomId={roomId} session={session} />
 
           {sinceShown && p.since.length > 0 && (
             <div class="since" role="status">
               <b>Since you were last here</b>
-              <ul>{p.since.map((e) => <li key={e.id}><span class={'dot' + (e.tone === 'needs' ? ' needs' : e.tone === 'pass' ? ' live' : e.who ? ' ask' : '')}></span><span>{e.text}</span></li>)}</ul>
+              <ul>{p.since.map((e) => <li key={e.id}><span class={'dot' + (e.tone === 'needs' ? ' needs' : e.tone === 'pass' ? ' live' : e.who ? ' ask' : '')}></span><span><CodeText text={e.text} /></span></li>)}</ul>
               <div style="display:flex;gap:8px;justify-content:flex-end">
                 <button class="mini ghost" type="button" onClick={() => setSinceShown(false)}>Dismiss</button>
               </div>
             </div>
           )}
 
-          <div class="glimpse">
-            <div class="gl-head">
-              <span class="rk">Last shared view</span>
-              {p.lastView && <span class="gl-meta"><b>{p.lastView.name}</b> · {p.lastView.by ? (p.lastView.by.tone === 'me' ? 'you' : p.lastView.by.name) + ' · ' : ''}{ago(p.lastView.at)}</span>}
+          {p.attention.length > 0 && (
+            <div class="lsec">
+              <span class="lk">Needs you</span>
+              <ul class="needlist">
+                {p.attention.map((a) => (
+                  <li key={a.id} class="needrow">
+                    <span class="dot needs"></span>
+                    <span class="nr-txt"><b>{a.text}</b><span>{a.detail}</span></span>
+                    <span class="nr-acts">
+                      {a.streamId && <button class="mini ghost" type="button" onClick={() => inspect(a.streamId)}>Inspect</button>}
+                      <button class="mini" type="button" onClick={onJoin}>{live ? 'Join the call' : 'Open in call'}</button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
+          )}
+
+          <div class="lsec glimpse">
+            <span class="lk">Where the canvas was left</span>
             {p.lastView?.scene ? (
               <>
                 <SceneGlimpse scene={p.lastView.scene} />
-                <span class="gl-q">{p.lastView.question}</span>
+                <span class="gl-cap"><b>{p.lastView.name}</b>{p.lastView.question ? <> · {p.lastView.question}</> : null}
+                  <span class="gl-meta" title={exact(p.lastView.at)}>
+                    {p.seenAt && Date.parse(p.lastView.at) > Date.parse(p.seenAt) && p.lastView.by?.tone !== 'me' && <span class="gl-new">New since you were here</span>}
+                    {p.lastView.by ? `Edited by ${p.lastView.by.tone === 'me' ? 'you' : p.lastView.by.name}, ` : 'Edited '}{ago(p.lastView.at)}
+                  </span></span>
               </>
             ) : (
               <div class="gl-empty">Nothing has been drawn here yet. Vowe draws on the shared canvas once the room starts talking in a call.</div>
             )}
           </div>
-
-          {p.recent.length > 0 && (
-            <div class="rsec">
-              <span class="rk">Recently</span>
-              <ul class="evlist">{p.recent.map((e) => <EventRow key={e.id} e={e} />)}</ul>
-            </div>
-          )}
         </div>
+      </div>
 
-        <div class="lobby-side" id="work">
+      {inspector && (
+        <aside class="lobby-side" id="work" aria-label="Inspector">
           {people}
-          {p.attention.length > 0 && (
-            <div class="rsec">
-              <span class="rk">Needs you<span>{p.attention.length}</span></span>
-              {p.attention.map((a) => (
-                <div key={a.id} class="needcard">
-                  <b><span class="dot needs"></span>{a.text}</b>
-                  <p>{a.detail}</p>
-                  <span class="acts">
-                    <button class="mini strong" type="button" onClick={onJoin}>{p.room.inCall.some((x) => x.tone !== 'me') ? 'Join the call' : 'Start a call'}</button>
-                    {a.streamId && <button class="mini ghost" type="button" onClick={() => inspect(a.streamId)}>Inspect the work</button>}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
           <WorkContext work={ctx} repo={p.room.repo} openId={openId} setOpen={setOpen} onJoin={onJoin}
             share={work.share && ((id) => { void work.share!(roomId, id); })}
             transcript={work.transcript && ((id) => work.transcript!(roomId, id))}
@@ -166,8 +181,14 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin: joi
               repos: room.repos, addRepo: room.addRepo, attach: (id) => room.attach!(roomId, id), error: attachError,
             } : undefined}
             addClone={room.addRepo && (async () => { await room.addRepo!(); })} />
-        </div>
-      </div>
+          {p.recent.length > 0 && (
+            <div class="rsec">
+              <span class="rk">Activity</span>
+              <ul class="evlist">{p.recent.map((e) => <EventRow key={e.id} e={e} />)}</ul>
+            </div>
+          )}
+        </aside>
+      )}
     </section>
   );
 }
