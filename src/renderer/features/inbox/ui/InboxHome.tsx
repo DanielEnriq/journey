@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from '../../../vendor/preact-hooks.js';
 import { requestAnchor } from '../../../shared/nav.js';
 import { Spinner, Toast } from '../../../ui/components.js';
 import { Icon } from '../../../ui/icons.js';
+import { JoinByLink } from '../../../ui/pass2/invites/JoinByLink.js';
+import type { InviteKey } from '../../../../shared/api.js';
 import { OBLIGATION_VERB, SOURCE_LABEL, type InboxItem } from '../model.js';
 import type { InboxSource, InboxState } from '../source.js';
 import { canMarkDone, canOpen } from './body.js';
@@ -29,9 +31,11 @@ export interface InboxHomeProps {
   quiet?: ComponentChildren;
   /** Something Home itself couldn't do (adding a repository, say), shown under the greeting. */
   notice?: string | null;
+  /** Opens an invite from a pasted link (email invitations arrive as items); absent in the demo. */
+  onOpenInvite?(key: InviteKey): void;
 }
 
-type Foot = null | 'done' | 'snoozed';
+type Foot = null | 'done' | 'snoozed' | 'link';
 
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
@@ -124,7 +128,12 @@ export function InboxHome(p: InboxHomeProps) {
           <div class="vi-error" role="alert"><Icon name="warn" /><span>Couldn’t read your rooms{st.error ? `: ${st.error}` : ''}.{ids.length ? ' Showing what was read last.' : ''}</span>
             <button type="button" class="v-btn v-btn-sm" onClick={() => p.source.refresh()}>Retry</button></div>
         ) : null}
-        {foot ? (
+        {foot === 'link' && p.onOpenInvite ? (
+          <section class="vi-sec" aria-label="Open an invite link">
+            <div class="vi-sec-h"><button type="button" class="vi-back" onClick={() => setFoot(null)}><Icon name="chevron-l" size={14} />Inbox</button><span>Invite link</span></div>
+            <div class="vi-link"><JoinByLink onOpen={p.onOpenInvite} autoFocus /></div>
+          </section>
+        ) : foot && foot !== 'link' ? (
           <section class="vi-sec" aria-label={foot === 'done' ? 'Done today' : 'Snoozed'}>
             <div class="vi-sec-h"><button type="button" class="vi-back" onClick={() => setFoot(null)}><Icon name="chevron-l" size={14} />Inbox</button><span>{foot === 'done' ? 'Done today' : 'Snoozed'}</span></div>
             {foot === 'done'
@@ -146,6 +155,7 @@ export function InboxHome(p: InboxHomeProps) {
         <footer class="vi-foot">
           <button type="button" class="vi-footbtn" aria-pressed={foot === 'done'} onClick={() => setFoot(foot === 'done' ? null : 'done')}>Done today{doneToday.length ? ` · ${doneToday.length}` : ''}</button>
           <button type="button" class="vi-footbtn" aria-pressed={foot === 'snoozed'} onClick={() => setFoot(foot === 'snoozed' ? null : 'snoozed')}>Snoozed{v.snoozed.length ? ` · ${v.snoozed.length}` : ''}</button>
+          {p.onOpenInvite ? <button type="button" class="vi-footbtn" aria-pressed={foot === 'link'} onClick={() => setFoot(foot === 'link' ? null : 'link')}>Have an invite link?</button> : null}
           {st.unavailable.length ? <span class="vi-unavail" title="These sources don’t feed the Inbox yet">Not in Journey yet: {st.unavailable.map((s) => SOURCE_LABEL[s].replace(/ · not in Journey yet$/, '')).join(', ')}</span> : null}
           {st.marksKept?.on === 'device' ? <span class="vi-unavail" title={st.marksKept.reason}>Seen, snoozed and muted are kept on this machine only</span> : null}
         </footer>

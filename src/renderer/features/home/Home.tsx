@@ -13,7 +13,6 @@ import { HomeFirst } from '../../ui/pass2/home/HomeFirst.js';
 import { InboxHome } from '../inbox/ui/InboxHome.js';
 import { RoomsQuiet, YourRooms } from '../inbox/ui/YourRooms.js';
 import { activeInbox, type InboxSource } from '../inbox/source.js';
-import { InvitationsIndex } from '../../ui/pass2/invites/InviteGate.js';
 import { FindRepositoriesSheet } from '../../ui/pass2/projects/Projects.js';
 import { AppShell, type ShellRoute } from '../../ui/pass2/shell/AppShell.js';
 import type { AccountView, WorkItem } from '../../ui/pass2/types.js';
@@ -21,7 +20,7 @@ import type { NewRoom, RepoChoice } from '../room/data/sources.js';
 import type { RoomSummary } from '../room/types.js';
 import { localWork, realStatus, realWorkspace, repositories, roomCheckouts } from '../workspace/real/workspace.js';
 
-// Home and Invitations (Design Pass 2), inside the Pass 2 shell. The components in
+// Home, your Inbox (Design Pass 2), inside the Pass 2 shell. The components in
 // ui/pass2 never fetch: this reads what they show from the real workspace (rooms and their records,
 // invitations, rooms.checkout, each room's canvas, this machine's repositories and their Claude Code
 // work) and maps it to their view models. What Journey can't know is passed as null, so it's left out.
@@ -132,9 +131,7 @@ export function Home(p: HomeProps) {
 
   let page: ComponentChildren;
   if (p.invite) page = p.invite;
-  else if (p.page === 'invitations') {
-    page = <InvitationsIndex invitations={invitations} onOpen={p.onOpenInvite} />;
-  } else if (noRooms) {
+  else if (noRooms) {
     page = <HomeFirst firstName={firstName(user)} composer={composer} invitations={invitations ?? []} onOpenInvite={p.onOpenInvite}
       repoCount={local?.length ?? 0} onAddRepo={addRepo} onFindRepos={findRepos} notice={notice} />;
   } else {
@@ -145,7 +142,7 @@ export function Home(p: HomeProps) {
     );
     page = inbox
       ? <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
-          quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />} notice={notice}
+          quiet={<RoomsQuiet rooms={p.rooms} now={new Date().toISOString()} />} notice={notice} onOpenInvite={p.onOpenInvite}
           idle={(st) => rooms(needsByRoom(st.view.needs), st.now)} />
       : rooms();
   }
@@ -174,7 +171,7 @@ export function Home(p: HomeProps) {
   );
 
   return (
-    <AppShell route={p.invite ? 'invitations' : p.page} onNavigate={p.onNavigate} account={me} invitationCount={invitations?.length ?? 0}
+    <AppShell route={p.page} onNavigate={p.onNavigate} account={me} invitationCount={invitations?.length ?? 0}
       rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={(repo) => p.onNewRoom(repo ?? null)} onAccount={() => setMenu(!menu)} accountOpen={menu} overlay={overlay}
       fixed={p.page === 'home' && !p.invite && !!inbox && !noRooms}>
       {page}

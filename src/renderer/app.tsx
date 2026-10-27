@@ -28,11 +28,11 @@ import { account, signIn } from './shared/account.js';
 import type { NewRoom, RepoChoice } from './features/room/data/sources.js';
 import type { InviteKey, Theme } from '../shared/api.js';
 
-// Vowe's renderer: sign-in → Home (and your rooms, projects and invitations) → a room's preview → its call, plus the design's reference
+// Vowe's renderer: sign-in → Home, your Inbox (invitations arrive there) → a room's preview → its call, plus the design's reference
 // sheets and a developer menu. Screens are hash routes kept in localStorage, so a relaunch lands back
 // on the same one; a call is the exception, since it is never rejoined without you asking.
 //
-// Two workspaces, never mixed: your real rooms (#/home, #/invitations, #/room/…), and
+// Two workspaces, never mixed: your real rooms (#/home, #/room/…), and
 // the Payment Reliability demo (#/demo/home, #/demo/room/…, and so on), reached from the developer menu and marked as a demo while it shows.
 // The browser preview has no main process, so it only has the demo.
 
@@ -50,7 +50,7 @@ const ROUTE_KEY = 'vowe.route';
 /** No main process (the development preview, or a plain browser): only the demo exists here. */
 const PREVIEW = !window.journey;
 /** Home's pages, each its own route under the same shell. */
-const PAGES: HomePage[] = ['home', 'invitations'];
+const PAGES: HomePage[] = ['home'];
 
 const demoSession = new CallSession(demoWorkspace.call);
 /** Your rooms' canvases: main's hub over IPC, acting as the signed-in person. */
@@ -72,6 +72,8 @@ function parseRoute(hash: string): Route {
   if (parts[0] === 'demo') parts.shift();
   const [screen, a, b] = parts;
   if (screen === 'home' && a === 'i' && b) return { screen: 'home', demo, item: decodeURIComponent(b) };
+  // Invitations now arrive in the Inbox: an old #/invitations link lands there.
+  if (screen === 'invitations') return { screen: 'home', demo };
   if (PAGES.includes(screen as HomePage)) return { screen: 'home', demo, ...(screen === 'home' ? {} : { page: screen as HomePage }) };
   if (screen === 'room' && a) return { screen: 'room', id: decodeURIComponent(a), call: b === 'call', demo };
   if (screen === 'reference') return { screen: 'reference', sheet: a in SHEETS ? a as Sheet : 'Components' };
@@ -141,7 +143,7 @@ function ReferenceScreen({ sheet, go, onClose }: { sheet: Sheet; go(s: Sheet): v
 }
 
 /**
- * An invite, opened from Home or Invitations: checked against the account you're signed in with, then
+ * An invite, opened from the Inbox: checked against the account you're signed in with, then
  * previewed, then joined, in place of the page inside the shell. The key (a link's token, or your email
  * invitation's id) lives only in this screen's memory.
  */

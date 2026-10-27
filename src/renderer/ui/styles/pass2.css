@@ -17,7 +17,7 @@
 }
 
 /* ------------------------------------------------------------------ shell */
-.vh-app { position: relative; height: 100%; min-height: 0; display: grid; grid-template-columns: var(--vh-side, 236px) minmax(0, 1fr); background: var(--v-bg); color: var(--v-fg); transition: grid-template-columns var(--v-dur-3) var(--v-ease); overflow: hidden; }
+.vh-app { position: relative; height: 100%; min-height: 0; display: grid; grid-template-columns: var(--vh-side, var(--vh-sidebar-w, 236px)) minmax(0, 1fr); background: var(--v-bg); color: var(--v-fg); transition: grid-template-columns var(--v-dur-3) var(--v-ease); overflow: hidden; }
 .vh-app.is-hidden { --vh-side: 0px; }
 .vh-band { position: absolute; z-index: 20; left: 0; right: 0; top: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 86px; pointer-events: none; }
 .vh-band > * { pointer-events: auto; }
@@ -42,7 +42,7 @@
 .vh-nav .v-count { position: static; }
 .vh-main { position: relative; min-width: 0; min-height: 0; overflow: auto; }
 .vh-main.is-fixed { overflow: hidden; display: flex; flex-direction: column; }
-.vh-side > .vh-sb { min-width: 236px; }
+.vh-side > .vh-sb { min-width: var(--vh-sidebar-w, 236px); }
 .vh-side .vh-sb-foot { padding: 6px 8px; }
 .vh-page { width: min(1080px, calc(100% - 80px)); margin: 0 auto; padding: 72px 0 56px; }
 
@@ -317,7 +317,6 @@
 .vh-gate-goal { margin: 0; font-family: var(--v-font-serif); font-size: 18px; line-height: 1.35; color: var(--v-fg-2); }
 .vh-gate-body { margin: 0; font-size: 13.5px; color: var(--v-fg-2); }
 .vh-gate-acts { display: flex; justify-content: flex-end; gap: 8px; }
-.vh-inv-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 40px; margin-top: 24px; }
 
 /* ------------------------------------------------------------- projects */
 .vh-proj-sec { margin-top: 26px; }
@@ -333,7 +332,6 @@
 @media (max-width: 1180px) {
   .vh-ret-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .vh-rp { grid-template-columns: minmax(0, 1fr); }
-  .vh-inv-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 860px) {
   .vh-page { width: calc(100% - 40px); padding-top: 60px; }

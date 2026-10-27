@@ -215,3 +215,6 @@
 .vi-work-none { margin: 0; padding: 10px 0; border-top: 1px solid var(--v-line); font-size: 12.5px; line-height: 1.5; color: var(--v-fg-3); }
 .vi-notice { display: flex; align-items: center; gap: 10px; margin: 0 28px 12px; padding: 10px 12px; border-radius: var(--v-radius-md); background: var(--v-fault-wash); color: var(--v-fault-fg); font-size: 12.5px; line-height: 1.45; }
 .vi-notice > span { flex: 1; }
+
+/* The invite-link field, from the foot: pasted links open the invite in place of the page. */
+.vi-link { padding: 6px 28px 16px; }

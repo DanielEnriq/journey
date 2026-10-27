@@ -1,6 +1,6 @@
 /* The sidebar (ui/pass2/shell/Sidebar.tsx): sunken, global, the same on Home and in rooms. Ink, Paper & Signal
    tokens only. Its host (AppShell's .vh-side, the room's .sidebar) places it; this styles what's inside. */
-.vh-sb { display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; font-family: var(--v-font-sans); }
+.vh-sb { position: relative; display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; font-family: var(--v-font-sans); }
 .vh-sb-places { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px 10px; }
 .vh-sb-row { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--v-fg-2); font: 500 13px/1 var(--v-font-sans); text-align: left; cursor: pointer; transition: background var(--v-dur-1) ease, color var(--v-dur-1) ease; }
 .vh-sb-row:hover { background: var(--v-surface-hover); color: var(--v-fg); }
@@ -60,5 +60,13 @@
 
 /* In a room: the window's .sidebar column hosts it, on the same sunken surface as Home's. */
 .win .sidebar.vh-sb-host { background: var(--v-bg-sunken); box-shadow: inset -1px 0 0 var(--v-line); padding-top: 44px; }
-.win .sidebar.vh-sb-host > * { min-width: 236px; }
+.win .sidebar.vh-sb-host > * { min-width: var(--vh-sidebar-w, 236px); }
 .win .sidebar.vh-sb-host .account-foot { border-top: 0; }
+
+/* The right edge you drag to size the sidebar: an invisible strip over the divider. The only sign is the divider
+   itself, a little brighter while you drag. */
+.vh-sb-edge { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; width: 6px; cursor: col-resize; touch-action: none; outline: none; }
+.vh-sb-edge::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 1px; background: var(--v-line-strong); opacity: 0; transition: opacity var(--v-dur-2) var(--v-ease); }
+.vh-sb-edge:focus-visible::after, body.vh-sb-resizing .vh-sb-edge::after { opacity: 1; }
+body.vh-sb-resizing { cursor: col-resize; user-select: none; }
+body.vh-sb-resizing .vh-app, body.vh-sb-resizing .win { transition: none; }

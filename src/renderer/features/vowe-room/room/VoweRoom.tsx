@@ -1,6 +1,6 @@
 import { h, Fragment, useEffect, useState, useStore, Lights, Chrome, Who, CallBar, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary, type Store } from '../journey.js';
 import { AccountFoot } from '../../../shared/components/Account.js';
-import { SIDEBAR_W, shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui/pass2/shell/prefs.js';
+import { shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui/pass2/shell/prefs.js';
 import { ShellSidebar } from '../../../ui/pass2/shell/Sidebar.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
@@ -113,7 +113,7 @@ function useWindowSize(): [number, number] {
 
 export function VoweRoom(p: VoweRoomProps) {
   const u = useStore(p.ui);
-  const side = useStore(shellPrefs).sidebar;
+  const { sidebar: side, width: sideW } = useStore(shellPrefs);
   useSidebarKey();
   const rec = useStore(p.record);
   const s = useStore(p.client.store);
@@ -129,7 +129,7 @@ export function VoweRoom(p: VoweRoomProps) {
   // Sizes: the compact column, and the widened Desk, which never leaves the canvas less than 440px.
   // Below 1180px the widened Desk becomes a sheet over the canvas.
   const [W, H] = p.size ?? win;
-  const left = side ? SIDEBAR_W : 0;
+  const left = side ? sideW : 0;
   const compact = W < 1200 ? 320 : 352;
   const sheet = W < 1180;
   const maxW = Math.max(compact, W - left - 440);
