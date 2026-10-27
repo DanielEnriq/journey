@@ -51,10 +51,12 @@
 .vh-sb-dot.is-live { background: var(--v-success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--v-success) 22%, transparent); }
 .vh-sb-dot.is-needs { background: var(--v-signal); }
 .vh-sb-ago { flex: none; font-size: 12px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; }
-.vh-sb-foot { flex: none; padding: 4px 8px; border-top: 1px solid var(--v-line); }
+.vh-sb-foot { flex: none; padding: 6px 8px; border-top: 1px solid var(--v-line); }
 /* The account row, on Home and in rooms alike: just a little room above and below. */
 .vh-sb-foot .account { padding: 0; }
 .vh-sb-foot .account-me { height: 36px; padding: 0 8px; }
+.vh-sb-foot .account .avatar { width: 24px; height: 24px; flex-basis: 24px; }
+.vh-sb-foot .account .nm { font-size: 12px; }
 
 /* In a room: the window's .sidebar column hosts it, on the same sunken surface as Home's. */
 .win .sidebar.vh-sb-host { background: var(--v-bg-sunken); box-shadow: inset -1px 0 0 var(--v-line); padding-top: 44px; }

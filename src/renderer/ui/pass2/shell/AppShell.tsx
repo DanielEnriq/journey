@@ -69,7 +69,7 @@ export function AppShell(p: AppShellProps) {
           onPlace={p.onNavigate} onRoom={p.onOpenRoom} onNew={p.onNewRoom}
           foot={
             <button type="button" class="vh-acct" data-account-anchor aria-haspopup="dialog" aria-expanded={!!p.accountOpen} onClick={p.onAccount}>
-              <Avatar initials={p.account.initials} tone={p.account.tone} size={28} />
+              <Avatar initials={p.account.initials} tone={p.account.tone} size={24} />
               <span class="vh-acct-main"><b>{p.account.name}</b></span>
               <Icon name="chevron" size={14} />
             </button>
