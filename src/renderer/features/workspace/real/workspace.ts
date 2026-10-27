@@ -172,7 +172,6 @@ async function read(roomId: string, room?: CloudRoom): Promise<Known> {
 }
 
 /** Reads the rooms list again (after "Couldn’t read your rooms"). */
-export const retryRooms = () => refresh();
 
 async function refresh() {
   if (!account.state.user) return;

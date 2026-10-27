@@ -20,7 +20,7 @@ import type { AccountView } from '../types.js';
 import { shellPrefs, toggleSidebar, useSidebarKey } from './prefs.js';
 import { ShellSidebar } from './Sidebar.js';
 
-export type ShellRoute = 'home' | 'rooms' | 'projects' | 'invitations';
+export type ShellRoute = 'home' | 'projects' | 'invitations';
 
 export interface AppShellProps {
   route: ShellRoute | 'room';

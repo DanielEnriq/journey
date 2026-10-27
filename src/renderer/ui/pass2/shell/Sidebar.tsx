@@ -16,7 +16,7 @@ import { countByRoom, groupRooms, openByDefault, since, sidebarRooms, type Sideb
 //                    name, and how long since it moved. A click opens the room.
 // Only Home carries a number, and only for what needs you; a waiting invitation is a dot (it's counted there).
 
-export type SidebarPlace = 'home' | 'rooms' | 'projects' | 'invitations';
+export type SidebarPlace = 'home' | 'projects' | 'invitations';
 
 export interface SidebarProps {
   /** The page on screen; null in a room. */
@@ -42,7 +42,6 @@ const opened = new Map<string, boolean>();
 
 const PLACES: { key: SidebarPlace; label: string; icon: IconName; tip?: string }[] = [
   { key: 'home', label: 'Home', icon: 'room', tip: 'Home · ⌘1' },
-  { key: 'rooms', label: 'Rooms', icon: 'people' },
   { key: 'projects', label: 'Projects', icon: 'project' },
   { key: 'invitations', label: 'Invitations', icon: 'mail' },
 ];
