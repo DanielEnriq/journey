@@ -10,10 +10,9 @@
 .vc-room { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 .vc-faces .v-av { width: 20px; height: 20px; font-size: 9px; }
 .vc-more { font-size: 11px; color: var(--v-fg-3); font-variant-numeric: tabular-nums; }
-.vc-vmark { position: relative; display: inline-block; width: 16px; height: 16px; flex: 0 0 16px; border-radius: 50%; box-shadow: inset 0 0 0 1.25px var(--v-info-line); }
-.vc-vmark::after { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: var(--v-info); }
+.vc-vmark { position: relative; display: inline-block; width: 16px; height: 16px; flex: 0 0 16px; border-radius: 50%; background: var(--v-agent-face), var(--v-info); }
 .vc-vmark.is-hearing::before { content: ''; position: absolute; inset: -3px; border-radius: 50%; box-shadow: 0 0 0 1px var(--v-info-line); }
-.vc-vmark.is-deaf::after { background: transparent; box-shadow: inset 0 0 0 1.25px var(--v-info); }
+.vc-vmark.is-deaf { opacity: .45; }
 .vc-mic { position: relative; }
 .vc-mic[aria-pressed="false"] { color: var(--v-fg); }
 .vc-mic[aria-pressed="true"] { color: var(--v-fg-3); background: var(--v-surface-press); }

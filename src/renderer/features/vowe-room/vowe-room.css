@@ -694,7 +694,7 @@ body.nx-resizing{cursor:col-resize;user-select:none}
 .nx-cref:hover{border-bottom-color:var(--v-fg)}
 .nx-by{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--v-fg-3)}
 .nx-by.agent{color:var(--v-info-fg)}
-.nx-agentmark{display:inline-block;width:8px;height:8px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--v-info);flex:0 0 auto}
+.nx-agentmark{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--v-agent-face),var(--v-info);flex:0 0 auto}
 .nx-was{margin:2px 0 0;font-size:12.5px;color:var(--v-fg-3)}
 .nx-dif del,.nx-wasline,.nx-removed2 del,.nx-bound li.gone del{text-decoration:line-through;text-decoration-color:var(--v-fault-fg);color:var(--v-fg-3)}
 .nx-dif ins,.nx-prop ins{text-decoration:none;background:var(--v-proposed-wash);box-shadow:inset 0 -1.25px 0 var(--v-proposed-line);color:var(--v-fg)}

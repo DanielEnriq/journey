@@ -116,6 +116,9 @@
   --v-info-fg: var(--slate-600);
   --v-info-wash: rgba(113, 150, 171, 0.14);
   --v-info-line: rgba(65, 105, 127, 0.38);
+  /* Vowe's face (AgentMark) for marks drawn by class: eyes and a smile in the surface colour, as background
+     layers over var(--v-info). Gradients, since the CSP keeps data: images out. Declared per theme so it follows. */
+  --v-agent-face: radial-gradient(5.8% 9.6% at 36.7% 43.8%, var(--v-surface) 90%, transparent 100%) center / 100% 100% no-repeat, radial-gradient(5.8% 9.6% at 63.3% 43.8%, var(--v-surface) 90%, transparent 100%) center / 100% 100% no-repeat, radial-gradient(23.7% 66% at 50% -39.5%, transparent 68%, var(--v-surface) 71%, var(--v-surface) 97%, transparent 100%) bottom / 100% 35.8% no-repeat;
   /* states */
   --v-success: var(--sage-600);
   --v-success-wash: rgba(63, 107, 76, 0.1);
@@ -179,6 +182,7 @@
   --v-info-fg: var(--slate-300);
   --v-info-wash: rgba(141, 176, 196, 0.12);
   --v-info-line: rgba(141, 176, 196, 0.34);
+  --v-agent-face: radial-gradient(5.8% 9.6% at 36.7% 43.8%, var(--v-surface) 90%, transparent 100%) center / 100% 100% no-repeat, radial-gradient(5.8% 9.6% at 63.3% 43.8%, var(--v-surface) 90%, transparent 100%) center / 100% 100% no-repeat, radial-gradient(23.7% 66% at 50% -39.5%, transparent 68%, var(--v-surface) 71%, var(--v-surface) 97%, transparent 100%) bottom / 100% 35.8% no-repeat;
   --v-success: var(--sage-400);
   --v-success-wash: rgba(143, 191, 152, 0.1);
   --v-fault: var(--oxide-400);
