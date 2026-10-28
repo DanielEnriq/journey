@@ -50,6 +50,10 @@ export interface RoomSummary {
    * itself once it holds a decision or a plan; a quick one that goes quiet drops into Earlier.
    */
   keptAt?: string | null;
+  /** Where it sits among the rooms you pinned, smallest first; null when it isn't pinned; absent until known. Yours alone. */
+  pinOrder?: number | null;
+  /** When you archived it out of your sidebar; null while it's there; absent until known. Yours alone. */
+  archivedAt?: string | null;
   /** Who is in the room's call right now, you included once you join; empty when there is no call. */
   inCall: PersonRef[];
   /** Who has the room open right now, in the call or not; absent until known. */

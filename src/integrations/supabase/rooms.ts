@@ -61,14 +61,14 @@ export function createRoomService(client: () => Promise<Cloud>) {
     const { supabase, selfId } = await signedIn();
     const { data, error } = await supabase
       .from('rooms')
-      .select('*, membership:room_members!inner(role), room_members(count)')
+      .select('*, membership:room_members!inner(role, pin_order, archived_at), room_members(count)')
       .eq('id', id)
       .eq('membership.user_id', selfId)
       .maybeSingle();
     if (error) throw toRoomError(error);
     if (!data) throw notFound();
     const { membership, room_members, ...room } = data;
-    return { ...summary(room, membership[0]!.role), memberCount: room_members[0]?.count ?? 0 };
+    return { ...summary(room, membership[0]!), memberCount: room_members[0]?.count ?? 0 };
   }
 
   return {
@@ -77,13 +77,13 @@ export function createRoomService(client: () => Promise<Cloud>) {
       const { supabase, selfId } = await signedIn();
       let query = supabase
         .from('rooms')
-        .select('*, membership:room_members!inner(role)')
+        .select('*, membership:room_members!inner(role, pin_order, archived_at)')
         .eq('membership.user_id', selfId)
         .order('updated_at', { ascending: false });
       if (workspaceId !== undefined) query = query.eq('workspace_id', requireId(workspaceId, 'Workspace'));
       const { data, error } = await query;
       if (error) throw toRoomError(error);
-      return data.map(({ membership, ...room }) => summary(room, membership[0]!.role));
+      return data.map(({ membership, ...room }) => summary(room, membership[0]!));
     },
 
     getRoom,
@@ -226,6 +226,29 @@ export function createRoomService(client: () => Promise<Cloud>) {
       return getRoom(id);
     },
 
+    /**
+     * Pins a room to the top of your sidebar at `order` among your pins (smallest first), moves it there, or
+     * unpins it (null). Yours alone: nobody else's sidebar changes. Pinning a quick room keeps it too.
+     */
+    async pinRoom(roomId: string, order: number | null): Promise<RoomDetails> {
+      const id = requireId(roomId, 'Room');
+      if (order !== null && (typeof order !== 'number' || !Number.isFinite(order) || Math.abs(order) > 1e15)) {
+        throw new RoomError('invalid', 'A pin’s place must be a finite number');
+      }
+      const { supabase } = await signedIn();
+      const { error } = await supabase.rpc('pin_room', { room: id, pin_order: order as number });
+      if (error) throw toRoomError(error);
+      return getRoom(id);
+    },
+    /** Archives a room out of your sidebar (unpinning it), or brings it back. Yours alone; the room is untouched. */
+    async archiveRoom(roomId: string, archive: boolean): Promise<RoomDetails> {
+      const id = requireId(roomId, 'Room');
+      const { supabase } = await signedIn();
+      const { error } = await supabase.rpc('archive_room', { room: id, archive: archive === true });
+      if (error) throw toRoomError(error);
+      return getRoom(id);
+    },
+
     /** The Space's repositories, the order they were linked in. Every room in the Space can use all of them. */
     async listSpaceRepositories(workspaceId: string): Promise<SpaceRepository[]> {
       const ws = requireId(workspaceId, 'Space');
@@ -309,7 +332,7 @@ async function findMember(supabase: Cloud, roomId: string, userId: string): Prom
   return data ? member(data) : undefined;
 }
 
-type RoomRow = Omit<RoomSummary, 'role' | 'workspaceId' | 'createdBy' | 'createdAt' | 'updatedAt' | 'keptAt'> & {
+type RoomRow = Omit<RoomSummary, 'role' | 'workspaceId' | 'createdBy' | 'createdAt' | 'updatedAt' | 'keptAt' | 'pinOrder' | 'archivedAt'> & {
   workspace_id: string;
   kept_at: string | null;
   created_by: string;
@@ -317,7 +340,10 @@ type RoomRow = Omit<RoomSummary, 'role' | 'workspaceId' | 'createdBy' | 'created
   updated_at: string;
 };
 
-function summary(row: RoomRow, role: RoomRole): RoomSummary {
+/** Your own membership row: your role, and where the room sits in your sidebar. */
+type Membership = { role: RoomRole; pin_order: number | null; archived_at: string | null };
+
+function summary(row: RoomRow, mine: Membership): RoomSummary {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -328,7 +354,9 @@ function summary(row: RoomRow, role: RoomRole): RoomSummary {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     keptAt: row.kept_at,
-    role,
+    role: mine.role,
+    pinOrder: mine.pin_order,
+    archivedAt: mine.archived_at,
   };
 }
 
@@ -456,6 +484,8 @@ export function toRoomError(error: unknown): RoomError {
   switch (code) {
     case '42501': // RLS or column privileges
       return new RoomError('permission-denied', 'You don’t have permission to do that');
+    case 'P0002': // pin_room, archive_room: not a member, or no such room
+      return notFound();
     case 'VR001': // keep_room_owner
       return new RoomError('conflict', message, 'last_owner');
     case 'VI001': // the invitation functions: the message is the reason

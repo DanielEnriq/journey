@@ -8,7 +8,7 @@ import { allRepos, filtering, NO_FILTER, repoName, suggestSpaceName, type Sideba
 
 // The sidebar's menus, drawn the way macOS draws them: one raised panel, check marks in a column on the left,
 // small grey section names, keyboard first (arrows move, Return picks, Escape closes and gives focus back).
-//   FilterMenu    what the Spaces list shows: Earlier rooms, only what needs you or has a call on, one repository.
+//   FilterMenu    what the Spaces list shows: Earlier rooms, archived ones, only what needs you or has a call on, one repository.
 //   ContextMenu   a right-click on a Space or a room.
 //   SpacePicker   a new Space starts from the repositories on this Mac: one click makes it, named after the
 //                 repository; Select Multiple makes one from several. A repository another of your Spaces
@@ -81,6 +81,7 @@ export function FilterMenu({ at, filter, spaces, onFilter, onCollapse, onClose }
   const lines: MenuLine[] = [
     { section: 'Show' },
     { label: 'Earlier Rooms', checked: filter.earlier, run: () => onFilter({ earlier: !filter.earlier }) },
+    { label: 'Archived Rooms', checked: filter.archived, run: () => onFilter({ archived: !filter.archived }) },
     { section: 'Only' },
     { label: 'Needs You', checked: filter.needs, run: () => onFilter({ needs: !filter.needs }) },
     { label: 'Calls On Now', checked: filter.live, run: () => onFilter({ live: !filter.live }) },
@@ -91,7 +92,7 @@ export function FilterMenu({ at, filter, spaces, onFilter, onCollapse, onClose }
     ] : []),
     'sep',
     { label: 'Collapse All Spaces', run: onCollapse },
-    ...(filtering(filter) || filter.earlier ? [{ label: 'Reset Filters', run: () => onFilter(NO_FILTER) } as MenuLine] : []),
+    ...(filtering(filter) || filter.earlier || filter.archived ? [{ label: 'Reset Filters', run: () => onFilter(NO_FILTER) } as MenuLine] : []),
   ];
   return <div ref={box} tabIndex={-1} class="v-menu vh-sbm" role="menu" aria-label="Filter Spaces" style={fit(at, 240, 360)}><Lines lines={lines} onClose={onClose} checks /></div>;
 }

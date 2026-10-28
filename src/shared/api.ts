@@ -633,6 +633,10 @@ export interface RoomSummary {
   keptAt: string | null;
   /** Your role in it. */
   role: RoomRole;
+  /** Where it sits among the rooms you pinned, smallest first; null when you haven't pinned it. Yours alone. */
+  pinOrder: number | null;
+  /** When you archived it out of your sidebar; null while it's there. Yours alone: the room is untouched. */
+  archivedAt: string | null;
 }
 
 /** A repository linked to a Space (a workspace). Every room in the Space can use all of its repositories. */
@@ -1121,6 +1125,10 @@ export interface Channels {
     'rooms:checkouts': (roomId: string) => RoomResult<RoomRepositoryCheckout[]>;
     /** Keeps a room, or lets it be quick again. Owners and members. */
     'rooms:keep': (roomId: string, keep: boolean) => RoomResult<RoomDetails>;
+    /** Pins a room at a place among yours, moves it, or unpins it (null). Yours alone. */
+    'rooms:pin': (roomId: string, order: number | null) => RoomResult<RoomDetails>;
+    /** Archives a room out of your sidebar, or brings it back. Yours alone. */
+    'rooms:archive': (roomId: string, archive: boolean) => RoomResult<RoomDetails>;
     'spaces:repositories': (workspaceId: string) => RoomResult<SpaceRepository[]>;
     /** Links a local repository's `origin` identity to the Space; its path stays local. */
     'spaces:link': (workspaceId: string, repositoryId: string) => RoomResult<SpaceRepository>;
@@ -1361,6 +1369,10 @@ export interface JourneyApi {
     checkouts(roomId: string): Promise<RoomResult<RoomRepositoryCheckout[]>>;
     /** Keeps the room, or lets it be quick again; owners and members. */
     keep(roomId: string, keep: boolean): Promise<RoomResult<RoomDetails>>;
+    /** Pins the room at a place among yours (smallest first), moves it, or unpins it (null). Yours alone. */
+    pin(roomId: string, order: number | null): Promise<RoomResult<RoomDetails>>;
+    /** Archives the room out of your sidebar (unpinning it), or brings it back. Yours alone. */
+    archive(roomId: string, archive: boolean): Promise<RoomResult<RoomDetails>>;
 
     // The live room: Realtime channel and presence. Members only.
     /** Connects and announces you to the room. Members only; joining twice is a no-op. */

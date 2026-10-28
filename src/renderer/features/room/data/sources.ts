@@ -85,6 +85,10 @@ export interface RoomDataSource {
   update?(roomId: string, patch: { name?: string; goal?: string }): Promise<void>;
   /** Keeps a room, or lets it be quick again. */
   keep?(roomId: string, keep: boolean): Promise<void>;
+  /** Pins a room at a place among yours (smallest first), moves it, or unpins it (null). Yours alone. */
+  pin?(roomId: string, order: number | null): Promise<void>;
+  /** Archives a room out of your sidebar (unpinning it), or brings it back. Yours alone. */
+  archive?(roomId: string, archive: boolean): Promise<void>;
   /** Your Spaces, the ones you made first; read with list() and changed with the same subscribe(). */
   spaces?(): SpaceSummary[];
   /** Repositories on this machine that a Space can link, with their shared identities. */

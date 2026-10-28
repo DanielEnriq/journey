@@ -29,6 +29,12 @@ export interface SidebarRoom {
   faces: PersonRef[];
   /** Its coding agents, in one mark: running, or waiting on you. */
   work: 'running' | 'waiting' | null;
+  /** Where it sits among your pinned rooms, smallest first; null when it isn't pinned. */
+  pin: number | null;
+  /** You archived it out of your sidebar: shown only when the filter asks for archived rooms. */
+  archived: boolean;
+  /** Your role there; owners rename it. Null until known. */
+  role: 'owner' | 'member' | 'viewer' | null;
 }
 
 /** At most this many faces on a row; past it, "+N". */
@@ -47,8 +53,10 @@ export interface SidebarFilter {
   live: boolean;
   /** Only Spaces that link this repository. */
   repo: string | null;
+  /** Rooms you archived, back in their Spaces (dimmed) so you can bring them back. */
+  archived: boolean;
 }
-export const NO_FILTER: SidebarFilter = { earlier: false, needs: false, live: false, repo: null };
+export const NO_FILTER: SidebarFilter = { earlier: false, needs: false, live: false, repo: null, archived: false };
 /** Whether the filter hides anything: the filter button says so. */
 export const filtering = (f: SidebarFilter) => f.needs || f.live || f.repo !== null;
 
@@ -86,13 +94,45 @@ export function groupRooms(rooms: SidebarRoom[]): SidebarGroup[] {
 
 const recentFirst = (a: SidebarRoom, b: SidebarRoom) => (a.at < b.at ? 1 : a.at > b.at ? -1 : a.name.localeCompare(b.name));
 
+/** What the filter leaves of a room: what needs you, calls on now, and archived rooms only when asked for. */
+const passes = (r: SidebarRoom, filter: SidebarFilter) => (!filter.needs || r.needs > 0) && (!filter.live || r.live) && (!r.archived || filter.archived);
+
+/**
+ * Your pinned rooms, whatever Space they're in, in the order you put them; the filter applies to them as to the rest
+ * (a repository filter keeps the pins in Spaces that link it). They're left out of their Spaces.
+ */
+export function pinnedRooms(rooms: SidebarRoom[], filter: SidebarFilter = NO_FILTER, spaces: SpaceSummary[] | null = null): SidebarRoom[] {
+  const inRepo = (r: SidebarRoom) => {
+    if (!filter.repo) return true;
+    const want = filter.repo.toLowerCase();
+    const s = spaces?.find((x) => x.id === r.spaceId);
+    return s ? s.repos.some((x) => x.toLowerCase() === want) : r.repo?.toLowerCase() === want;
+  };
+  return rooms.filter((r) => r.pin !== null && !r.archived && passes(r, filter) && inRepo(r))
+    .sort((a, b) => a.pin! - b.pin! || a.name.localeCompare(b.name));
+}
+
+/**
+ * The place for a room dropped into the pins at `index` (0 is the top; past the end, the bottom): halfway between its
+ * new neighbours, so nothing else moves. `pins` is the list as drawn, the dragged room left out.
+ */
+export function pinPlace(pins: { pin: number | null }[], index: number): number {
+  const at = (i: number) => pins[i]?.pin ?? null;
+  const before = index > 0 ? at(index - 1) : null, after = at(index);
+  if (before === null && after === null) return 1;
+  if (before === null) return after! - 1;
+  if (after === null) return before + 1;
+  return (before + after) / 2;
+}
+
 /**
  * Spaces in their own order (they don't jump around as rooms move), rooms in each most recent first, the quiet quick
  * ones under Earlier. Rooms whose Space isn't listed (it hasn't loaded) go in a last group named "Rooms". With a filter,
- * Spaces with nothing left in them are left out; without one, every Space shows, empty ones too.
+ * Spaces with nothing left in them are left out; without one, every Space shows, empty ones too. Pinned rooms are in
+ * the pins instead (pinnedRooms); archived ones only when the filter shows them.
  */
 export function groupSpaces(spaces: SpaceSummary[], rooms: SidebarRoom[], filter: SidebarFilter = NO_FILTER): SidebarSpace[] {
-  const keep = (r: SidebarRoom) => (!filter.needs || r.needs > 0) && (!filter.live || r.live);
+  const keep = (r: SidebarRoom) => passes(r, filter) && (r.pin === null || r.archived);
   const known = new Set(spaces.map((s) => s.id));
   const loose = rooms.filter((r) => !r.spaceId || !known.has(r.spaceId));
   const all: SpaceSummary[] = loose.length ? [...spaces, { id: '', name: 'Rooms', repos: [], role: 'member' }] : spaces;
@@ -146,7 +186,7 @@ export function sidebarRooms(rooms: RoomSummary[], o: { now: string; callRoomId:
       repo: r.repo,
       spaceId: r.spaceId ?? null,
       quick: quickRoom,
-      earlier: quickRoom && Date.parse(o.now) - Date.parse(at) > EARLIER_MS && o.callRoomId !== r.id && r.inCall.length === 0,
+      earlier: quickRoom && (r.pinOrder ?? null) === null && Date.parse(o.now) - Date.parse(at) > EARLIER_MS && o.callRoomId !== r.id && r.inCall.length === 0,
       live: r.inCall.length > 0 || o.callRoomId === r.id,
       inCall: o.callRoomId === r.id,
       needs: o.needsByRoom ? o.needsByRoom[r.id] ?? 0 : r.needs ? 1 : 0,
@@ -154,6 +194,9 @@ export function sidebarRooms(rooms: RoomSummary[], o: { now: string; callRoomId:
       at,
       faces: [...r.inCall].sort((a, b) => (a.tone === 'me' ? -1 : b.tone === 'me' ? 1 : 0)),
       work: r.work ?? null,
+      pin: r.archivedAt ? null : r.pinOrder ?? null,
+      archived: !!r.archivedAt,
+      role: r.role ?? null,
     };
   });
 }

@@ -7,23 +7,27 @@ import type { PersonRef, RoomSummary, SpaceSummary } from '../../../features/roo
 import { Icon, type IconName } from '../../icons.js';
 import { setSidebarWidth, shellPrefs, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_W } from './prefs.js';
 import {
-  countByRoom, filtering, groupRooms, MAX_FACES, groupSpaces, openByDefault, repoName, since, sidebarRooms, spaceOpenByDefault,
+  countByRoom, filtering, groupRooms, MAX_FACES, groupSpaces, openByDefault, pinnedRooms, pinPlace, repoName, since, sidebarRooms, spaceOpenByDefault,
   type SidebarRoom, type SidebarSpace,
 } from './sidebar-model.js';
 import { setSidebarFilter, sidebarFilter, useSpaces } from './spaces.js';
 import { ContextMenu, FilterMenu, SpacePicker, type At, type MenuLine, type PickerMode } from './SpaceMenus.js';
 
 // The one sidebar, the same on Home and in every room: Journey's places (the Inbox, which is Home, and New Space,
-// which starts one from the repositories on this Mac: SpaceMenus.tsx), then your Spaces, each a folder of rooms. It is either shown or gone ("[" or the sidebar button hide it entirely;
-// shell/prefs.ts keeps the choice).
+// which starts one from the repositories on this Mac: SpaceMenus.tsx), the rooms you pinned, then your Spaces, each a folder of
+// rooms. It is either shown or gone ("[" or the sidebar button hide it entirely; shell/prefs.ts keeps the choice).
+//   Pinned           your pinned rooms, whatever Space they're in, in the order you dragged them; only there while
+//                    something is. Nothing on a row says it's pinned: being at the top does. They leave their Spaces.
 //   Spaces heading   a filter: what the list shows; tinted while it hides anything.
 //   Space row        a folder, open or closed. On hover or keyboard focus it becomes the chevron that says
 //                    what a click does, and a + starts a room in it. Right-click: new room, rename, link a
 //                    repository, and the repositories it links. Double-click the name to rename it.
 //   room row         a dot (signal: something, or an agent, waits on you; grey otherwise; a ring while the room is
 //                    quick, not kept yet) and the name. On the right, who's in its call as faces, or a spinner while
-//                    its agents work; nothing when it's quiet. How long since it moved is in its tooltip. Right-click
-//                    keeps it.
+//                    its agents work; nothing when it's quiet. How long since it moved is in its tooltip (and, pinned,
+//                    its Space). On hover those give way to ⋯, the same menu as a right-click: pin, keep, rename,
+//                    archive. Drag a room into Pinned to pin it there, within it to reorder, out of it to unpin.
+//   Archived         rooms you archived leave your sidebar (yours alone); the filter's Archived Rooms shows them again.
 //   Earlier          quick rooms quiet for a day fold under it, at the foot of their Space; never deleted.
 // Without Spaces (a workspace that doesn't have them), rooms group under their repository as before.
 // Only the Inbox carries a number, and only for what needs you (a waiting invitation among it).
@@ -49,6 +53,8 @@ export interface SidebarProps {
 
 /** Spaces you opened or closed, kept while you move between Home and rooms. */
 const opened = new Map<string, boolean>();
+/** Whether Pinned is open; closed, its heading stays, with its rooms folded away. */
+let pinsOpen = true;
 /** Spaces whose Earlier rooms you opened. */
 const earlierOpen = new Set<string>();
 
@@ -59,7 +65,7 @@ const PLACES: { key: SidebarPlace; label: string; icon: IconName; tip?: string }
 const roomLabel = (r: SidebarRoom, now: string) =>
   `${r.name}${r.quick ? ', quick' : ''}${r.inCall ? ', your call is here' : r.live ? `, ${r.faces.map((f) => (f.tone === 'me' ? 'you' : f.name)).join(', ')} in the call` : ''}${r.work === 'running' ? ', agents working' : ''}${r.needs ? `, ${r.needs} need${r.needs > 1 ? '' : 's'} you` : ''}${since(r.at, now) === 'now' ? ', just now' : since(r.at, now) ? `, ${since(r.at, now)} ago` : ''}`;
 
-type Menu = { kind: 'filter'; at: At } | { kind: 'picker'; at: At; mode: PickerMode } | { kind: 'lines'; at: At; label: string; lines: MenuLine[] };
+type Menu = { kind: 'filter'; at: At } | { kind: 'picker'; at: At; mode: PickerMode } | { kind: 'lines'; at: At; label: string; lines: MenuLine[]; room?: string };
 
 const below = (e: Event): At => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); return { x: r.left, y: r.bottom + 4 }; };
 /** Under a sidebar row, lined up with its left edge, the way a popover hangs from what opened it. */
@@ -76,6 +82,15 @@ export function Sidebar(p: SidebarProps) {
   const [menu, setMenu] = useState<Menu | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [renamingRoom, setRenamingRoom] = useState<string | null>(null);
+  /** The room being dragged, and whether it came from Pinned. */
+  const [drag, setDrag] = useState<{ id: string; pinned: boolean } | null>(null);
+  /** Where it would land: an index among the pins (the insertion line), 'unpin' over the Spaces, or nowhere. */
+  const [drop, setDrop] = useState<number | 'unpin' | null>(null);
+  /** The room just archived, while its Undo is offered. */
+  const [undo, setUndo] = useState<{ id: string; name: string } | null>(null);
+  const pinList = useRef<HTMLDivElement>(null);
+  const seenPins = useRef<Set<string> | null>(null);
   const close = () => setMenu(null);
   const nav = useRef<HTMLElement>(null);
   const newSpace = (at: At) => (canSpaces ? setMenu(menu?.kind === 'picker' ? null : { kind: 'picker', at, mode: { kind: 'new' } }) : p.onNew(null));
@@ -84,9 +99,29 @@ export function Sidebar(p: SidebarProps) {
   const groups: SidebarSpace[] = spaces
     ? groupSpaces(spaces, p.rooms, filter)
     : groupRooms(p.rooms).map((g) => ({ id: g.key, name: g.name, repos: g.repo ? [g.repo] : [], role: 'member', rooms: g.rooms, earlier: [] }));
+  const pins = pinnedRooms(p.rooms, filter, spaces);
+  const canPin = !!source?.pin;
+  // A room that just arrived in Pinned slides up into place, as a note does when Notes pins it.
+  const arriving = new Set(seenPins.current ? pins.filter((r) => !seenPins.current!.has(r.id)).map((r) => r.id) : []);
+  useEffect(() => { seenPins.current = new Set(pins.map((r) => r.id)); });
+  const spaceName = (r: SidebarRoom) => spaces?.find((s) => s.id === r.spaceId)?.name ?? null;
   const isOpen = (g: SidebarSpace) => opened.get(g.id) ?? (spaces ? spaceOpenByDefault(g, p.current) : openByDefault({ key: g.id, repo: null, name: g.name, rooms: g.rooms }, p.current));
   const toggle = (g: SidebarSpace) => { opened.set(g.id, !isOpen(g)); bump(0); };
   const canSpaces = !!(spaces && source?.createSpace);
+  // Archive's Undo lasts a few seconds, and ⌘Z takes it while it's offered (not while typing).
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), 6000);
+    const key = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== 'z' || !nav.current?.offsetParent) return;
+      if (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable)) return;
+      e.preventDefault();
+      unarchive();
+    };
+    addEventListener('keydown', key);
+    return () => { clearTimeout(t); removeEventListener('keydown', key); };
+  }, [undo]);
   // ⇧⌘N: New Space, from the sidebar on screen (a room kept alive behind Home has one too, hidden).
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -124,24 +159,107 @@ export function Sidebar(p: SidebarProps) {
     ];
     setMenu({ kind: 'lines', at: point(e), label: g.name, lines });
   };
-  const roomMenu = (r: SidebarRoom, e: MouseEvent) => {
-    if (!source?.keep) return;
-    e.preventDefault();
-    setMenu({ kind: 'lines', at: point(e), label: r.name, lines: [
-      { icon: 'join', label: 'Open Room', run: () => p.onRoom(r.id) },
-      'sep',
-      { icon: 'keep', label: r.quick ? 'Keep Room' : 'Kept', checked: !r.quick, run: () => void source.keep!(r.id, r.quick) },
-    ] });
+  // Pins and archive change the room source at once (it puts them back if the server refuses); nothing to say here.
+  const pinTo = (r: SidebarRoom, order: number | null) => void source?.pin?.(r.id, order).catch(() => {});
+  const archive = (r: SidebarRoom) => {
+    void source?.archive?.(r.id, true).catch(() => setUndo(null));
+    setUndo({ id: r.id, name: r.name });
+  };
+  const unarchive = () => {
+    if (!undo) return;
+    void source?.archive?.(undo.id, false).catch(() => {});
+    setUndo(null);
+  };
+  const renameRoom = (r: SidebarRoom, name: string | null) => {
+    setRenamingRoom(null);
+    const to = name?.trim();
+    if (to && to !== r.name) void source?.update?.(r.id, { name: to }).catch(() => { /* the name stays as it was */ });
+  };
+  /** The room's menu, the same from ⋯ and a right-click. */
+  const roomMenu = (r: SidebarRoom, at: At) => {
+    const lines: MenuLine[] = [
+      ...(source?.pin && !r.archived ? [{ icon: 'pin', label: r.pin !== null ? 'Unpin Room' : 'Pin Room', run: () => pinTo(r, r.pin !== null ? null : pinPlace(pins, pins.length)) } as MenuLine] : []),
+      ...(source?.keep && r.quick && !r.archived ? [{ icon: 'keep', label: 'Keep Room', run: () => void source.keep!(r.id, true).catch(() => {}) } as MenuLine] : []),
+      ...(source?.update && r.role === 'owner' ? [{ icon: 'pen', label: 'Rename', run: () => setRenamingRoom(r.id) } as MenuLine] : []),
+    ];
+    if (source?.archive) {
+      if (lines.length) lines.push('sep');
+      lines.push(r.archived
+        ? { icon: 'archive', label: 'Unarchive Room', run: () => void source.archive!(r.id, false).catch(() => {}) }
+        : { icon: 'archive', label: 'Archive Room', run: () => archive(r) });
+    }
+    if (lines.length) setMenu({ kind: 'lines', at, label: r.name, lines, room: r.id });
   };
 
-  const roomRow = (r: SidebarRoom) => (
-    <button key={r.id} type="button" class="vh-sb-row vh-sb-room" aria-current={p.current === r.id ? 'page' : undefined} onClick={() => p.onRoom(r.id)}
-      onContextMenu={(e) => roomMenu(r, e)} aria-label={roomLabel(r, p.now)} title={since(r.at, p.now) === 'now' ? 'Just now' : since(r.at, p.now) ? `${since(r.at, p.now)} ago` : undefined}>
-      <span class="vh-sb-glyph" aria-hidden="true"><i class={'vh-sb-dot' + (r.needs || r.work === 'waiting' ? ' is-needs' : r.quick ? ' is-quick' : '')} /></span>
-      <span class="vh-sb-name">{r.name}</span>
-      {r.faces.length ? <Faces people={r.faces} /> : r.work === 'running' ? <span class="vh-sb-running" aria-hidden="true" /> : null}
-    </button>
-  );
+  // Dragging a room: into Pinned (anywhere along it) pins it there; out of Pinned onto the Spaces unpins it.
+  const startDrag = (r: SidebarRoom, e: DragEvent) => {
+    e.dataTransfer?.setData('text/plain', r.name);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    setDrag({ id: r.id, pinned: r.pin !== null });
+  };
+  const endDrag = () => { setDrag(null); setDrop(null); };
+  const overPins = (e: DragEvent) => {
+    if (!drag) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    const rows = [...(pinList.current?.querySelectorAll<HTMLElement>('.vh-sb-roomline') ?? [])].filter((el) => el.dataset.room !== drag.id);
+    const i = rows.findIndex((el) => { const b = el.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; });
+    const at = i < 0 ? rows.length : i;
+    if (at !== drop) setDrop(at);
+  };
+  const dropPins = (e: DragEvent) => {
+    if (!drag) return;
+    e.preventDefault();
+    const r = p.rooms.find((x) => x.id === drag.id);
+    const rest = pins.filter((x) => x.id !== drag.id);
+    if (r) pinTo(r, pinPlace(rest, typeof drop === 'number' ? drop : rest.length));
+    endDrag();
+  };
+  const overSpaces = (e: DragEvent) => {
+    if (!drag) return;
+    if (!drag.pinned) { if (drop !== null) setDrop(null); return; }
+    e.preventDefault();
+    if (drop !== 'unpin') setDrop('unpin');
+  };
+  const dropSpaces = (e: DragEvent) => {
+    if (!drag?.pinned) return;
+    e.preventDefault();
+    const r = p.rooms.find((x) => x.id === drag.id);
+    if (r) pinTo(r, null);
+    endDrag();
+  };
+
+  const roomRow = (r: SidebarRoom, pinned = false) => {
+    const ago = since(r.at, p.now);
+    const tip = [pinned ? spaceName(r) : null, ago === 'now' ? 'Just now' : ago ? `${ago} ago` : null].filter(Boolean).join(' · ') || undefined;
+    const menuOpen = menu?.kind === 'lines' && menu.room === r.id;
+    const dot = <span class="vh-sb-glyph" aria-hidden="true"><i class={'vh-sb-dot' + (r.needs || r.work === 'waiting' ? ' is-needs' : r.quick ? ' is-quick' : '')} /></span>;
+    if (renamingRoom === r.id) {
+      return (
+        <div key={r.id} class="vh-sb-roomline" data-room={r.id}>
+          <div class="vh-sb-row vh-sb-room is-renaming">{dot}<RenameField label="Room name" value={r.name} onDone={(v) => renameRoom(r, v)} /></div>
+        </div>
+      );
+    }
+    return (
+      <div key={r.id} data-room={r.id} draggable={canPin && !r.archived} onDragStart={(e) => startDrag(r, e)} onDragEnd={endDrag}
+        class={'vh-sb-roomline' + (menuOpen ? ' is-menu' : '') + (r.archived ? ' is-archived' : '') + (pinned && arriving.has(r.id) ? ' is-arriving' : '') + (drag?.id === r.id ? ' is-dragging' : '')}>
+        <button type="button" class="vh-sb-row vh-sb-room" aria-current={p.current === r.id ? 'page' : undefined} onClick={() => p.onRoom(r.id)}
+          onContextMenu={(e) => { e.preventDefault(); roomMenu(r, point(e)); }}
+          onKeyDown={(e) => { if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); roomMenu(r, beside(e)); } }}
+          aria-label={roomLabel(r, p.now)} title={tip}>
+          {dot}
+          <span class="vh-sb-name">{r.name}</span>
+          <span class="vh-sb-trail">{r.faces.length ? <Faces people={r.faces} /> : r.work === 'running' ? <span class="vh-sb-running" aria-hidden="true" /> : null}</span>
+        </button>
+        <button type="button" class="v-iconbtn vh-sb-more" aria-label={`${r.name}: more`} aria-haspopup="menu" aria-expanded={menuOpen} tabIndex={-1}
+          onClick={(e) => (menuOpen ? close() : roomMenu(r, beside(e)))}><Icon name="more" size={16} /></button>
+      </div>
+    );
+  };
+  const showPins = pins.length > 0 || (!!drag && canPin && !drag.pinned);
+  const rest = drag ? pins.filter((x) => x.id !== drag.id) : pins;
+  const line = (i: number) => (drop === i ? <i key="insert" class="vh-sb-insert" aria-hidden="true" /> : null);
 
   return (
     <nav ref={nav} class="vh-sb" aria-label="Vowe">
@@ -160,6 +278,25 @@ export function Sidebar(p: SidebarProps) {
           <kbd class="vh-sb-kbd" aria-hidden="true">⇧⌘N</kbd>
         </button>
       </div>
+      <div class="vh-sb-rooms" onDragOver={overSpaces} onDrop={dropSpaces}>
+        {showPins ? (
+          <div class={'vh-sb-pins' + (drop !== null && drop !== 'unpin' ? ' is-target' : '')} onDragOver={(e) => { e.stopPropagation(); overPins(e); }} onDrop={(e) => { e.stopPropagation(); dropPins(e); }}>
+            <div class="vh-sb-h vh-sb-pinsh">
+              <button type="button" class="vh-sb-hfold" aria-expanded={pinsOpen || !!drag} aria-controls="vh-sb-pinned" onClick={() => { pinsOpen = !pinsOpen; bump(0); }}>
+                Pinned<Icon name={pinsOpen || drag ? 'chevron' : 'chevron-r'} size={14} />
+              </button>
+            </div>
+            {pinsOpen || drag ? (
+              <div ref={pinList} id="vh-sb-pinned" role="group" aria-label="Pinned" class="vh-sb-pinlist">
+                {pins.map((r) => (
+                  <Fragment key={r.id}>{line(rest.indexOf(r))}{roomRow(r, true)}</Fragment>
+                ))}
+                {line(rest.length)}
+                {!pins.length ? <div class="vh-sb-pinslot" aria-hidden="true" /> : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       <div class="vh-sb-h">
         <span class="vh-sb-htitle">Spaces{filtering(filter) ? <span class="vh-sb-hfilter"> · {filterName(filter)}</span> : null}</span>
         {spaces ? (
@@ -168,7 +305,7 @@ export function Sidebar(p: SidebarProps) {
             onClick={(e) => setMenu(menu?.kind === 'filter' ? null : { kind: 'filter', at: below(e) })}><Icon name="filter" size={14} /></button>
         ) : null}
       </div>
-      <div class="vh-sb-rooms">
+        <div class={'vh-sb-spaces' + (drop === 'unpin' ? ' is-target' : '')}>
         {groups.length === 0 ? (
           filtering(filter)
             ? <p class="vh-sb-none">Nothing matches the filter. <button type="button" class="linkish" onClick={() => setSidebarFilter({ needs: false, live: false, repo: null })}>Show everything</button></p>
@@ -184,7 +321,7 @@ export function Sidebar(p: SidebarProps) {
                 {renaming === g.id ? (
                   <div class="vh-sb-row vh-sb-reporow is-renaming">
                     <span class="vh-sb-glyph" aria-hidden="true"><Icon name="folder-open" size={16} /></span>
-                    <RenameField value={g.name} onDone={(v) => rename(g, v ?? g.name)} />
+                    <RenameField label="Space name" value={g.name} onDone={(v) => rename(g, v ?? g.name)} />
                   </div>
                 ) : (
                   <button type="button" class="vh-sb-row vh-sb-reporow" aria-expanded={o} aria-controls={id} onClick={() => toggle(g)}
@@ -204,7 +341,7 @@ export function Sidebar(p: SidebarProps) {
               {/* Always drawn, so opening and closing can animate in step with the chevron; closed, it's out of reach. */}
               <div class={'vh-sb-repo-fold' + (o ? ' is-open' : '')} inert={!o} aria-hidden={!o}>
                 <div id={id} role="group" aria-label={g.name} class="vh-sb-repo-rooms">
-                  {g.rooms.map(roomRow)}
+                  {g.rooms.map((r) => roomRow(r))}
                   {!g.rooms.length && !g.earlier.length ? (
                     <button type="button" class="vh-sb-row vh-sb-room vh-sb-empty" onClick={() => p.onNew(g.id || null)}>
                       <span class="vh-sb-glyph" aria-hidden="true"><Icon name="plus" size={14} /></span><span class="vh-sb-name">New Room</span>
@@ -216,7 +353,7 @@ export function Sidebar(p: SidebarProps) {
                         <span class="vh-sb-glyph" aria-hidden="true"><Icon name="chevron-r" size={14} /></span>
                         <span class="vh-sb-name">Earlier <span class="vh-sb-earliern">{g.earlier.length}</span></span>
                       </button>
-                      {earlier ? g.earlier.map(roomRow) : null}
+                      {earlier ? g.earlier.map((r) => roomRow(r)) : null}
                     </>
                   ) : null}
                 </div>
@@ -224,7 +361,14 @@ export function Sidebar(p: SidebarProps) {
             </div>
           );
         })}
+        </div>
       </div>
+      {undo ? (
+        <div class="vh-sb-undo" role="status">
+          <Icon name="archive" size={14} /><span class="vh-sb-name">{undo.name}</span>
+          <button type="button" class="vh-sb-undobtn" aria-keyshortcuts="Meta+Z" onClick={unarchive}>Undo</button>
+        </div>
+      ) : null}
       {p.foot ? <div class="vh-sb-foot">{p.foot}</div> : null}
       <SidebarEdge />
       {menu?.kind === 'filter' && spaces ? (
@@ -251,13 +395,13 @@ function Faces({ people }: { people: PersonRef[] }) {
 }
 
 /** Finder's rename: the name selected in place; Return keeps it, Escape puts the old one back, clicking away keeps it. */
-function RenameField({ value, onDone }: { value: string; onDone(v: string | null): void }) {
+function RenameField({ label, value, onDone }: { label: string; value: string; onDone(v: string | null): void }) {
   const ref = useRef<HTMLInputElement>(null);
   const done = useRef(false);
   useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
   const end = (v: string | null) => { if (done.current) return; done.current = true; onDone(v); };
   return (
-    <input ref={ref} class="vh-sb-rename" type="text" defaultValue={value} aria-label="Space name" spellcheck={false}
+    <input ref={ref} class="vh-sb-rename" type="text" defaultValue={value} aria-label={label} spellcheck={false}
       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); end(e.currentTarget.value); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(null); } }}
       onBlur={(e) => end(e.currentTarget.value)} />
   );

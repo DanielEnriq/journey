@@ -914,19 +914,25 @@ export type Database = {
       }
       room_members: {
         Row: {
+          archived_at: string | null
           joined_at: string
+          pin_order: number | null
           role: Database["public"]["Enums"]["room_role"]
           room_id: string
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           joined_at?: string
+          pin_order?: number | null
           role?: Database["public"]["Enums"]["room_role"]
           room_id: string
           user_id: string
         }
         Update: {
+          archived_at?: string | null
           joined_at?: string
+          pin_order?: number | null
           role?: Database["public"]["Enums"]["room_role"]
           room_id?: string
           user_id?: string
@@ -1901,9 +1907,17 @@ export type Database = {
           resent: boolean
         }[]
       }
+      archive_room: {
+        Args: { archive: boolean; room: string }
+        Returns: string
+      }
       keep_room: {
         Args: { keep: boolean; room: string }
         Returns: string
+      }
+      pin_room: {
+        Args: { pin_order: number; room: string }
+        Returns: number
       }
       my_room_invitations: {
         Args: never

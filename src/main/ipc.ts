@@ -428,6 +428,8 @@ export function registerIpc() {
   handle('rooms:checkout', (roomId) => roomResult(() => roomCheckout(roomId)));
   handle('rooms:checkouts', (roomId) => roomResult(() => roomCheckouts(roomId)));
   handle('rooms:keep', (roomId, keep) => roomResult(() => rooms.keepRoom(roomId, keep === true)));
+  handle('rooms:pin', (roomId, order) => roomResult(() => rooms.pinRoom(roomId, order ?? null)));
+  handle('rooms:archive', (roomId, archive) => roomResult(() => rooms.archiveRoom(roomId, archive === true)));
   // A Space's repositories. Linking takes a local repository and sends only its origin's identity.
   handle('spaces:repositories', (workspaceId) => roomResult(() => rooms.listSpaceRepositories(workspaceId)));
   handle('spaces:link', (workspaceId, repositoryId) =>

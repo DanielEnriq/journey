@@ -163,6 +163,8 @@ function summaryOf(k: Known): RoomSummary {
     repo: reposOf(k.room)[0] ?? null,
     repos: reposOf(k.room),
     keptAt: k.room.keptAt,
+    pinOrder: k.room.pinOrder,
+    archivedAt: k.room.archivedAt,
     // Known once the room's work has been read on this machine (opening it, or the Inbox reading it).
     work: work.has(k.room.id) ? workMark(work.get(k.room.id)!.room.workstreams.map((w) => w.status)) : undefined,
     inCall: (presence.get(k.room.id) ?? []).filter((p) => p.call).map((p) => who(p.userId, { name: p.name, email: '' })),
@@ -468,6 +470,35 @@ const room: RoomDataSource = {
     const k = known.get(roomId);
     if (k) k.room = { ...k.room, keptAt: details.keptAt };
     notify();
+  },
+  async pin(roomId, order) {
+    // Moves at once, so a drag lands where it was dropped; the server's answer settles it, or puts it back.
+    const k = known.get(roomId);
+    const was = k?.room;
+    if (k) { k.room = { ...k.room, pinOrder: order, archivedAt: order === null ? k.room.archivedAt : null }; notify(); }
+    try {
+      const details = await unwrap(api().rooms.pin(roomId, order));
+      if (k) k.room = { ...k.room, pinOrder: details.pinOrder, archivedAt: details.archivedAt, keptAt: details.keptAt };
+    } catch (err) {
+      if (k && was) k.room = was;
+      throw err;
+    } finally {
+      notify();
+    }
+  },
+  async archive(roomId, archive) {
+    const k = known.get(roomId);
+    const was = k?.room;
+    if (k) { k.room = { ...k.room, archivedAt: archive ? new Date().toISOString() : null, pinOrder: archive ? null : k.room.pinOrder }; notify(); }
+    try {
+      const details = await unwrap(api().rooms.archive(roomId, archive));
+      if (k) k.room = { ...k.room, pinOrder: details.pinOrder, archivedAt: details.archivedAt };
+    } catch (err) {
+      if (k && was) k.room = was;
+      throw err;
+    } finally {
+      notify();
+    }
   },
   spaces: () => spaceList.map((w): SpaceSummary => ({
     id: w.id, name: w.name, repos: spaceRepos.get(w.id) ?? [], role: isMe(w.createdBy) ? 'owner' : 'member',

@@ -424,4 +424,39 @@ describe('persistent rooms (local Supabase)', integration, () => {
     assert.equal(error, null);
     assert.ok((await alice.rooms.getRoom(room.id)).keptAt, 'a decision keeps the room');
   });
+
+  it('pins and archives rooms for one person only, and pinning keeps a quick room', async () => {
+    const { alice, bob, carol, dave } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Pin me' });
+    await alice.rooms.addMember(room.id, bob.id);
+    await alice.rooms.addMember(room.id, carol.id, 'viewer');
+
+    const pinned = await bob.rooms.pinRoom(room.id, 2.5);
+    assert.equal(pinned.pinOrder, 2.5);
+    assert.ok(pinned.keptAt, 'pinning keeps a quick room');
+    assert.equal((await alice.rooms.getRoom(room.id)).pinOrder, null, 'nobody else’s sidebar changes');
+    assert.equal((await bob.rooms.listRooms()).find((r) => r.id === room.id)?.pinOrder, 2.5);
+
+    // A viewer pins too, but can't keep the room by it.
+    await alice.rooms.keepRoom(room.id, false);
+    assert.equal((await carol.rooms.pinRoom(room.id, 1)).keptAt, null);
+    await rejectsWith(dave.rooms.pinRoom(room.id, 1), 'not-found');
+    await rejectsWith(bob.rooms.pinRoom(room.id, Number.NaN), 'invalid');
+
+    // Archiving unpins; unarchiving brings it back unpinned. Pinning an archived room brings it back.
+    const archived = await bob.rooms.archiveRoom(room.id, true);
+    assert.ok(archived.archivedAt);
+    assert.equal(archived.pinOrder, null);
+    assert.equal((await alice.rooms.getRoom(room.id)).archivedAt, null);
+    assert.equal((await bob.rooms.archiveRoom(room.id, false)).archivedAt, null);
+    await bob.rooms.archiveRoom(room.id, true);
+    const back = await bob.rooms.pinRoom(room.id, 1);
+    assert.equal(back.archivedAt, null);
+    assert.equal((await bob.rooms.pinRoom(room.id, null)).pinOrder, null);
+    await rejectsWith(dave.rooms.archiveRoom(room.id, true), 'not-found');
+
+    // Not by writing your membership directly: members change it only through these.
+    const direct = await bob.cloud.from('room_members').update({ pin_order: 9 }).eq('room_id', room.id).eq('user_id', bob.id).select();
+    assert.ok(direct.error || !direct.data?.length, 'a member can’t write their membership directly');
+  });
 });
