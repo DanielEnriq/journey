@@ -12,22 +12,40 @@
 /* ---------- A room from outside its call. ---------- */
 @scope (.room-screen) {
   .win.outside .room{grid-template-rows:40px minmax(0,1fr)}
-  /* The page (the room itself) and its inspector (what's been going on), side by side, each scrolling on its own. */
-  .lobby{grid-row:2;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;border-top:1px solid var(--hairline);background-color:var(--studio-field);background-image:radial-gradient(ellipse 72% 54% at 50% 0%,var(--studio-glow),transparent 74%);container-type:inline-size;}
-  .lobby.no-inspector{grid-template-columns:minmax(0,1fr)}
+  /* The room is one plane; its inspector is a stack of cards floating on its right, not a column beside it. */
+  .lobby{grid-row:2;min-height:0;position:relative;display:grid;grid-template-columns:minmax(0,1fr);border-top:1px solid var(--hairline);background-color:var(--studio-field);background-image:radial-gradient(ellipse 72% 54% at 50% 0%,var(--studio-glow),transparent 74%);container-type:inline-size;}
   @keyframes lobbyIn{from{opacity:0}to{opacity:1}}
   .lobby-main{min-width:0;min-height:0;overflow-y:auto}
+  .lobby:not(.no-inspector) .lobby-main{padding-right:300px}
   .lobby-col{max-width:680px;margin:0 auto;padding:32px 40px 56px;box-sizing:border-box;display:flex;flex-direction:column;gap:28px}
-  /* The inspector: a Mac inspector's quiet material, a hairline, its own scroll. */
-  .lobby-side{min-width:0;min-height:0;overflow-y:auto;display:flex;flex-direction:column;padding:14px 16px 40px;box-sizing:border-box;background:color-mix(in srgb,var(--v-bg-sunken) 72%,transparent);box-shadow:inset 1px 0 0 var(--hairline)}
-  .lobby-side > .rsec:first-child{border-top:0;padding-top:0}
-  .lobby-side .rsec .rk{font-size:11px;font-weight:600;color:var(--ink-7)}
-  .lobby-side .rsec .rk svg{width:12px;height:12px;color:var(--ink-8)}
-  /* A stream on one line in the inspector: its title gives way, the agent's name doesn't. */
+  /* The stack: cards keep their own height and the stack scrolls when they outgrow the window. */
+  .lobby-side{position:absolute;top:12px;right:12px;bottom:12px;width:284px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;scrollbar-width:none;}
+  .lobby-side::-webkit-scrollbar{display:none}
+  .icard{flex:none;display:flex;flex-direction:column;border-radius:12px;background:var(--v-surface-raised);box-shadow:0 0 0 .5px var(--hairline),0 1px 2px rgba(0,0,0,.05),0 6px 20px -8px rgba(0,0,0,.14);animation:lobbyIn .18s ease-out}
+  .icard-h{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:4px;height:34px;padding:0 12px;cursor:default;border-radius:12px}
+  .icard-h:focus-visible{box-shadow:inset 0 0 0 2px var(--v-focus)}
+  .icard-t{font-size:12px;font-weight:600;color:var(--v-fg-2,var(--ink-5))}
+  .icard-h svg{width:12px;height:12px;color:var(--ink-8);transition:transform .15s ease;opacity:0}
+  .icard-h:hover svg,.icard-h:focus-visible svg{opacity:1}
+  .icard.is-open .icard-h svg{transform:rotate(90deg)}
+  .icard-s{margin-left:auto;padding-left:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ink-8);font-variant-numeric:tabular-nums}
+  .icard-s.is-needs{color:var(--attention-ink)}
+  .icard-b{display:flex;flex-direction:column;padding:0 12px 12px;min-width:0}
+  .icard-b > .rsec{border-top:0;padding:0}
+  .icard-b > .rsec + .rsec{border-top:1px solid var(--hairline);margin-top:10px;padding-top:10px}
+  .icard-b .rsec .rk{gap:4px;font-size:11px;font-weight:600;color:var(--ink-7)}
+  .icard-b .rsec .rk svg{width:12px;height:12px;color:var(--ink-8)}
+  .icard-repos{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:2px}
+  .icard-repos li{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:var(--ink-6);line-height:20px}
+  .icard-repos li svg{flex:none;width:13px;height:13px;color:var(--ink-8)}
+  .icard-repos li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .icard-repos + .rsec{border-top:1px solid var(--hairline);margin-top:8px;padding-top:10px}
+  /* A stream on one line in a card: its title gives way, the agent's name doesn't. */
   .lobby-side .wstream .top{display:flex;align-items:center;gap:6px;min-width:0}
   .lobby-side .wstream .wt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .lobby-side .wstream .top .who{margin-left:auto;flex:none;padding-left:6px;white-space:nowrap;font-size:11px;color:var(--ink-8)}
-  @container (max-width: 760px){.lobby{grid-template-columns:minmax(0,1fr);overflow-y:auto}.lobby-main,.lobby-side{overflow:visible}.lobby-side{box-shadow:inset 0 1px 0 var(--hairline);padding:16px 24px 40px}.lobby-col{padding:24px 24px 32px}}
+  /* Too narrow to float beside the page: the cards follow it, in the page's own flow. */
+  @container (max-width: 760px){.lobby{overflow-y:auto}.lobby-main{overflow:visible}.lobby:not(.no-inspector) .lobby-main{padding-right:0}.lobby-side{position:static;width:auto;overflow:visible;padding:0 24px 40px}.lobby-col{padding:24px 24px 32px}}
   .lhead{display:flex;flex-direction:column;gap:10px;padding:0 2px}
   .lhead .goal-line{font-size:22px;letter-spacing:-.022em;line-height:1.3;padding:0}
   .lhead .goal-line.quiet{font-size:17px;color:var(--ink-5);font-weight:500}

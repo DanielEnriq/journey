@@ -149,7 +149,7 @@ function Stream({ w, open, toggle, share, transcript, onJoin }: {
   );
 }
 
-export function WorkContext({ work, repo, openId, setOpen, share, transcript, connect, addClone, onJoin }: {
+export function WorkContext({ work, repo, openId, setOpen, share, transcript, connect, addClone, onJoin, bare }: {
   work: Loaded<RoomWorkContext> & { retry(): void };
   repo: string | null;
   openId: string | null;
@@ -162,10 +162,12 @@ export function WorkContext({ work, repo, openId, setOpen, share, transcript, co
   /** Offered when the room's repository isn't added on this machine. */
   addClone?: () => Promise<void>;
   onJoin(): void;
+  /** Inside a card that names it already: no heading of its own. */
+  bare?: boolean;
 }) {
   const ctx = work.value;
   // The repository is the window's subtitle already; the inspector doesn't say it again.
-  const head = <span class="rk">Work</span>;
+  const head = bare ? null : <span class="rk">Work</span>;
   if (work.state === 'loading') {
     return <div class="rsec">{head}<span class="wnote"><span class="spinlet"></span>Looking for work in {repo ?? 'this room'}…</span></div>;
   }

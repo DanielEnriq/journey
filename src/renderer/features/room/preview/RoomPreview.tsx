@@ -10,6 +10,8 @@ import { Icon, type IconName } from '../../../ui/icons.js';
 import { listNames, Who } from '../shell.js';
 import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 import { WorkContext } from './WorkContext.js';
+import { Card } from './Cards.js';
+import { repoName } from '../../../ui/pass2/shell/sidebar-model.js';
 import { CodeText } from './code.js';
 import { pendingAnchor } from '../../../shared/nav.js';
 
@@ -94,6 +96,14 @@ function CallNote({ roomId, session }: { roomId: string; session: CallSession })
   );
 }
 
+// What the room's sessions are doing, in a few words: how many run, and how many wait on you.
+function sessionsSummary(ws: { status: string }[] | undefined): string | undefined {
+  if (!ws?.length) return undefined;
+  const running = ws.filter((w) => w.status === 'active').length, needs = ws.filter((w) => w.status === 'attention').length;
+  const parts = [running ? `${running} running` : '', needs ? `${needs} need${needs === 1 ? 's' : ''} you` : ''].filter(Boolean);
+  return parts.length ? parts.join(' · ') : String(ws.length);
+}
+
 export function RoomPreview({ sources, roomId, session, attachError, onJoin, inspector = true, people }: {
   sources: Sources;
   roomId: string;
@@ -125,6 +135,7 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
   }
   const inspect = (id?: string) => { if (id) setOpen(id); document.getElementById('work')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   const live = p.room.inCall.some((x) => x.tone !== 'me');
+  const repos = ctx.value?.repos?.map((r) => r.repo) ?? p.room.repos ?? (p.room.repo ? [p.room.repo] : []);
 
   return (
     <section class={'lobby' + (inspector ? '' : ' no-inspector')} aria-label={`${p.room.name}, outside the call`}>
@@ -195,19 +206,27 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
 
       {inspector && (
         <aside class="lobby-side" id="work" aria-label="Inspector">
-          {people}
-          <WorkContext work={ctx} repo={p.room.repo} openId={openId} setOpen={setOpen} onJoin={onJoin}
-            share={work.share && ((id) => { void work.share!(roomId, id); })}
-            transcript={work.transcript && ((id) => work.transcript!(roomId, id))}
-            connect={room.repos && room.addRepo && room.attach ? {
-              repos: room.repos, addRepo: room.addRepo, attach: (id) => room.attach!(roomId, id), error: attachError,
-            } : undefined}
-            addClone={room.addRepo && (async () => { await room.addRepo!(); })} />
+          <Card id="room" title="Room" summary={repos.length > 1 ? `${repos.length} repositories` : undefined}>
+            {repos.length > 0 && (
+              <ul class="icard-repos">
+                {repos.map((r) => <li key={r} title={r}><Icon name="branch" size={14} /><span>{repoName(r)}</span></li>)}
+              </ul>
+            )}
+            {people}
+          </Card>
+          <Card id="sessions" title="Sessions" summary={sessionsSummary(ctx.value?.workstreams)} needs={ctx.value?.workstreams.some((w) => w.status === 'attention')}>
+            <WorkContext bare work={ctx} repo={p.room.repo} openId={openId} setOpen={setOpen} onJoin={onJoin}
+              share={work.share && ((id) => { void work.share!(roomId, id); })}
+              transcript={work.transcript && ((id) => work.transcript!(roomId, id))}
+              connect={room.repos && room.addRepo && room.attach ? {
+                repos: room.repos, addRepo: room.addRepo, attach: (id) => room.attach!(roomId, id), error: attachError,
+              } : undefined}
+              addClone={room.addRepo && (async () => { await room.addRepo!(); })} />
+          </Card>
           {p.recent.length > 0 && (
-            <div class="rsec">
-              <span class="rk">Activity</span>
+            <Card id="activity" title="Activity" summary={ago(p.recent[0].at)} closedByDefault>
               <ul class="evlist">{p.recent.map((e) => <EventRow key={e.id} e={e} />)}</ul>
-            </div>
+            </Card>
           )}
         </aside>
       )}
