@@ -10,10 +10,11 @@ describe('Inbox time and movement', () => {
     assert.equal(ago(NOW, NOW), 'now');
     assert.equal(ago(at(2026, 9, 26, 14, 19), NOW), '41m');
     assert.equal(ago(at(2026, 9, 26, 10), NOW), '5h');
-    assert.equal(ago(at(2026, 9, 26, 1, 5), NOW), '1:05 am');
-    assert.equal(ago(at(2026, 9, 25, 9), NOW), 'Yesterday');
-    assert.equal(ago(at(2026, 9, 22, 9), NOW), 'Thu');
-    assert.equal(ago(at(2026, 9, 2, 9), NOW), 'Oct 2');
+    assert.equal(ago(at(2026, 9, 25, 9), NOW), '1d');
+    assert.equal(ago(at(2026, 9, 22, 9), NOW), '4d');
+    assert.equal(ago(at(2026, 9, 2, 9), NOW), '3w');
+    assert.equal(ago(at(2026, 6, 2, 9), NOW), '3mo');
+    assert.equal(ago(at(2025, 6, 2, 9), NOW), '1y');
     assert.equal(ago('nope', NOW), '');
   });
   it('says how long something has waited', () => {

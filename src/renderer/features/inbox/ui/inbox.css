@@ -50,8 +50,10 @@
 .vi-row[aria-selected="true"]:focus { background: var(--v-selection); }
 .vi-row.is-unread::before { content: ''; position: absolute; left: 3px; top: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--v-info-fg); }
 .vi-face { grid-row: 1 / span 2; display: inline-flex; }
-.vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--v-fg-2); }
-.vi-row.is-unread .vi-hl { color: var(--v-fg); font-weight: 500; }
+.vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--v-fg-3); }
+/* Unread, the headline stands out bright and bold; read, the row settles into one grey. */
+.vi-row.is-unread .vi-hl { color: var(--v-fg); font-weight: 600; }
+.vi-row:not(.is-unread) .vi-where { color: inherit; }
 .vi-r { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .vi-glyph { display: inline-flex; color: var(--v-fg-4); }
 .vi-row.is-needs .vi-glyph { color: var(--v-signal-fg); }
