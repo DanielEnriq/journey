@@ -1,7 +1,7 @@
 import { buildScene, type Scene } from '../../../../shared/canvas/index.js';
 import type {
-  ClaudeCodeBlock, ClaudeCodeMessage, Participant, Repository, RoomActivity, RoomAuthor, RoomCanvas, RoomCheckout, RoomDecision, RoomDetails,
-  RoomFailure, RoomInvitation, RoomMember, RoomRecord, RoomResult, RoomRole, RoomSummary as CloudRoom, WorkContext,
+  AttachedSession, ClaudeCodeBlock, ClaudeCodeMessage, Participant, Repository, RoomActivity, RoomAuthor, RoomCanvas, RoomCheckout, RoomDecision, RoomDetails,
+  RoomFailure, RoomInvitation, RoomMember, RoomRecord, RoomResult, RoomRole, RoomSessionReport, RoomSummary as CloudRoom, WorkContext,
 } from '../../../../shared/api.js';
 import { CallService } from '../../../calls/service.js';
 import { account, initials } from '../../../shared/account.js';
@@ -9,7 +9,7 @@ import { Store } from '../../../shared/store.js';
 import { shortAgo } from '../../../shared/time.js';
 import type {
   CallDataSource, LocalRepo, NewRoom, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomRecordSource, RoomRecordView,
-  RoomWorkContext, Transcript, TranscriptLine, WorkstreamDataSource,
+  RoomWorkContext, RoomWorkstream, Transcript, TranscriptLine, WorkstreamDataSource,
 } from '../../room/data/sources.js';
 import { workMark } from '../../room/data/sources.js';
 import type { Person as PanelPerson, PersonTone, Stream } from '../../room/panel/types.js';
@@ -166,7 +166,7 @@ function summaryOf(k: Known): RoomSummary {
     pinOrder: k.room.pinOrder,
     archivedAt: k.room.archivedAt,
     // Known once the room's work has been read on this machine (opening it, or the Inbox reading it).
-    work: work.has(k.room.id) ? workMark(work.get(k.room.id)!.room.workstreams.map((w) => w.status)) : undefined,
+    work: work.has(k.room.id) ? workMark(roomWork(work.get(k.room.id)!.room).map((w) => w.status)) : undefined,
     inCall: (presence.get(k.room.id) ?? []).filter((p) => p.call).map((p) => who(p.userId, { name: p.name, email: '' })),
     here: (presence.get(k.room.id) ?? []).map((p) => who(p.userId, { name: p.name, email: '' })),
     role: k.room.role,
@@ -600,42 +600,130 @@ const call: CallDataSource = {
 
 /* ---------- Work: your clone of the room's repository, read on this machine. ---------- */
 
+/** Which attached session each workstream on this Mac is in the room as, by `roomId:streamId`. */
+const attachedAs = new Map<string, string>();
+
 const workSource: WorkstreamDataSource = {
   async context(roomId) {
     const generatedAt = new Date().toISOString();
-    const checkouts = await unwrap(api().rooms.checkouts(roomId));
+    const [checkouts, attachedRead] = await Promise.all([unwrap(api().rooms.checkouts(roomId)), api().rooms.sessions(roomId)]);
+    // Where the room's sessions can't be read (attaching isn't on this database yet), the work on this Mac still shows.
+    const attached = attachedRead.ok ? attachedRead.value : null;
+    const k = known.get(roomId);
+    const who = peopleOf(k?.members ?? []);
+    const canAttach = attached !== null && k?.room.role !== 'viewer';
     const repos = checkouts.map((c) => ({ repo: c.repository, here: c.repositoryId !== null }));
     const repo = checkouts[0]?.repository ?? null;
-    if (!repo) return { repo: null, repos, generatedAt, workstreams: [] };
+    const remote = (row: AttachedSession): RoomWorkstream => ({
+      id: `session:${row.sessionId}`, title: row.title, agent: 'Claude Code', branch: row.branch, worktree: '',
+      status: row.status, lastActivityAt: row.statusAt, lastActivity: row.activity, changedFiles: row.changedFiles,
+      sessions: 1, visibility: 'room', observed: [], repo: row.repository, here: false,
+      by: row.attachedBy ? who(row.attachedBy) : undefined, detachable: isMe(row.attachedBy) || k?.room.role === 'owner',
+    });
+    if (!repo) return { repo: null, repos, generatedAt, workstreams: (attached ?? []).map(remote), canAttach };
     const here = checkouts.filter((c): c is typeof c & { repositoryId: string } => c.repositoryId !== null);
     if (!here.length) {
       const which = checkouts.length === 1 ? `${repo} isn’t` : 'None of this Space’s repositories are';
-      return { repo, repos, generatedAt, workstreams: [], unavailable: `${which} added on this machine, so their Claude Code sessions can’t be read here. Add your clone.` };
+      return { repo, repos, generatedAt, workstreams: (attached ?? []).map(remote), canAttach, unavailable: `${which} added on this machine, so their Claude Code sessions can’t be read here. Add your clone.` };
     }
     // One repository that can't be read leaves the others' work showing.
     const contexts = (await Promise.all(here.map(async (c) => {
       const context = await api().context.work(c.repositoryId).catch(() => null);
       return context && { repository: c.repository, repositoryId: c.repositoryId, context };
     }))).filter((c) => c !== null);
-    const workstreams = contexts
-      .flatMap(({ repository, context }) => toRoomWorkContext(context).workstreams.map((w) => ({ ...w, repo: repository })))
-      .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''));
-    const shown: RoomWorkContext = { repo, repos, generatedAt, workstreams };
+    const found = contexts.flatMap(({ repository, context }) => toRoomWorkContext(context).workstreams.map((w) => {
+      const linked = context.workstreams.find((s) => s.id === w.id)?.sessions.map((s) => s.sessionId) ?? [];
+      // The session that names it: its most recently active one, the one attaching it records.
+      const names = context.sessions.find((s) => linked.includes(s.id))?.id;
+      return { w: { ...w, repo: repository }, linked, names };
+    }));
+    // A session can touch several worktrees: each attached one is shown once, where it names the work, else
+    // in the most recently active work it touched.
+    const rowOf = new Map<string, AttachedSession>();
+    for (const row of attached ?? []) {
+      const at = found.find((f) => f.names === row.sessionId && !rowOf.has(f.w.id))
+        ?? found.filter((f) => f.linked.includes(row.sessionId) && !rowOf.has(f.w.id))
+          .sort((a, b) => (b.w.lastActivityAt ?? '').localeCompare(a.w.lastActivityAt ?? ''))[0];
+      if (at) rowOf.set(at.w.id, row);
+    }
+    const matched = new Set([...rowOf.values()].map((r) => r.sessionId));
+    const local = found.map(({ w }): RoomWorkstream => {
+      const row = rowOf.get(w.id);
+      if (!row) return w;
+      attachedAs.set(`${roomId}:${w.id}`, row.sessionId);
+      // It runs here and you attached it: tell the room when what it's doing changes.
+      if (isMe(row.attachedBy)) publish(roomId, row, w);
+      return { ...w, visibility: 'room', here: true, title: row.title || w.title, by: who(row.attachedBy!), detachable: true };
+    });
+    // Attached work not found here runs on someone else's machine (or in a clone this Mac doesn't have).
+    const away = (attached ?? []).filter((a) => !matched.has(a.sessionId)).map(remote);
+    const workstreams = [...local, ...away].sort(byUrgency);
+    const shown: RoomWorkContext = { repo, repos, generatedAt, workstreams, canAttach, ...(attached === null && { unattached: true }) };
     work.set(roomId, { contexts, room: shown });
     return shown;
   },
+  async attach(roomId, streamId) {
+    const found = streamOf(roomId, streamId);
+    if (!found) throw new Error('That session isn’t on this Mac any more.');
+    const w = work.get(roomId)!.room.workstreams.find((x) => x.id === streamId);
+    await unwrap(api().rooms.attachSession(roomId, {
+      sessionId: found.session.id, repository: found.repository, title: w?.title ?? found.session.title, branch: found.stream.branch,
+      ...(w && report(w)),
+    }));
+    await changed(roomId);
+  },
+  async detach(roomId, streamId) {
+    const sessionId = streamId.startsWith('session:') ? streamId.slice('session:'.length) : attachedAs.get(`${roomId}:${streamId}`);
+    if (!sessionId) throw new Error('That session isn’t attached to this room.');
+    await unwrap(api().rooms.detachSession(roomId, sessionId));
+    await changed(roomId);
+  },
   async transcript(roomId, streamId) {
-    const found = work.get(roomId)?.contexts
-      .map((c) => ({ ...c, stream: c.context.workstreams.find((s) => s.id === streamId) }))
-      .find((c) => c.stream);
-    if (!found?.stream) throw new Error('This workstream isn’t in the room’s work any more.');
-    const linked = new Set(found.stream.sessions.map((s) => s.sessionId));
-    const session = found.context.sessions.find((s) => linked.has(s.id));
-    if (!session) throw new Error('No Claude Code session is linked to this workstream.');
+    const found = streamOf(roomId, streamId);
+    if (!found) throw new Error(streamId.startsWith('session:') ? 'This session runs on another machine; its transcript stays there.' : 'This workstream isn’t in the room’s work any more.');
+    const { session } = found;
     const page = await api().claudeCode.messages(found.repositoryId, session.id, { limit: 40 });
     return { title: session.title, total: page.total, lines: page.messages.flatMap(linesOf) } satisfies Transcript;
   },
 };
+
+/** A workstream on this Mac, with the session that names it (its most recently active one). */
+function streamOf(roomId: string, streamId: string) {
+  for (const c of work.get(roomId)?.contexts ?? []) {
+    const stream = c.context.workstreams.find((s) => s.id === streamId);
+    if (!stream) continue;
+    const linked = new Set(stream.sessions.map((s) => s.sessionId));
+    const session = c.context.sessions.find((s) => linked.has(s.id));
+    return session ? { repository: c.repository, repositoryId: c.repositoryId, stream, session } : null;
+  }
+  return null;
+}
+
+/** The room's own work: what's attached to it, or everything here where attaching can't be read. */
+const roomWork = (ctx: RoomWorkContext) => ctx.workstreams.filter((w) => w.visibility === 'room' || ctx.unattached);
+
+/** What waits on someone first, then what's running, then the most recently active. */
+function byUrgency(a: RoomWorkstream, b: RoomWorkstream) {
+  const rank = (w: RoomWorkstream) => (w.status === 'attention' ? 0 : w.status === 'active' ? 1 : 2);
+  return rank(a) - rank(b) || (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? '');
+}
+
+/** What a session's machine publishes about it, in the shape the database keeps (activity trimmed to fit). */
+function report(w: RoomWorkstream): RoomSessionReport {
+  const activity = w.lastActivity?.trim() || null;
+  return { status: w.status, activity: activity && activity.length > 300 ? activity.slice(0, 299) + '…' : activity, changedFiles: w.changedFiles };
+}
+
+/** Publishes an attached session's status when it differs from what the room has; at most one write in flight per session. */
+const publishing = new Set<string>();
+function publish(roomId: string, row: AttachedSession, w: RoomWorkstream) {
+  const r = report(w);
+  if (r.status === row.status && r.activity === row.activity && r.changedFiles === row.changedFiles) return;
+  const key = `${roomId}:${row.sessionId}`;
+  if (publishing.has(key)) return;
+  publishing.add(key);
+  void api().rooms.reportSession(roomId, row.sessionId, r).finally(() => publishing.delete(key));
+}
 
 function linesOf(m: ClaudeCodeMessage): TranscriptLine[] {
   return m.blocks.flatMap((b: ClaudeCodeBlock, i): TranscriptLine[] => {
@@ -699,7 +787,7 @@ const record: RoomRecordSource = {
     add(meId);
     // Only work with recent evidence is "running"; anything quiet stays in the preview's Work list.
     const ctx = work.get(roomId)?.room ?? await workSource.context(roomId).catch(() => null);
-    const streams: Stream[] = (ctx?.workstreams ?? []).flatMap((w): Stream[] => w.status === 'unknown' ? [] : [{
+    const streams: Stream[] = (ctx ? roomWork(ctx) : []).flatMap((w): Stream[] => w.status === 'unknown' ? [] : [{
       id: w.id, title: w.title, agent: w.agent, meta: [w.branch ?? 'detached', w.changedFiles !== null ? `${w.changedFiles} changed` : null].filter(Boolean).join(' · '),
       state: STREAM_STATE[w.status], line: w.lastActivity ?? undefined,
     }]);

@@ -9,6 +9,10 @@ import type {
   RoomPatch,
   RoomRole,
   RoomSummary,
+  NewRoomSession,
+  AttachedSession,
+  RoomSessionReport,
+  RoomSessionStatus,
 } from '../../shared/api.js';
 import type { Cloud } from './index.js';
 
@@ -249,6 +253,76 @@ export function createRoomService(client: () => Promise<Cloud>) {
       return getRoom(id);
     },
 
+    /** The coding sessions attached to the room, the order they were attached in. Members. */
+    async listSessions(roomId: string): Promise<AttachedSession[]> {
+      const id = requireId(roomId, 'Room');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('room_sessions').select().eq('room_id', id).order('attached_at');
+      if (error) throw toRoomError(error);
+      // RLS returns nothing to non-members; say so rather than "no sessions".
+      if (!data.length) await getRoom(id);
+      return data.map(roomSession);
+    },
+
+    /**
+     * Attaches one of your Claude Code sessions to the room, in one of its Space's repositories. Owners and
+     * members. Attaching a session that's already attached returns it as it is.
+     */
+    async attachSession(roomId: string, session: NewRoomSession): Promise<AttachedSession> {
+      const id = requireId(roomId, 'Room');
+      if (!isRecord(session)) throw new RoomError('invalid', 'A session is needed');
+      const sessionId = requireId(session.sessionId, 'Session');
+      const repository = optionalRepository(session.repository);
+      if (!repository) throw new RoomError('invalid', 'A repository is needed');
+      const title = requireText(session.title, 'A session’s title', MAX_NAME) ?? sessionId.slice(0, 8);
+      const branch = requireText(session.branch, 'A branch', 255);
+      const report = session.status === undefined ? null : requireReport(session as RoomSessionReport);
+      const { supabase, selfId } = await signedIn();
+      const { error } = await supabase.from('room_sessions').insert({
+        room_id: id, session_id: sessionId, repository, title, branch, attached_by: selfId,
+        ...(report && { status: report.status, activity: report.activity, changed_files: report.changedFiles, status_at: new Date().toISOString() }),
+      });
+      if (error && error.code !== '23505') {
+        if (isRlsRefusal(error)) {
+          const room = await getRoom(id);
+          if (room.role === 'viewer') throw new RoomError('permission-denied', 'Only the room’s owners and members can attach sessions');
+          throw new RoomError('invalid', 'That session isn’t in one of this Space’s repositories');
+        }
+        throw toRoomError(error);
+      }
+      const { data, error: readError } = await supabase.from('room_sessions').select().eq('room_id', id).eq('session_id', sessionId).maybeSingle();
+      if (readError) throw toRoomError(readError);
+      if (!data) throw notFound();
+      return roomSession(data);
+    },
+
+    /** Detaches a session from the room: whoever attached it, or a room owner. Nothing on any machine changes. */
+    async detachSession(roomId: string, sessionId: string): Promise<void> {
+      const id = requireId(roomId, 'Room');
+      const session = requireId(sessionId, 'Session');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('room_sessions').delete().eq('room_id', id).eq('session_id', session).select('session_id');
+      if (error) throw toRoomError(error);
+      if (!data.length) {
+        await getRoom(id);
+        const { data: there } = await supabase.from('room_sessions').select('session_id').eq('room_id', id).eq('session_id', session).maybeSingle();
+        if (there) throw new RoomError('permission-denied', 'Only whoever attached a session, or the room’s owners, can detach it');
+      }
+    },
+
+    /** Publishes what a session you attached is doing now, from the machine it runs on. */
+    async reportSession(roomId: string, sessionId: string, report: RoomSessionReport): Promise<void> {
+      const id = requireId(roomId, 'Room');
+      const session = requireId(sessionId, 'Session');
+      const r = requireReport(report);
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('room_sessions')
+        .update({ status: r.status, activity: r.activity, changed_files: r.changedFiles, status_at: new Date().toISOString() })
+        .eq('room_id', id).eq('session_id', session).select('session_id');
+      if (error) throw toRoomError(error);
+      if (!data.length) throw new RoomError('permission-denied', 'Only whoever attached a session publishes what it’s doing');
+    },
+
     /** The Space's repositories, the order they were linked in. Every room in the Space can use all of them. */
     async listSpaceRepositories(workspaceId: string): Promise<SpaceRepository[]> {
       const ws = requireId(workspaceId, 'Space');
@@ -364,6 +438,30 @@ function spaceRepository(row: { workspace_id: string; repository: string; added_
   return { workspaceId: row.workspace_id, repository: row.repository, addedBy: row.added_by, addedAt: row.added_at };
 }
 
+function roomSession(row: {
+  room_id: string; session_id: string; repository: string; title: string; branch: string | null; attached_by: string | null;
+  attached_at: string; status: string; activity: string | null; changed_files: number | null; status_at: string | null;
+}): AttachedSession {
+  return {
+    roomId: row.room_id,
+    sessionId: row.session_id,
+    repository: row.repository,
+    title: row.title,
+    branch: row.branch,
+    attachedBy: row.attached_by,
+    attachedAt: row.attached_at,
+    status: isSessionStatus(row.status) ? row.status : 'unknown',
+    activity: row.activity,
+    changedFiles: row.changed_files,
+    statusAt: row.status_at,
+  };
+}
+
+const SESSION_STATUSES: RoomSessionStatus[] = ['active', 'completed', 'attention', 'unknown'];
+function isSessionStatus(value: unknown): value is RoomSessionStatus {
+  return SESSION_STATUSES.includes(value as RoomSessionStatus);
+}
+
 function member(row: {
   room_id: string;
   user_id: string;
@@ -404,6 +502,22 @@ function requireName(value: unknown): string {
   if (!name) throw new RoomError('invalid', 'Room name must not be empty');
   if (name.length > MAX_NAME) throw new RoomError('invalid', `Room name must be at most ${MAX_NAME} characters`);
   return name;
+}
+
+/** Trimmed text of at most `max` characters, or null when there's none. */
+function requireText(value: unknown, what: string, max: number): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') throw new RoomError('invalid', `${what} must be text`);
+  const text = value.trim();
+  if (text.length > max) return text.slice(0, max - 1) + '…';
+  return text || null;
+}
+
+function requireReport(value: unknown): RoomSessionReport {
+  if (!isRecord(value) || !isSessionStatus(value.status)) throw new RoomError('invalid', 'A session’s status must be active, completed, attention or unknown');
+  const files = value.changedFiles;
+  if (files !== null && files !== undefined && !(Number.isInteger(files) && (files as number) >= 0)) throw new RoomError('invalid', 'Changed files must be a count');
+  return { status: value.status, activity: requireText(value.activity, 'Activity', 300), changedFiles: (files as number | null | undefined) ?? null };
 }
 
 function optionalGoal(value: unknown): string | null {

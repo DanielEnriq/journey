@@ -4,12 +4,12 @@ import { useStore } from '../../../shared/store.js';
 import { ago } from '../../../shared/time.js';
 import type { CallSession } from '../../call/session.js';
 import { useLoaded } from '../../workspace/hooks.js';
-import { nameFromGoal, UNTITLED, type EventKind, type RoomDataSource, type RoomEvent, type WorkstreamDataSource } from '../data/sources.js';
+import { nameFromGoal, UNTITLED, type EventKind, type RoomDataSource, type RoomEvent, type RoomWorkContext, type RoomWorkstream, type WorkstreamDataSource } from '../data/sources.js';
 import type { RoomSummary } from '../types.js';
 import { Icon, type IconName } from '../../../ui/icons.js';
 import { listNames, Who } from '../shell.js';
 import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
-import { WorkContext } from './WorkContext.js';
+import { WorkContext, waitsOnYou } from './WorkContext.js';
 import { Card } from './Cards.js';
 import { repoName } from '../../../ui/pass2/shell/sidebar-model.js';
 import { CodeText } from './code.js';
@@ -96,12 +96,15 @@ function CallNote({ roomId, session }: { roomId: string; session: CallSession })
   );
 }
 
-// What the room's sessions are doing, in a few words: how many run, and how many wait on you.
-function sessionsSummary(ws: { status: string }[] | undefined): string | undefined {
-  if (!ws?.length) return undefined;
-  const running = ws.filter((w) => w.status === 'active').length, needs = ws.filter((w) => w.status === 'attention').length;
-  const parts = [running ? `${running} running` : '', needs ? `${needs} need${needs === 1 ? 's' : ''} you` : ''].filter(Boolean);
-  return parts.length ? parts.join(' · ') : String(ws.length);
+// What the room's sessions are doing, in a few words: how many run, how many wait on you, how many on someone else.
+function sessionsSummary(ctx: RoomWorkContext | null | undefined): { text?: string; needs: boolean } {
+  const ws = ctx?.workstreams.filter((w) => w.visibility === 'room' || ctx.unattached) ?? [];
+  if (!ws.length) return { needs: false };
+  const count = (f: (w: RoomWorkstream) => boolean) => ws.filter(f).length;
+  const running = count((w) => w.status === 'active');
+  const yours = count((w) => w.status === 'attention' && waitsOnYou(w)), theirs = count((w) => w.status === 'attention' && !waitsOnYou(w));
+  const parts = [running ? `${running} running` : '', yours ? `${yours} need${yours === 1 ? 's' : ''} you` : '', theirs ? `${theirs} waiting` : ''].filter(Boolean);
+  return { text: parts.length ? parts.join(' · ') : String(ws.length), needs: yours > 0 };
 }
 
 export function RoomPreview({ sources, roomId, session, attachError, onJoin, inspector = true, people }: {
@@ -135,6 +138,7 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
   }
   const inspect = (id?: string) => { if (id) setOpen(id); document.getElementById('work')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   const live = p.room.inCall.some((x) => x.tone !== 'me');
+  const sessions = sessionsSummary(ctx.value);
   const repos = ctx.value?.repos?.map((r) => r.repo) ?? p.room.repos ?? (p.room.repo ? [p.room.repo] : []);
 
   return (
@@ -214,9 +218,10 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
             )}
             {people}
           </Card>
-          <Card id="sessions" title="Sessions" summary={sessionsSummary(ctx.value?.workstreams)} needs={ctx.value?.workstreams.some((w) => w.status === 'attention')}>
+          <Card id="sessions" title="Sessions" summary={sessions.text} needs={sessions.needs}>
             <WorkContext bare work={ctx} repo={p.room.repo} openId={openId} setOpen={setOpen} onJoin={onJoin}
-              share={work.share && ((id) => { void work.share!(roomId, id); })}
+              attach={work.attach && ((id) => work.attach!(roomId, id))}
+              detach={work.detach && ((id) => work.detach!(roomId, id))}
               transcript={work.transcript && ((id) => work.transcript!(roomId, id))}
               connect={room.repos && room.addRepo && room.attach ? {
                 repos: room.repos, addRepo: room.addRepo, attach: (id) => room.attach!(roomId, id), error: attachError,

@@ -28,7 +28,7 @@ type Validators = { [K in RoomEventType]: (payload: unknown) => payload is RoomE
 const validators: Validators = {
   'chat:message': (p): p is RoomEvents['chat:message'] => isRecord(p) && typeof p.text === 'string',
   'record:changed': (p): p is RoomEvents['record:changed'] =>
-    isRecord(p) && ['thread', 'reply', 'decision', 'signature', 'work', 'plan', 'settings'].includes(p.what as string),
+    isRecord(p) && ['thread', 'reply', 'decision', 'signature', 'work', 'plan', 'settings', 'sessions'].includes(p.what as string),
   'members:changed': (p): p is RoomEvents['members:changed'] =>
     isRecord(p) &&
     ['joined', 'left', 'removed', 'role', 'invitation'].includes(p.what as string) &&

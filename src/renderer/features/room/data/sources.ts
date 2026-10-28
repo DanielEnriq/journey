@@ -158,8 +158,14 @@ export interface RoomWorkstream {
   lastActivity: string | null;
   changedFiles: number | null;
   sessions: number;
-  /** `room`: shared with the room's members; `local`: seen on your machine only. */
+  /** `room`: attached to the room, so its members see it; `local`: on your machine, not attached. */
   visibility: 'room' | 'local';
+  /** Who attached it to the room: it runs on their machine. Only for attached work. */
+  by?: PersonRef;
+  /** False for attached work running on someone else's machine: only what it publishes is known here. */
+  here?: boolean;
+  /** Whether you can detach it: you attached it, or you own the room. */
+  detachable?: boolean;
   fromDecision?: string;
   question?: string;
   checks?: WorkCheck[];
@@ -179,6 +185,10 @@ export interface RoomWorkContext {
   workstreams: RoomWorkstream[];
   /** Why there is nothing to show even though the room has a repository, e.g. it isn't cloned here. */
   unavailable?: string;
+  /** Whether you can attach work on this machine to the room: owners and members. */
+  canAttach?: boolean;
+  /** The room's attached sessions couldn't be read (e.g. attaching isn't on this database yet): all work here shows. */
+  unattached?: boolean;
 }
 
 /** One message of a Claude Code session, reduced to what a person reads. */
@@ -195,8 +205,10 @@ export interface Transcript {
 export interface WorkstreamDataSource {
   /** The room's repositories, worktrees and sessions. Rejects when the context can't be read right now. */
   context(roomId: string): Promise<RoomWorkContext>;
-  /** Shares a workstream seen only on your machine with the room's members; absent where that isn't built. */
-  share?(roomId: string, streamId: string): Promise<void>;
+  /** Attaches a workstream on your machine to the room, so its members see it; absent where that isn't built. */
+  attach?(roomId: string, streamId: string): Promise<void>;
+  /** Detaches attached work from the room. Nothing on anyone's machine changes. */
+  detach?(roomId: string, streamId: string): Promise<void>;
   /** The latest of a workstream's most recent Claude Code session; absent where there are no transcripts. */
   transcript?(roomId: string, streamId: string): Promise<Transcript>;
 }

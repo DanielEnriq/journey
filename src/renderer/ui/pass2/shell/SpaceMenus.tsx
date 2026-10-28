@@ -44,7 +44,11 @@ function useMenu(onClose: () => void, first?: string) {
   return box;
 }
 
-export interface MenuEntry { icon?: IconName; label: string; run?(): void; checked?: boolean; mono?: boolean; hint?: string; disabled?: boolean }
+export interface MenuEntry {
+  icon?: IconName; label: string; run?(): void; checked?: boolean; mono?: boolean; hint?: string; disabled?: boolean;
+  /** A few grey words at the right edge, where a Mac menu puts its shortcuts. */
+  detail?: string;
+}
 export type MenuLine = MenuEntry | 'sep' | { section: string };
 
 function Lines({ lines, onClose, checks }: { lines: MenuLine[]; onClose(): void; checks?: boolean }) {
@@ -60,6 +64,7 @@ function Lines({ lines, onClose, checks }: { lines: MenuLine[]; onClose(): void;
             {checks ? <span class="vh-sbm-check">{l.checked ? <Icon name="check" size={14} /> : null}</span> : null}
             {l.icon ? <Icon name={l.icon} size={14} /> : null}
             <span class="vh-sbm-label">{l.label}</span>
+            {l.detail ? <span class="vh-sbm-detail">{l.detail}</span> : null}
           </button>
         );
       })}
@@ -67,10 +72,10 @@ function Lines({ lines, onClose, checks }: { lines: MenuLine[]; onClose(): void;
   );
 }
 
-export function ContextMenu({ at, label, lines, onClose }: { at: At; label: string; lines: MenuLine[]; onClose(): void }) {
+export function ContextMenu({ at, label, lines, onClose, width = 240 }: { at: At; label: string; lines: MenuLine[]; onClose(): void; width?: number }) {
   const box = useMenu(onClose);
   const tall = lines.reduce((n, l) => n + (l === 'sep' ? 9 : 30), 10);
-  return <div ref={box} tabIndex={-1} class="v-menu vh-sbm" role="menu" aria-label={label} style={fit(at, 240, tall)}><Lines lines={lines} onClose={onClose} /></div>;
+  return <div ref={box} tabIndex={-1} class="v-menu vh-sbm" role="menu" aria-label={label} style={`${fit(at, width, tall)};width:${width}px`}><Lines lines={lines} onClose={onClose} /></div>;
 }
 
 export function FilterMenu({ at, filter, spaces, onFilter, onCollapse, onClose }: {

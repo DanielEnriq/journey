@@ -954,6 +954,63 @@ export type Database = {
           },
         ]
       }
+      room_sessions: {
+        Row: {
+          activity: string | null
+          attached_at: string
+          attached_by: string | null
+          branch: string | null
+          changed_files: number | null
+          repository: string
+          room_id: string
+          session_id: string
+          status: string
+          status_at: string | null
+          title: string
+        }
+        Insert: {
+          activity?: string | null
+          attached_at?: string
+          attached_by?: string | null
+          branch?: string | null
+          changed_files?: number | null
+          repository: string
+          room_id: string
+          session_id: string
+          status?: string
+          status_at?: string | null
+          title: string
+        }
+        Update: {
+          activity?: string | null
+          attached_at?: string
+          attached_by?: string | null
+          branch?: string | null
+          changed_files?: number | null
+          repository?: string
+          room_id?: string
+          session_id?: string
+          status?: string
+          status_at?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_sessions_attached_by_fkey"
+            columns: ["attached_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_sessions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_signatures: {
         Row: {
           decision_id: string

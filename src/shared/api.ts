@@ -648,6 +648,36 @@ export interface SpaceRepository {
   addedAt: string;
 }
 
+/** What a coding session was last seen doing, by the machine running it. */
+export type RoomSessionStatus = 'active' | 'completed' | 'attention' | 'unknown';
+
+/**
+ * A Claude Code session attached to a room: the room's members see it, its title and what it's doing.
+ * Its transcript stays on the machine that ran it; that machine publishes the status when it changes.
+ */
+export interface AttachedSession {
+  roomId: string;
+  /** Claude Code's session id. */
+  sessionId: string;
+  /** The Space repository it runs in, by shared identity. */
+  repository: string;
+  title: string;
+  branch: string | null;
+  /** Whose machine it runs on: whoever attached it. Null once their account is gone. */
+  attachedBy: string | null;
+  attachedAt: string;
+  status: RoomSessionStatus;
+  /** The latest thing it did, in words. */
+  activity: string | null;
+  changedFiles: number | null;
+  /** When the status was last published; null until it first is. */
+  statusAt: string | null;
+}
+
+export type NewRoomSession = Pick<AttachedSession, 'sessionId' | 'repository' | 'title' | 'branch'> & Partial<RoomSessionReport>;
+/** What the machine running a session publishes about it. */
+export type RoomSessionReport = Pick<AttachedSession, 'status' | 'activity' | 'changedFiles'>;
+
 export interface RoomDetails extends RoomSummary {
   memberCount: number;
 }
@@ -793,7 +823,7 @@ export interface RoomEvents {
    * settings such as the assistant's name); members re-read it. The database sends it too, after each
    * vowe_* write.
    */
-  'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' | 'work' | 'plan' | 'settings' };
+  'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' | 'work' | 'plan' | 'settings' | 'sessions' };
   /**
    * Who's in the room changed: someone joined, left, was removed or got another role, or an invitation
    * changed. Members re-read the room's access; `userId` (when it's about a person) lets the person it's
@@ -1129,6 +1159,13 @@ export interface Channels {
     'rooms:pin': (roomId: string, order: number | null) => RoomResult<RoomDetails>;
     /** Archives a room out of your sidebar, or brings it back. Yours alone. */
     'rooms:archive': (roomId: string, archive: boolean) => RoomResult<RoomDetails>;
+    'rooms:sessions': (roomId: string) => RoomResult<AttachedSession[]>;
+    /** Owners and members; the session must be in one of the Space's repositories. */
+    'rooms:attachSession': (roomId: string, session: NewRoomSession) => RoomResult<AttachedSession>;
+    /** Whoever attached it, or a room owner. */
+    'rooms:detachSession': (roomId: string, sessionId: string) => RoomResult<void>;
+    /** Whoever attached it: what it's doing now, on their machine. */
+    'rooms:reportSession': (roomId: string, sessionId: string, report: RoomSessionReport) => RoomResult<void>;
     'spaces:repositories': (workspaceId: string) => RoomResult<SpaceRepository[]>;
     /** Links a local repository's `origin` identity to the Space; its path stays local. */
     'spaces:link': (workspaceId: string, repositoryId: string) => RoomResult<SpaceRepository>;
@@ -1373,6 +1410,14 @@ export interface JourneyApi {
     pin(roomId: string, order: number | null): Promise<RoomResult<RoomDetails>>;
     /** Archives the room out of your sidebar (unpinning it), or brings it back. Yours alone. */
     archive(roomId: string, archive: boolean): Promise<RoomResult<RoomDetails>>;
+    /** The coding sessions attached to the room, in the order they were attached. Members. */
+    sessions(roomId: string): Promise<RoomResult<AttachedSession[]>>;
+    /** Attaches one of your sessions to the room (owners and members); attaching it again updates it. */
+    attachSession(roomId: string, session: NewRoomSession): Promise<RoomResult<AttachedSession>>;
+    /** Detaches a session: whoever attached it, or a room owner. Nothing on any machine changes. */
+    detachSession(roomId: string, sessionId: string): Promise<RoomResult<void>>;
+    /** Publishes what a session you attached is doing now. */
+    reportSession(roomId: string, sessionId: string, report: RoomSessionReport): Promise<RoomResult<void>>;
 
     // The live room: Realtime channel and presence. Members only.
     /** Connects and announces you to the room. Members only; joining twice is a no-op. */

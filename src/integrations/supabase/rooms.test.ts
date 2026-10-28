@@ -459,4 +459,48 @@ describe('persistent rooms (local Supabase)', integration, () => {
     const direct = await bob.cloud.from('room_members').update({ pin_order: 9 }).eq('room_id', room.id).eq('user_id', bob.id).select();
     assert.ok(direct.error || !direct.data?.length, 'a member can’t write their membership directly');
   });
+
+  it('attaches coding sessions to a room: members see them, only their machine publishes what they do', async () => {
+    const { alice, bob, carol, dave } = people;
+    await alice.rooms.linkRepository(workspaceId, 'github.com/Acme/Web');
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Sessions' });
+    await alice.rooms.addMember(room.id, bob.id);
+    await alice.rooms.addMember(room.id, carol.id, 'viewer');
+    const one = '0a1b2c3d-0000-4000-8000-000000000001', two = '0a1b2c3d-0000-4000-8000-000000000002';
+
+    const attached = await bob.rooms.attachSession(room.id, {
+      sessionId: one, repository: 'git@github.com:Acme/Web.git', title: 'Fix the join sheet', branch: 'fix/join', status: 'active', activity: 'Edited sheet.tsx', changedFiles: 3,
+    });
+    assert.equal(attached.repository, 'github.com/Acme/Web');
+    assert.equal(attached.attachedBy, bob.id);
+    assert.equal(attached.status, 'active');
+    // Attaching it again leaves it as it was.
+    assert.equal((await bob.rooms.attachSession(room.id, { sessionId: one, repository: 'github.com/Acme/Web', title: 'Renamed', branch: null })).title, 'Fix the join sheet');
+    const seen = await carol.rooms.listSessions(room.id);
+    assert.deepEqual(seen.map((s) => [s.sessionId, s.title, s.changedFiles]), [[one, 'Fix the join sheet', 3]], 'viewers see the room’s sessions');
+
+    // Viewers don't attach; nor does anyone outside the room, or from outside the Space's repositories.
+    await rejectsWith(carol.rooms.attachSession(room.id, { sessionId: two, repository: 'github.com/Acme/Web', title: 'Mine', branch: null }), 'permission-denied');
+    await rejectsWith(bob.rooms.attachSession(room.id, { sessionId: two, repository: 'github.com/Acme/Elsewhere', title: 'Mine', branch: null }), 'invalid');
+    await rejectsWith(dave.rooms.attachSession(room.id, { sessionId: two, repository: 'github.com/Acme/Web', title: 'Mine', branch: null }), 'not-found');
+    await rejectsWith(dave.rooms.listSessions(room.id), 'not-found');
+    await rejectsWith(bob.rooms.attachSession(room.id, { sessionId: 'not-a-session', repository: 'github.com/Acme/Web', title: 'x', branch: null }), 'invalid');
+
+    // Only whoever attached it publishes what it's doing, and nothing else about it changes.
+    await rejectsWith(alice.rooms.reportSession(room.id, one, { status: 'attention', activity: null, changedFiles: null }), 'permission-denied');
+    await bob.rooms.reportSession(room.id, one, { status: 'attention', activity: 'Allow pnpm test?', changedFiles: 4 });
+    const [now] = await alice.rooms.listSessions(room.id);
+    assert.deepEqual([now!.status, now!.activity, now!.changedFiles], ['attention', 'Allow pnpm test?', 4]);
+    assert.ok(now!.statusAt);
+    const moved = await bob.cloud.from('room_sessions').update({ repository: 'github.com/Acme/Other' }).eq('session_id', one).select();
+    assert.ok(moved.error || !moved.data?.length, 'a session’s repository is fixed once attached');
+
+    // Whoever attached it, or an owner, detaches it.
+    await bob.rooms.attachSession(room.id, { sessionId: two, repository: 'github.com/Acme/Web', title: 'Second', branch: 'b' });
+    await rejectsWith(carol.rooms.detachSession(room.id, one), 'permission-denied');
+    await alice.rooms.detachSession(room.id, one);
+    await bob.rooms.detachSession(room.id, two);
+    assert.deepEqual(await bob.rooms.listSessions(room.id), []);
+    await alice.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Web');
+  });
 });
