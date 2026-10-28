@@ -957,42 +957,51 @@ export type Database = {
       room_sessions: {
         Row: {
           activity: string | null
+          agent: string
           attached_at: string
           attached_by: string | null
           branch: string | null
           changed_files: number | null
+          last_seen_at: string | null
           repository: string
           room_id: string
           session_id: string
           status: string
           status_at: string | null
           title: string
+          waiting_on: string | null
         }
         Insert: {
           activity?: string | null
+          agent?: string
           attached_at?: string
           attached_by?: string | null
           branch?: string | null
           changed_files?: number | null
+          last_seen_at?: string | null
           repository: string
           room_id: string
           session_id: string
           status?: string
           status_at?: string | null
           title: string
+          waiting_on?: string | null
         }
         Update: {
           activity?: string | null
+          agent?: string
           attached_at?: string
           attached_by?: string | null
           branch?: string | null
           changed_files?: number | null
+          last_seen_at?: string | null
           repository?: string
           room_id?: string
           session_id?: string
           status?: string
           status_at?: string | null
           title?: string
+          waiting_on?: string | null
         }
         Relationships: [
           {

@@ -11,8 +11,10 @@ import type {
   RoomSummary,
   NewRoomSession,
   AttachedSession,
+  RoomSessionAgent,
   RoomSessionReport,
   RoomSessionStatus,
+  RoomSessionWaitingOn,
 } from '../../shared/api.js';
 import type { Cloud } from './index.js';
 
@@ -276,11 +278,12 @@ export function createRoomService(client: () => Promise<Cloud>) {
       if (!repository) throw new RoomError('invalid', 'A repository is needed');
       const title = requireText(session.title, 'A session’s title', MAX_NAME) ?? sessionId.slice(0, 8);
       const branch = requireText(session.branch, 'A branch', 255);
+      const agent = session.agent === undefined ? 'claude-code' : requireAgent(session.agent);
       const report = session.status === undefined ? null : requireReport(session as RoomSessionReport);
       const { supabase, selfId } = await signedIn();
       const { error } = await supabase.from('room_sessions').insert({
-        room_id: id, session_id: sessionId, repository, title, branch, attached_by: selfId,
-        ...(report && { status: report.status, activity: report.activity, changed_files: report.changedFiles, status_at: new Date().toISOString() }),
+        room_id: id, session_id: sessionId, agent, repository, title, branch, attached_by: selfId,
+        ...(report && reportRow(report)),
       });
       if (error && error.code !== '23505') {
         if (isRlsRefusal(error)) {
@@ -317,7 +320,7 @@ export function createRoomService(client: () => Promise<Cloud>) {
       const r = requireReport(report);
       const { supabase } = await signedIn();
       const { data, error } = await supabase.from('room_sessions')
-        .update({ status: r.status, activity: r.activity, changed_files: r.changedFiles, status_at: new Date().toISOString() })
+        .update(reportRow(r))
         .eq('room_id', id).eq('session_id', session).select('session_id');
       if (error) throw toRoomError(error);
       if (!data.length) throw new RoomError('permission-denied', 'Only whoever attached a session publishes what it’s doing');
@@ -441,25 +444,47 @@ function spaceRepository(row: { workspace_id: string; repository: string; added_
 function roomSession(row: {
   room_id: string; session_id: string; repository: string; title: string; branch: string | null; attached_by: string | null;
   attached_at: string; status: string; activity: string | null; changed_files: number | null; status_at: string | null;
+  agent: string; waiting_on: string | null; last_seen_at: string | null;
 }): AttachedSession {
+  const status = isSessionStatus(row.status) ? row.status : 'unknown';
   return {
     roomId: row.room_id,
     sessionId: row.session_id,
+    agent: isAgent(row.agent) ? row.agent : 'claude-code',
     repository: row.repository,
     title: row.title,
     branch: row.branch,
     attachedBy: row.attached_by,
     attachedAt: row.attached_at,
-    status: isSessionStatus(row.status) ? row.status : 'unknown',
+    status,
+    waitingOn: status === 'waiting' && isWaitingOn(row.waiting_on) ? row.waiting_on : null,
     activity: row.activity,
     changedFiles: row.changed_files,
     statusAt: row.status_at,
+    lastSeenAt: row.last_seen_at,
   };
 }
 
-const SESSION_STATUSES: RoomSessionStatus[] = ['active', 'completed', 'attention', 'unknown'];
+/** The columns a report writes. A session that isn't waiting waits on nothing. */
+function reportRow(r: Required<RoomSessionReport>) {
+  return {
+    status: r.status, waiting_on: r.status === 'waiting' ? r.waitingOn : null, last_seen_at: r.lastSeenAt,
+    activity: r.activity, changed_files: r.changedFiles, status_at: new Date().toISOString(),
+  };
+}
+
+const SESSION_STATUSES: RoomSessionStatus[] = ['active', 'waiting', 'completed', 'attention', 'unknown'];
 function isSessionStatus(value: unknown): value is RoomSessionStatus {
   return SESSION_STATUSES.includes(value as RoomSessionStatus);
+}
+const WAITING_ON: RoomSessionWaitingOn[] = ['permission', 'input'];
+const isWaitingOn = (value: unknown): value is RoomSessionWaitingOn => WAITING_ON.includes(value as RoomSessionWaitingOn);
+const AGENTS: RoomSessionAgent[] = ['claude-code', 'codex'];
+const isAgent = (value: unknown): value is RoomSessionAgent => AGENTS.includes(value as RoomSessionAgent);
+
+function requireAgent(value: unknown): RoomSessionAgent {
+  if (!isAgent(value)) throw new RoomError('invalid', 'A session’s agent must be claude-code or codex');
+  return value;
 }
 
 function member(row: {
@@ -513,11 +538,20 @@ function requireText(value: unknown, what: string, max: number): string | null {
   return text || null;
 }
 
-function requireReport(value: unknown): RoomSessionReport {
-  if (!isRecord(value) || !isSessionStatus(value.status)) throw new RoomError('invalid', 'A session’s status must be active, completed, attention or unknown');
+function requireReport(value: unknown): Required<RoomSessionReport> {
+  if (!isRecord(value) || !isSessionStatus(value.status)) throw new RoomError('invalid', 'A session’s status must be active, waiting, completed, attention or unknown');
   const files = value.changedFiles;
   if (files !== null && files !== undefined && !(Number.isInteger(files) && (files as number) >= 0)) throw new RoomError('invalid', 'Changed files must be a count');
-  return { status: value.status, activity: requireText(value.activity, 'Activity', 300), changedFiles: (files as number | null | undefined) ?? null };
+  const waitingOn = value.waitingOn ?? null;
+  if (value.status === 'waiting' ? !isWaitingOn(waitingOn) : waitingOn !== null) {
+    throw new RoomError('invalid', 'A waiting session must say whether it waits on a permission or an answer, and only then');
+  }
+  const seen = value.lastSeenAt ?? null;
+  if (seen !== null && (typeof seen !== 'string' || Number.isNaN(Date.parse(seen)))) throw new RoomError('invalid', 'Last seen must be a time');
+  return {
+    status: value.status, waitingOn: waitingOn as RoomSessionWaitingOn | null, lastSeenAt: seen as string | null,
+    activity: requireText(value.activity, 'Activity', 300), changedFiles: (files as number | null | undefined) ?? null,
+  };
 }
 
 function optionalGoal(value: unknown): string | null {

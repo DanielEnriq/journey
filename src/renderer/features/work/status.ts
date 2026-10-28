@@ -7,8 +7,8 @@ import type { WorkCheck, WorkStatus } from '../room/data/sources.js';
 /** Activity newer than this reads as work still going on. */
 export const ACTIVE_WINDOW_MIN = 15;
 
-export function classify(e: { question?: string; checks?: WorkCheck[]; lastActivityAt: string | null }, now = Date.now()): WorkStatus {
-  if (e.question) return 'attention';
+export function classify(e: { question?: string; waitingOn?: unknown; checks?: WorkCheck[]; lastActivityAt: string | null }, now = Date.now()): WorkStatus {
+  if (e.question || e.waitingOn) return 'attention';
   if (e.checks?.length && e.checks.every((c) => c.result === 'pass')) return 'completed';
   if (e.lastActivityAt && now - Date.parse(e.lastActivityAt) < ACTIVE_WINDOW_MIN * 60_000) return 'active';
   return 'unknown';

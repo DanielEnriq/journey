@@ -494,9 +494,26 @@ describe('persistent rooms (local Supabase)', integration, () => {
     assert.ok(now!.statusAt);
     const moved = await bob.cloud.from('room_sessions').update({ repository: 'github.com/Acme/Other' }).eq('session_id', one).select();
     assert.ok(moved.error || !moved.data?.length, 'a session’s repository is fixed once attached');
+    assert.equal(now!.agent, 'claude-code', 'sessions are Claude Code’s unless attached as another agent');
+    const recast = await bob.cloud.from('room_sessions').update({ agent: 'codex' }).eq('session_id', one).select();
+    assert.ok(recast.error || !recast.data?.length, 'a session’s agent is fixed once attached');
+
+    // A waiting session says what it waits for, and only a waiting one does; its machine says when it last saw it.
+    const seenAt = '2026-10-28T12:00:00.000Z';
+    await bob.rooms.reportSession(room.id, one, { status: 'waiting', waitingOn: 'permission', lastSeenAt: seenAt, activity: 'Asked: Claude needs your permission to use Bash', changedFiles: 4 });
+    const [waiting] = await carol.rooms.listSessions(room.id);
+    assert.deepEqual([waiting!.status, waiting!.waitingOn, Date.parse(waiting!.lastSeenAt!)], ['waiting', 'permission', Date.parse(seenAt)]);
+    await rejectsWith(bob.rooms.reportSession(room.id, one, { status: 'waiting', activity: null, changedFiles: null }), 'invalid');
+    await rejectsWith(bob.rooms.reportSession(room.id, one, { status: 'active', waitingOn: 'input', activity: null, changedFiles: null }), 'invalid');
+    const unpaired = await bob.cloud.from('room_sessions').update({ status: 'waiting', waiting_on: null }).eq('session_id', one).select();
+    assert.ok(unpaired.error, 'the database refuses a waiting session that doesn’t say what for');
+    await bob.rooms.reportSession(room.id, one, { status: 'active', activity: 'Used Bash: pnpm test', changedFiles: 4 });
+    const [moving] = await alice.rooms.listSessions(room.id);
+    assert.deepEqual([moving!.status, moving!.waitingOn], ['active', null], 'it waits on nothing once it moves on');
 
     // Whoever attached it, or an owner, detaches it.
-    await bob.rooms.attachSession(room.id, { sessionId: two, repository: 'github.com/Acme/Web', title: 'Second', branch: 'b' });
+    const second = await bob.rooms.attachSession(room.id, { sessionId: two, agent: 'codex', repository: 'github.com/Acme/Web', title: 'Second', branch: 'b' });
+    assert.equal(second.agent, 'codex');
     await rejectsWith(carol.rooms.detachSession(room.id, one), 'permission-denied');
     await alice.rooms.detachSession(room.id, one);
     await bob.rooms.detachSession(room.id, two);

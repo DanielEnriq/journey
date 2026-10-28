@@ -204,11 +204,11 @@ export interface ClaudeCodeSession {
 }
 
 /**
- * What Vowe observes of a Claude Code session, named after the hook events. Hooks report all six
+ * What Vowe observes of a Claude Code session, named after the hook events. Hooks report all seven
  * (agents/claude-code-hooks.ts); the transcript watcher (agents/claude-code-watcher.ts) sees prompts,
  * tool results, and completed turns, but never a session starting or ending.
  */
-export type ClaudeCodeEventType = 'SessionStart' | 'UserPromptSubmit' | 'PostToolUse' | 'PostToolUseFailure' | 'Stop' | 'SessionEnd';
+export type ClaudeCodeEventType = 'SessionStart' | 'UserPromptSubmit' | 'PostToolUse' | 'PostToolUseFailure' | 'Notification' | 'Stop' | 'SessionEnd';
 
 /** One observed event, reduced to a summary line; tool inputs and outputs aren't kept. */
 export interface ClaudeCodeEvent {
@@ -225,7 +225,8 @@ export interface ClaudeCodeEvent {
   toolName: string | null;
   /**
    * One redacted line: the tool's command, file, or pattern (plus the error on a failure), the
-   * prompt, the end of Claude's reply on Stop, the start source, or the end reason.
+   * prompt, the end of Claude's reply on Stop, what it asked for on Notification, the start source,
+   * or the end reason.
    */
   summary: string | null;
   /** Fired inside a subagent rather than the main conversation. */
@@ -239,11 +240,12 @@ export interface ClaudeCodeEvent {
  * a long tool call and a killed process look the same from outside.
  * - `active`: new activity (a start, prompt, or tool call) was observed in the last few minutes;
  *   it lapses to `unknown` after that.
+ * - `waiting`: Claude asked its user for permission or an answer, and nothing has happened since.
  * - `turn-completed`: Claude finished a reply and was waiting on its user.
  * - `ended`: the session exited; only a SessionEnd hook confirms this.
  * - `unknown`: nothing observed recently enough to say.
  */
-export type ClaudeCodeActivityState = 'active' | 'turn-completed' | 'ended' | 'unknown';
+export type ClaudeCodeActivityState = 'active' | 'waiting' | 'turn-completed' | 'ended' | 'unknown';
 
 export interface ClaudeCodeActivity {
   state: ClaudeCodeActivityState;
@@ -649,7 +651,12 @@ export interface SpaceRepository {
 }
 
 /** What a coding session was last seen doing, by the machine running it. */
-export type RoomSessionStatus = 'active' | 'completed' | 'attention' | 'unknown';
+/** `waiting`: the agent asked whoever runs it for something and has done nothing since (see RoomSessionWaitingOn). */
+export type RoomSessionStatus = 'active' | 'waiting' | 'completed' | 'attention' | 'unknown';
+/** What a waiting session asked for: permission to use a tool, or an answer to a question it put. */
+export type RoomSessionWaitingOn = 'permission' | 'input';
+/** Which coding agent runs a session. */
+export type RoomSessionAgent = 'claude-code' | 'codex';
 
 /**
  * A Claude Code session attached to a room: the room's members see it, its title and what it's doing.
@@ -657,8 +664,9 @@ export type RoomSessionStatus = 'active' | 'completed' | 'attention' | 'unknown'
  */
 export interface AttachedSession {
   roomId: string;
-  /** Claude Code's session id. */
+  /** The agent's own session id. */
   sessionId: string;
+  agent: RoomSessionAgent;
   /** The Space repository it runs in, by shared identity. */
   repository: string;
   title: string;
@@ -667,16 +675,20 @@ export interface AttachedSession {
   attachedBy: string | null;
   attachedAt: string;
   status: RoomSessionStatus;
+  /** Set exactly when the status is `waiting`. Whoever attached it is who it waits on. */
+  waitingOn: RoomSessionWaitingOn | null;
   /** The latest thing it did, in words. */
   activity: string | null;
   changedFiles: number | null;
   /** When the status was last published; null until it first is. */
   statusAt: string | null;
+  /** When the machine running it last observed it do anything; null until that's published. */
+  lastSeenAt: string | null;
 }
 
-export type NewRoomSession = Pick<AttachedSession, 'sessionId' | 'repository' | 'title' | 'branch'> & Partial<RoomSessionReport>;
+export type NewRoomSession = Pick<AttachedSession, 'sessionId' | 'repository' | 'title' | 'branch'> & Partial<Pick<AttachedSession, 'agent'> & RoomSessionReport>;
 /** What the machine running a session publishes about it. */
-export type RoomSessionReport = Pick<AttachedSession, 'status' | 'activity' | 'changedFiles'>;
+export type RoomSessionReport = Pick<AttachedSession, 'status' | 'activity' | 'changedFiles'> & Partial<Pick<AttachedSession, 'waitingOn' | 'lastSeenAt'>>;
 
 export interface RoomDetails extends RoomSummary {
   memberCount: number;

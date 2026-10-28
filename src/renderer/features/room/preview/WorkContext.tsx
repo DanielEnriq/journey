@@ -103,8 +103,12 @@ function Checks({ checks }: { checks: WorkCheck[] }) {
 
 /** Whose turn it is: yours where it runs here or you attached it, else whoever's Mac it's on. */
 export const waitsOnYou = (w: RoomWorkstream) => !w.by || w.by.tone === 'me';
-const waitingLine = (w: RoomWorkstream) =>
-  [`Waiting on ${waitsOnYou(w) ? 'you' : w.by!.name}`, w.here === false ? w.lastActivity : null].filter(Boolean).join(' · ');
+const WAITING_FOR = { permission: 'permission', input: 'an answer' } as const;
+const waitingLine = (w: RoomWorkstream) => {
+  const who = waitsOnYou(w) ? 'you' : w.by!.name;
+  const head = w.waitingOn ? `Waiting on ${who} for ${WAITING_FOR[w.waitingOn]}` : `Waiting on ${who}`;
+  return [head, w.here === false || w.waitingOn ? w.lastActivity : null].filter(Boolean).join(' · ');
+};
 
 function Stream({ w, open, toggle, detach, transcript, onJoin, onMenu }: {
   w: RoomWorkstream; open: boolean; toggle(): void; detach?: () => void; transcript?: () => Promise<Transcript>; onJoin(): void;

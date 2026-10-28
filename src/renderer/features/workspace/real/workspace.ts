@@ -1,7 +1,7 @@
 import { buildScene, type Scene } from '../../../../shared/canvas/index.js';
 import type {
   AttachedSession, ClaudeCodeBlock, ClaudeCodeMessage, Participant, Repository, RoomActivity, RoomAuthor, RoomCanvas, RoomCheckout, RoomDecision, RoomDetails,
-  RoomFailure, RoomInvitation, RoomMember, RoomRecord, RoomResult, RoomRole, RoomSessionReport, RoomSummary as CloudRoom, WorkContext,
+  RoomFailure, RoomInvitation, RoomMember, RoomRecord, RoomResult, RoomRole, RoomSessionAgent, RoomSessionReport, RoomSummary as CloudRoom, WorkContext,
 } from '../../../../shared/api.js';
 import { CallService } from '../../../calls/service.js';
 import { account, initials } from '../../../shared/account.js';
@@ -615,8 +615,9 @@ const workSource: WorkstreamDataSource = {
     const repos = checkouts.map((c) => ({ repo: c.repository, here: c.repositoryId !== null }));
     const repo = checkouts[0]?.repository ?? null;
     const remote = (row: AttachedSession): RoomWorkstream => ({
-      id: `session:${row.sessionId}`, title: row.title, agent: 'Claude Code', branch: row.branch, worktree: '',
-      status: row.status, lastActivityAt: row.statusAt, lastActivity: row.activity, changedFiles: row.changedFiles,
+      id: `session:${row.sessionId}`, title: row.title, agent: AGENT_NAMES[row.agent], branch: row.branch, worktree: '',
+      status: row.status === 'waiting' ? 'attention' : row.status, ...(row.waitingOn && { waitingOn: row.waitingOn }),
+      lastActivityAt: row.lastSeenAt ?? row.statusAt, lastActivity: row.activity, changedFiles: row.changedFiles,
       sessions: 1, visibility: 'room', observed: [], repo: row.repository, here: false,
       by: row.attachedBy ? who(row.attachedBy) : undefined, detachable: isMe(row.attachedBy) || k?.room.role === 'owner',
     });
@@ -667,7 +668,7 @@ const workSource: WorkstreamDataSource = {
     if (!found) throw new Error('That session isn’t on this Mac any more.');
     const w = work.get(roomId)!.room.workstreams.find((x) => x.id === streamId);
     await unwrap(api().rooms.attachSession(roomId, {
-      sessionId: found.session.id, repository: found.repository, title: w?.title ?? found.session.title, branch: found.stream.branch,
+      sessionId: found.session.id, agent: 'claude-code', repository: found.repository, title: w?.title ?? found.session.title, branch: found.stream.branch,
       ...(w && report(w)),
     }));
     await changed(roomId);
@@ -708,17 +709,26 @@ function byUrgency(a: RoomWorkstream, b: RoomWorkstream) {
   return rank(a) - rank(b) || (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? '');
 }
 
+const AGENT_NAMES: Record<RoomSessionAgent, string> = { 'claude-code': 'Claude Code', codex: 'Codex' };
+
 /** What a session's machine publishes about it, in the shape the database keeps (activity trimmed to fit). */
 function report(w: RoomWorkstream): RoomSessionReport {
   const activity = w.lastActivity?.trim() || null;
-  return { status: w.status, activity: activity && activity.length > 300 ? activity.slice(0, 299) + '…' : activity, changedFiles: w.changedFiles };
+  return {
+    status: w.waitingOn ? 'waiting' : w.status, waitingOn: w.waitingOn ?? null, lastSeenAt: w.lastActivityAt,
+    activity: activity && activity.length > 300 ? activity.slice(0, 299) + '…' : activity, changedFiles: w.changedFiles,
+  };
 }
+
+/** How far the room's "last seen" may lag behind this machine before it's worth a write of its own. */
+const SEEN_LAG_MS = 60_000;
 
 /** Publishes an attached session's status when it differs from what the room has; at most one write in flight per session. */
 const publishing = new Set<string>();
 function publish(roomId: string, row: AttachedSession, w: RoomWorkstream) {
   const r = report(w);
-  if (r.status === row.status && r.activity === row.activity && r.changedFiles === row.changedFiles) return;
+  const seenLags = !!r.lastSeenAt && (!row.lastSeenAt || Date.parse(r.lastSeenAt) - Date.parse(row.lastSeenAt) > SEEN_LAG_MS);
+  if (r.status === row.status && r.waitingOn === row.waitingOn && r.activity === row.activity && r.changedFiles === row.changedFiles && !seenLags) return;
   const key = `${roomId}:${row.sessionId}`;
   if (publishing.has(key)) return;
   publishing.add(key);

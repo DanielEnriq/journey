@@ -21,7 +21,7 @@ import { z } from 'zod';
 import { insertEvent, latestEvents, pruneEvents } from '../database/claude-code-events.js';
 import type { ClaudeCodeActivity, ClaudeCodeEvent, ClaudeCodeEventType, ClaudeCodeHooksStatus } from '../shared/api.js';
 
-const EVENTS: ClaudeCodeEventType[] = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionEnd'];
+const EVENTS: ClaudeCodeEventType[] = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'SessionEnd'];
 /** Names the installed script; any hook command containing it is Vowe's. */
 const SCRIPT_NAME = 'vowe-claude-hook.cjs';
 /** Activity observed this recently counts as `active`; after that, nothing says what the session is doing. */
@@ -51,6 +51,9 @@ export function activityFor(lastEvent: ClaudeCodeEvent, now = Date.now()): Claud
       return { state: 'ended', lastEvent };
     case 'Stop':
       return { state: 'turn-completed', lastEvent };
+    // Stopped until its user acts, however long ago it asked: the next event of any kind ends it.
+    case 'Notification':
+      return { state: 'waiting', lastEvent };
     default:
       return { state: now - Date.parse(lastEvent.timestamp) < ACTIVE_FOR_MS ? 'active' : 'unknown', lastEvent };
   }

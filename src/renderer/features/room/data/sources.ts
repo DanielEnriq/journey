@@ -1,3 +1,4 @@
+import type { RoomSessionWaitingOn } from '../../../../shared/api.js';
 import type { Scene } from '../../../../shared/canvas/index.js';
 import type { ChangedFile, PersonRef, RoomSummary, SpaceSummary } from '../types.js';
 import type { RoomPanelProps } from '../panel/types.js';
@@ -168,6 +169,8 @@ export interface RoomWorkstream {
   detachable?: boolean;
   fromDecision?: string;
   question?: string;
+  /** The agent asked whoever runs it (`by`, or you) for this, and has done nothing since. Status is `attention`. */
+  waitingOn?: RoomSessionWaitingOn;
   checks?: WorkCheck[];
   /** Observed events, newest first. */
   observed: { at: string; text: string }[];
