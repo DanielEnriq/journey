@@ -262,7 +262,7 @@ function Row({ it, st, selected, note, onSelect, onMenu, onOpen }: { it: InboxIt
       aria-label={[verb, it.headline, what, it.room.name, when].filter(Boolean).join(', ')}
       class={'vi-row' + (needs ? ' is-needs' : '') + (unread ? ' is-unread' : '')}
       onClick={onSelect} onDblClick={() => canOpen(it) && onOpen()} onContextMenu={onMenu} onFocus={() => !selected && onSelect()}>
-      <span class="vi-face"><Face id={it.actor} people={st.people} size={24} /></span>
+      <span class="vi-face"><Face id={it.actor} people={st.people} size={32} /></span>
       <span class="vi-hl">{it.headline}</span>
       <span class="vi-r">
         {it.raised ? <span class="vi-raised" title={it.raised}><Icon name="raise" size={14} /></span> : null}

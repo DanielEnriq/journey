@@ -42,13 +42,14 @@
 .vi-none { margin: 4px 18px 10px; font-size: 13px; color: var(--v-fg-3); }
 
 /* A row, two lines: who, the headline and the glyph for what it is (signal when it's yours to do); then what happened
-   and where, with when at the right. An unread dot sits in the gutter. No fills, no hairlines: a row is tinted only on
-   hover and when selected (slate while the list has focus). */
-.vi-row { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; margin: 0 6px; padding: 8px 10px 8px 12px; border-radius: 6px; color: var(--v-fg-2); cursor: default; outline: 0; }
+   and where, with when at the right. No fills, no hairlines: a row is tinted only on
+   hover, when selected, and while unread. */
+.vi-row { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; margin: 0 6px; padding: 8px 10px 8px 12px; border-radius: 6px; color: var(--v-fg-2); cursor: default; outline: 0; }
 .vi-row:hover { background: var(--v-surface-hover); }
+/* Unread, the row itself is tinted (no dot); hovering lightens the tint, and selection takes over. */
+.vi-row.is-unread { background: var(--v-info-wash); }
+.vi-row.is-unread:hover { background: linear-gradient(var(--v-surface-hover), var(--v-surface-hover)), var(--v-info-wash); }
 .vi-row[aria-selected="true"] { background: var(--v-surface-selected); }
-.vi-row[aria-selected="true"]:focus { background: var(--v-selection); }
-.vi-row.is-unread::before { content: ''; position: absolute; left: 3px; top: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--v-info-fg); }
 .vi-face { grid-row: 1 / span 2; display: inline-flex; }
 .vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--v-fg-3); }
 /* Unread, the headline stands out bright and bold; read, the row settles into one grey. */

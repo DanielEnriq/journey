@@ -135,7 +135,7 @@
 /* ------------------------------------------------------- avatars, presence */
 .v-p1 { --tone: var(--v-person-1); } .v-p2 { --tone: var(--v-person-2); } .v-p3 { --tone: var(--v-person-3); } .v-p4 { --tone: var(--v-person-4); } .v-p5 { --tone: var(--v-person-5); }
 .v-av { --s: 24px; width: var(--s); height: var(--s); flex: 0 0 var(--s); display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--tone, var(--v-fg-3)); color: var(--v-bg); font-size: calc(var(--s) * 0.38); font-weight: 600; letter-spacing: 0.01em; line-height: 1; }
-.v-av-16 { --s: 16px; } .v-av-20 { --s: 20px; } .v-av-28 { --s: 28px; } .v-av-36 { --s: 36px; } .v-av-56 { --s: 56px; }
+.v-av-16 { --s: 16px; } .v-av-20 { --s: 20px; } .v-av-28 { --s: 28px; } .v-av-32 { --s: 32px; } .v-av-36 { --s: 36px; } .v-av-56 { --s: 56px; }
 .v-av.is-here { box-shadow: 0 0 0 1.5px var(--v-bg), 0 0 0 3px var(--tone); }
 .v-av.is-speaking { animation: v-breathe 1.6s ease-in-out infinite; }
 .v-av.is-away { opacity: 0.45; }
