@@ -75,3 +75,72 @@ body.vh-sb-resizing .vh-app, body.vh-sb-resizing .win { transition: none; }
    window is clear only under the sidebar's column; its panes keep their own paint. */
 :root { --vh-sidebar-bg: color-mix(in srgb, var(--v-bg-sunken) 55%, transparent); }
 .win.side-open:has(> .vh-sb-host) { background: linear-gradient(to right, transparent var(--left-column), var(--pane) 0); }
+
+/* "Spaces" with its two tools: filter (tinted while it hides anything) and + (a new Space). Quiet until you reach
+   for them, like Finder's sidebar section headings. */
+.vh-sb-h { display: flex; align-items: center; gap: 2px; padding-right: 12px; }
+.vh-sb-htitle { flex: 1; min-width: 0; }
+.vh-sb-hbtn { width: 22px; height: 22px; color: var(--v-fg-4); }
+.vh-sb-h:hover .vh-sb-hbtn, .vh-sb-hbtn[aria-expanded="true"] { color: var(--v-fg-3); }
+.vh-sb-hbtn.is-filtering, .vh-sb-h:hover .vh-sb-hbtn.is-filtering { color: var(--v-signal); }
+
+/* A quick room: a ring, not a dot, until it's kept. */
+.vh-sb-dot.is-quick { background: transparent; box-shadow: inset 0 0 0 1.25px var(--v-fg-4); }
+/* Earlier and an empty Space's New Room: rows in a lower voice. */
+.vh-sb-earlier, .vh-sb-empty { color: var(--v-fg-3); }
+.vh-sb-earlier .vh-sb-glyph svg { transition: transform var(--v-dur-2) var(--v-ease); }
+.vh-sb-earlier[aria-expanded="true"] .vh-sb-glyph svg { transform: rotate(90deg); }
+/* A Space just made, or gone to, glows once. */
+.vh-sb-repo.is-flash > .vh-sb-repoline .vh-sb-reporow { animation: vh-sb-flash 1.2s var(--v-ease); }
+@keyframes vh-sb-flash { 0%, 35% { background: var(--v-surface-selected); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .vh-sb-repo.is-flash > .vh-sb-repoline .vh-sb-reporow { animation: none; } }
+/* Finder's rename: the field sits exactly where the name was. */
+.vh-sb-reporow.is-renaming { cursor: default; background: var(--v-surface-selected); padding-right: 6px; box-sizing: border-box; }
+.vh-sb-rename { flex: 1; min-width: 0; height: 22px; margin-left: -4px; padding: 0 4px; border: 0; border-radius: 4px; background: var(--v-surface-raised); color: var(--v-fg); font: 500 13px/1 var(--v-font-ui); box-shadow: inset 0 0 0 1px var(--v-line-strong); outline: 0; }
+
+/* The sidebar's menus: fixed, so they can be wider than the sidebar. */
+.vh-sbm { position: fixed; z-index: 60; width: 240px; max-height: calc(100vh - 16px); overflow-y: auto; outline: 0; }
+/* Keyboard focus in a menu is its highlight, as on the Mac, not a ring. */
+.vh-sbm .v-menu-item:focus-visible { box-shadow: none; background: var(--v-surface-hover); color: var(--v-fg); outline: 0; }
+.vh-sbm-sec { padding: 7px 9px 3px; font: 500 11px/1.3 var(--v-font-ui); color: var(--v-fg-4); }
+.vh-sbm-item { height: 26px; gap: 8px; }
+.vh-sbm-item[disabled] { cursor: default; background: transparent; color: var(--v-fg-3); }
+.vh-sbm-item.is-mono .vh-sbm-label { font: 12px/1 var(--v-font-mono); }
+.vh-sbm-check { width: 14px; flex: 0 0 14px; display: inline-flex; color: var(--v-fg); }
+.vh-sbm-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* New Space: a search field, the repositories on this Mac, and two ways to start otherwise. */
+.vh-sbp { width: 320px; display: flex; flex-direction: column; }
+.vh-sbp-search { display: flex; align-items: center; gap: 7px; height: 32px; margin: 0 0 4px; padding: 0 9px; border-bottom: 1px solid var(--v-line); color: var(--v-fg-3); }
+.vh-sbp-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--v-fg); font: 13px/1 var(--v-font-ui); outline: 0; }
+.vh-sbp-search input::placeholder { color: var(--v-fg-4); }
+.vh-sbp-head { display: flex; align-items: center; justify-content: space-between; padding-right: 6px; }
+.vh-sbp-multi { display: inline-flex; align-items: center; gap: 7px; font: 11.5px/1 var(--v-font-ui); color: var(--v-fg-3); cursor: pointer; }
+.vh-sbp-multi .v-switch { transform: scale(0.8); transform-origin: right center; margin-left: -6px; }
+.vh-sbp-list { max-height: 248px; overflow-y: auto; display: flex; flex-direction: column; }
+.vh-sbp-row { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 9px; border-radius: 6px; color: var(--v-fg-2); font-size: 13px; cursor: default; outline: 0; }
+.vh-sbp-row > .v-icon { color: var(--v-fg-3); flex: none; }
+.vh-sbp-row:hover, .vh-sbp-row:focus-visible { background: var(--v-surface-hover); color: var(--v-fg); }
+.vh-sbp-row:focus-visible { box-shadow: var(--v-focus-ring); }
+.vh-sbp-row.is-off { color: var(--v-fg-4); }
+.vh-sbp-row.is-off:hover { background: transparent; color: var(--v-fg-4); }
+.vh-sbp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vh-sbp-id { flex: none; font: 11px/1 var(--v-font-mono); color: var(--v-fg-4); }
+/* Already in another Space: its name, and the way there. */
+.vh-sbp-in { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 20px; padding: 0 4px 0 6px; border: 0; border-radius: 5px; background: var(--v-surface-hover); color: var(--v-fg-3); font: 500 11px/1 var(--v-font-ui); cursor: pointer; }
+.vh-sbp-in:hover { background: var(--v-surface-selected); color: var(--v-fg); }
+.vh-sbp-box { width: 14px; height: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; box-shadow: inset 0 0 0 1.25px var(--v-fg-4); }
+.vh-sbp-box.is-on { background: var(--v-fg); box-shadow: none; color: var(--v-fg-inverse); }
+.vh-sbp-empty { display: flex; justify-content: center; padding: 14px 9px; font-size: 12px; color: var(--v-fg-3); }
+.vh-sbp-err { padding: 6px 9px; font-size: 12px; color: var(--v-danger, var(--v-signal)); }
+.vh-sbp-make { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 4px 2px 9px; font-size: 12px; color: var(--v-fg-3); }
+.vh-sbp-go { height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--v-fg); color: var(--v-fg-inverse); font: 500 12px/1 var(--v-font-ui); cursor: pointer; }
+.vh-sbp-go[disabled] { opacity: 0.35; cursor: default; }
+
+/* New Space's shortcut, as a Mac menu shows one: faint, on the right, only while you point at the row. */
+.vh-sb-kbd { font: 11.5px/1 var(--v-font-ui); color: var(--v-fg-4); opacity: 0; transition: opacity var(--v-dur-1) ease; }
+.vh-sb-row:hover .vh-sb-kbd, .vh-sb-row:focus-visible .vh-sb-kbd { opacity: 1; }
+/* What the filter keeps, after "Spaces", in the filter's own tint. */
+.vh-sb-hfilter { color: var(--v-signal); }
+.vh-sb-htitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vh-sb-earliern { margin-left: 4px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; }

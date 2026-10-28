@@ -46,7 +46,8 @@ export interface HomeProps {
   /** Makes the room and opens its preview; rejects with a message to show. Never starts a call. */
   onCreate(room: NewRoom): Promise<void>;
   /** New room, in the repository whose + was pressed in the sidebar (null: none chosen). */
-  onNewRoom(repo?: string | null): void;
+  /** New room, in a Space (null: none chosen). */
+  onNewRoom(space?: string | null): void;
   /** Joins a room's call (asking first if you're in another); absent: opening the room offers it. */
   onJoinCall?(id: string): void;
   /** Absent in the demo: its pages have no invitations or link field. */
@@ -172,7 +173,7 @@ export function Home(p: HomeProps) {
 
   return (
     <AppShell route={p.page} onNavigate={p.onNavigate} account={me} invitationCount={invitations?.length ?? 0}
-      rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={(repo) => p.onNewRoom(repo ?? null)} onAccount={() => setMenu(!menu)} accountOpen={menu} overlay={overlay}
+      rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={(space) => p.onNewRoom(space ?? null)} onAccount={() => setMenu(!menu)} accountOpen={menu} overlay={overlay}
       fixed={p.page === 'home' && !p.invite && !!inbox && !noRooms}>
       {page}
     </AppShell>

@@ -27,7 +27,7 @@ export interface VoweRoomProps {
   rooms: RoomSummary[];
   onOpenRoom(id: string): void;
   /** New room, in the repository whose + was pressed in the sidebar (null: none chosen). */
-  onNewRoom(repo?: string | null): void;
+  onNewRoom(space?: string | null): void;
   /** Journey's canvas client for this room (features/canvas/client.ts over ipcTransport). */
   client: CanvasClient;
   /** The room's record, kept current by the host from VoweServices.record (load + subscribe). */
@@ -168,7 +168,7 @@ export function VoweRoom(p: VoweRoomProps) {
           <Chrome side={side} sideName="sidebar" desk={u.deskOpen} deskUnseen={!u.deskOpen && !!top} toggleSide={toggleSidebar} toggleDesk={() => p.ui.setState(u.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' })}
             nav={p.nav} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
           <aside class="sidebar vh-sb-host" aria-hidden={!side} inert={!side}>
-            <ShellSidebar place={null} rooms={rooms} current={p.room.id} onRoom={p.onOpenRoom} onNew={(repo) => p.onNewRoom(repo)} foot={<AccountFoot />} />
+            <ShellSidebar place={null} rooms={rooms} current={p.room.id} onRoom={p.onOpenRoom} onNew={(space) => p.onNewRoom(space)} foot={<AccountFoot />} />
           </aside>
           <main class="room">
             <div class="room-identity">

@@ -3,7 +3,8 @@
  * New room, with the same fields as Journey's `NewRoomSheet`:
  * - a name;
  * - what it's working toward (optional);
- * - a repository (optional): one added on this machine, or "Add one from disk…".
+ * - a repository (optional): one added on this machine, or "Add one from disk…"; or, made from a Space's +, the
+ *   Space it's in, whose repositories it can use.
  *
  * Creating it opens the room's preview. Nobody is called and the mic stays off.
  */
@@ -15,6 +16,8 @@ import { Icon } from '../../icons.js';
 
 import { Sheet } from '../common.js';
 import type { RepoOption } from '../home/Composer.js';
+import type { SpaceSummary } from '../../../features/room/types.js';
+import { repoName } from '../shell/sidebar-model.js';
 
 export interface CreateRoomProps {
   repos: RepoOption[];
@@ -25,9 +28,11 @@ export interface CreateRoomProps {
   onClose: () => void;
   /** The repository to start with chosen (the sidebar's + on a repository). The person can still change it. */
   initialRepo?: string | null;
+  /** The Space it's made in: no repository to choose; it uses the Space's. */
+  space?: SpaceSummary | null;
 }
 
-export function CreateRoomSheet({ repos, repoNote, onAddRepo, onCreate, onClose, initialRepo = null }: CreateRoomProps) {
+export function CreateRoomSheet({ repos, repoNote, onAddRepo, onCreate, onClose, initialRepo = null, space = null }: CreateRoomProps) {
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
   const [repo, setRepo] = useState<string | null>(initialRepo);
@@ -41,11 +46,11 @@ export function CreateRoomSheet({ repos, repoNote, onAddRepo, onCreate, onClose,
     if (!ok) return;
     setBusy(true);
     setError(null);
-    onCreate({ name: name.trim(), goal: goal.trim(), repo }).catch((err: Error) => { setBusy(false); setError(err.message); });
+    onCreate({ name: name.trim(), goal: goal.trim(), repo: space ? null : repo }).catch((err: Error) => { setBusy(false); setError(err.message); });
   };
   const add = () => onAddRepo?.().then((r) => { if (r) { setExtra((x) => x.concat([r])); setRepo(r.id); } }, (err: Error) => setError(err.message));
   return (
-    <Sheet title="New room" onClose={onClose} width={520}
+    <Sheet title={space ? `New room in ${space.name}` : 'New room'} onClose={onClose} width={520}
       footer={<>
         <span class={`vh-foot-note ${error ? 'vh-err-text' : 'vh-hint'}`} role={error ? 'alert' : undefined}>{error ?? 'Only you can see it until you invite someone.'}</span>
         <Button variant="quiet" onClick={onClose}>Cancel</Button>
@@ -60,7 +65,12 @@ export function CreateRoomSheet({ repos, repoNote, onAddRepo, onCreate, onClose,
           <span class="vh-label">Working toward <i class="vh-opt">optional</i></span>
           <div class="v-field"><input type="text" placeholder="Retries never charge a card twice." value={goal} onInput={(e) => setGoal((e.currentTarget as HTMLInputElement).value)} /></div>
         </label>
-        <div>
+        {space ? (
+          <div>
+            <span class="vh-label">Repositories</span>
+            <div class="vh-in-space">{space.repos.length ? space.repos.map((r) => <span key={r}><Icon name="branch" size={14} />{repoName(r)}</span>) : <span>None linked yet</span>}</div>
+          </div>
+        ) : <div>
           <span class="vh-label">Repository <i class="vh-opt">{repoNote}</i></span>
           <div class="vh-choices" role="radiogroup" aria-label="Repository">
             {[null, ...all].map((r) => {
@@ -74,7 +84,7 @@ export function CreateRoomSheet({ repos, repoNote, onAddRepo, onCreate, onClose,
             })}
             {onAddRepo ? <button type="button" class="vh-choice vh-choice-add" onClick={add}><Icon name="plus" size={14} /><span class="vh-choice-main"><b>Add one from disk…</b><span class="v-meta">Only its remote is shared with the room.</span></span></button> : null}
           </div>
-        </div>
+        </div>}
         <button type="submit" hidden />
       </form>
     </Sheet>

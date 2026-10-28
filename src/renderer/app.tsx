@@ -20,6 +20,7 @@ import { bindInbox } from './features/inbox/real.js';
 import { activeInbox } from './features/inbox/source.js';
 import { LoginScreen, OpeningVowe } from './features/welcome/LoginScreen.js';
 import { CreateRoomSheet } from './ui/pass2/rooms/CreateRoom.js';
+import { spaceSource } from './ui/pass2/shell/spaces.js';
 import { InviteGate } from './ui/pass2/invites/InviteGate.js';
 import { devFlags, type DevFlags } from './shared/devflags.js';
 import { useStore } from './shared/store.js';
@@ -223,8 +224,8 @@ function DevMenu({ route, go, onClose }: { route: Route; go(r: Route): void; onC
 function App() {
   const [route, go] = useRoute();
   const [dev, setDev] = useState(false);
-  /** The New room sheet, open with the repository it starts on (null: none). */
-  const [newRoom, setNewRoom] = useState<{ repo: string | null } | null>(null);
+  /** The New room sheet, open on the Space it's made in (null: none chosen). */
+  const [newRoom, setNewRoom] = useState<{ space: string | null } | null>(null);
   /** Joining another room's call while you're in one asks first. */
   const [switching, setSwitching] = useState<{ id: string; talk: boolean } | null>(null);
   const [repos, setRepos] = useState<RepoChoice[]>([]);
@@ -237,6 +238,8 @@ function App() {
   const ws = demo ? demoWorkspace : realWorkspace;
   const session = demo ? demoSession : realSession;
   const rooms = useRooms(ws.room);
+  // Every screen's sidebar reads Spaces from the workspace on screen.
+  useLayoutEffect(() => { spaceSource.setState({ source: ws.room }); }, [ws]);
   const cs = useStore(session.store);
   const real = useStore(realStatus);
   const { user } = useStore(account);
@@ -282,7 +285,7 @@ function App() {
   const home = () => go({ screen: 'home', demo });
   const openRoom = (id: string) => go({ screen: 'room', id, call: layout.keep === id, demo });
   const create = async (r: NewRoom) => {
-    const made = await ws.room.create(r);
+    const made = await ws.room.create(newRoom?.space && !r.spaceId ? { ...r, spaceId: newRoom.space } : r);
     setNewRoom(null);
     openRoom(made.id);
   };
@@ -319,8 +322,12 @@ function App() {
   const choices = demo ? EXAMPLE_REPOS : repos;
   const repoNote = demo ? 'examples · this is the demo' : repos.length ? 'added on this machine · only its remote is shared' : 'none added on this machine yet';
   const addRepo = demo ? undefined : () => addLocalRepo().then((r) => { loadRepos(); return r; });
-  const overlay = newRoom ? <CreateRoomSheet repos={choices} repoNote={repoNote} onAddRepo={addRepo} onCreate={create} onClose={() => setNewRoom(null)} initialRepo={newRoom.repo} /> : null;
-  const onNewRoom = (repo?: string | null) => setNewRoom({ repo: repo ?? null });
+  // A Space's +: the room is made in that Space and uses its repositories. Where there are no Spaces, the sidebar's +
+  // is on a repository, and the sheet starts with it chosen.
+  const newIn = newRoom?.space ? ws.room.spaces?.().find((s) => s.id === newRoom.space) ?? null : null;
+  const overlay = newRoom ? <CreateRoomSheet repos={choices} repoNote={repoNote} onAddRepo={addRepo} onCreate={create} onClose={() => setNewRoom(null)}
+    space={newIn} initialRepo={newIn ? null : newRoom.space} /> : null;
+  const onNewRoom = (space?: string | null) => setNewRoom({ space: space ?? null });
   const roomProps = (id: string) => ({
     sources: ws, roomId: id, session, light,
     ...(demo || !realCanvas ? demoRoom : {

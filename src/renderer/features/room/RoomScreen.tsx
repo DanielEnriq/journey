@@ -60,7 +60,7 @@ export interface RoomScreenProps {
   attachError?: string;
   light: boolean;
   onOpenRoom(id: string): void;
-  onNewRoom(repo?: string | null): void;
+  onNewRoom(space?: string | null): void;
   onHome(): void;
   /** Joins the call: muted, unless you chose to talk (which is what asks for the microphone). */
   onJoin(opts?: { talk: boolean }): void;
@@ -135,10 +135,10 @@ function Dropped({ session, onJoin, onLeave }: { session: CallSession; onJoin():
 }
 
 /** The app's one sidebar, as the room's left column (the same one Home and a call show). */
-function RoomSidebar(p: { rooms: RoomSummary[]; current: string; side: boolean; onOpenRoom(id: string): void; onNewRoom(repo?: string | null): void }) {
+function RoomSidebar(p: { rooms: RoomSummary[]; current: string; side: boolean; onOpenRoom(id: string): void; onNewRoom(space?: string | null): void }) {
   return (
     <aside class="sidebar vh-sb-host" aria-hidden={!p.side} inert={!p.side}>
-      <ShellSidebar place={null} rooms={p.rooms} current={p.current} onRoom={p.onOpenRoom} onNew={(repo) => p.onNewRoom(repo)} foot={<AccountFoot />} />
+      <ShellSidebar place={null} rooms={p.rooms} current={p.current} onRoom={p.onOpenRoom} onNew={(space) => p.onNewRoom(space)} foot={<AccountFoot />} />
     </aside>
   );
 }

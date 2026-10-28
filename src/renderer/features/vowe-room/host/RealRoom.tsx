@@ -51,7 +51,7 @@ export interface RealRoomProps {
   windowOverlay?: ComponentChildren;
   light: boolean;
   onOpenRoom(id: string): void;
-  onNewRoom(repo?: string | null): void;
+  onNewRoom(space?: string | null): void;
   onHome(): void;
 }
 
