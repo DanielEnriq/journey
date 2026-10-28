@@ -24,7 +24,7 @@
 .rp-sec.rp-first { border-top: 0; padding-top: 0; }
 .rp-rk { display: flex; align-items: baseline; justify-content: space-between; padding: 0 2px 2px; font-size: 11px; font-weight: 600; color: var(--ink-7); }
 .rp-rk span { font-weight: 400; color: var(--ink-8); }
-.rp-goal { margin: 0; padding: 0 2px; font-family: var(--serif); font-weight: 400; font-size: 21px; line-height: 1.15; letter-spacing: -.01em; color: var(--ink-bright); text-wrap: pretty; }
+.rp-goal { margin: 0; padding: 0 2px; font-family: var(--v-font-display); font-weight: 600; font-size:19px; line-height: 1.15; letter-spacing: -.016em; color: var(--ink-bright); text-wrap: pretty; }
 .rp-goal-by { padding: 0 2px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-7); }
 
 /* ---- Small controls */
@@ -79,7 +79,7 @@
 .rp-dc-v { font-family: var(--mono); font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 5px; background: var(--fill-2); color: var(--ink-4); }
 .rp-dc-open { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: var(--ink-8); transition: color 160ms ease; }
 .rp-dc-main:hover .rp-dc-open { color: var(--ink); }
-.rp-dc-title { font-family: var(--serif); font-weight: 400; font-size: 18px; line-height: 1.22; letter-spacing: -.004em; color: var(--ink-bright); }
+.rp-dc-title { font-family: var(--v-font-display); font-weight: 600; font-size:16px; line-height: 1.22; letter-spacing: -.008em; color: var(--ink-bright); }
 .rp-dc-verify { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; line-height: 1.45; color: var(--ink-5); }
 .rp-dc-verify b { flex: 0 0 auto; font-family: var(--mono); font-size: 9.5px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-9); }
 .rp-dc-verify span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

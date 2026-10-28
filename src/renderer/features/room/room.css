@@ -249,7 +249,7 @@
   .rdec.pointed,.decov.pointed{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--studio-accent) 55%,transparent),0 0 0 5px color-mix(in srgb,var(--studio-accent) 12%,transparent)}
   .decov .dh{display:flex;align-items:center;gap:8px}
   .decov .ver{font-family:var(--mono);font-size:10.5px;color:var(--ink-8)}
-  .decov .what{font-family:var(--serif);font-weight:400;font-size:19px;line-height:1.2;letter-spacing:-.006em;color:var(--ink-bright);text-wrap:pretty}
+  .decov .what{font-family:var(--v-font-display);font-weight: 600;font-size:17px;line-height:1.2;letter-spacing: -.008em;color:var(--ink-bright);text-wrap:pretty}
   .fields{display:grid;grid-template-columns:58px minmax(0,1fr);gap:7px 10px;margin:0;font-size:12px;line-height:1.45}
   .fields dt{font-size:11px;font-weight:500;color:var(--ink-8);padding-top:1px}
   .fields dd{margin:0;color:var(--ink-3)}
@@ -333,12 +333,12 @@
   .rsec{display:flex;flex-direction:column;gap:6px;padding:14px 0;border-top:1px solid var(--hairline)}
   .rsec .rk{display:flex;align-items:baseline;justify-content:space-between;padding:0 2px 2px;font-size:11px;font-weight:600;color:var(--ink-7)}
   .rsec .rk span{font-weight:400;color:var(--ink-8)}
-  .goal-line{margin:0;padding:0 2px;font-family:var(--serif);font-weight:400;font-size:21px;line-height:1.15;letter-spacing:-.01em;color:var(--ink-bright);text-wrap:pretty}
+  .goal-line{margin:0;padding:0 2px;font-family:var(--v-font-display);font-weight: 600;font-size:19px;line-height:1.15;letter-spacing: -.016em;color:var(--ink-bright);text-wrap:pretty}
   .goal-by{padding:0 2px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-7)}
   .rdec{display:flex;flex-direction:column;gap:6px;padding:12px;border:0;border-radius:11px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--border);text-align:left}
   .rdec:hover{box-shadow:inset 0 0 0 1px var(--border-4)}
   .rdec.proposed{background:transparent;box-shadow:none;border:1px dashed var(--v-proposed-line)}
-  .rdec .t{font-family:var(--serif);font-weight:400;font-size:16px;line-height:1.25;color:var(--ink-bright)}
+  .rdec .t{font-family:var(--v-font-display);font-weight: 600; letter-spacing: -.008em;font-size:16px;line-height:1.25;color:var(--ink-bright)}
   .rdec .m{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-6)}
   .rdec .m.needs{color:var(--attention-ink)}
   .rrow{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:8px 8px;border:0;border-radius:8px;background:transparent;text-align:left}
@@ -375,7 +375,7 @@
   .subrow:hover{background:var(--hover)}
 
   /* ---- After the review: views are named by their question, data says where it came from, Vowe shows its working. */
-  .room-identity .q{font-family:var(--serif);font-style:italic;font-size:15px;color:var(--ink-6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .room-identity .q{font-family:var(--v-font-sans);font-size:15px;color:var(--ink-6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .lineage{flex:0 0 auto;height:22px;padding:0 7px;border:0;border-radius:6px;background:transparent;font-size:11.5px;color:var(--ink-8);white-space:nowrap}
   .lineage:hover{background:var(--hover-strong);color:var(--ink-3)}
   .prov{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:7px;border:1px dashed var(--border-4);font-size:11.5px;color:var(--ink-6);white-space:nowrap}

@@ -24,10 +24,10 @@
 .v-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ------------------------------------------------------------ type styles */
-.v-display { font-family: var(--v-font-serif); font-weight: 400; font-size: 56px; line-height: 1.0; letter-spacing: -0.02em; color: var(--v-fg); }
+.v-display { font-family: var(--v-font-display); font-weight: 600; font-size:40px; line-height: 1.0; letter-spacing: -.022em; color: var(--v-fg); }
 .v-display em, .v-title em { font-style: italic; color: var(--v-fg-3); }
-.v-title { font-family: var(--v-font-serif); font-weight: 400; font-size: 30px; line-height: 1.1; letter-spacing: -0.012em; color: var(--v-fg); }
-.v-title-sm { font-family: var(--v-font-serif); font-size: 21px; line-height: 1.2; color: var(--v-fg); }
+.v-title { font-family: var(--v-font-display); font-weight: 600; font-size:25px; line-height: 1.1; letter-spacing: -.022em; color: var(--v-fg); }
+.v-title-sm { font-family: var(--v-font-display); font-weight: 600; letter-spacing: -.016em; font-size:19px; line-height: 1.2; color: var(--v-fg); }
 .v-h1 { font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.014em; color: var(--v-fg); }
 .v-h2 { font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -0.006em; color: var(--v-fg); }
 .v-body { font-size: 13.5px; line-height: 1.5; color: var(--v-fg-2); }

@@ -29,6 +29,6 @@
   /* people keep their own tones */
   --me:var(--v-person-1);--peer:var(--v-person-2);--peer2:var(--v-person-3);--peer3:var(--v-person-4);--peer4:var(--v-person-5);
   /* type */
-  --font:var(--v-font-sans);--serif:var(--v-font-serif);--mono:var(--v-font-mono);
+  --font:var(--v-font-sans);--mono:var(--v-font-mono);
   --ease:var(--v-ease);--studio-ease:var(--v-ease);
 }

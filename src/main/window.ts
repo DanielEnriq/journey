@@ -1,4 +1,4 @@
-import { BrowserWindow, session, shell } from 'electron';
+import { BrowserWindow, session, shell, systemPreferences } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -67,6 +67,15 @@ export function createMainWindow(): BrowserWindow {
   win.on('enter-full-screen', fullScreen);
   win.on('leave-full-screen', fullScreen);
   win.webContents.on('did-finish-load', fullScreen);
+
+  // Selection and focus take the accent colour from System Settings, as native controls do; a later
+  // sheet wins, so a change just adds another.
+  if (process.platform === 'darwin') {
+    const accent = () => void win.webContents.insertCSS(`:root { --v-accent: #${systemPreferences.getAccentColor().slice(0, 6)}; }`);
+    win.webContents.on('did-finish-load', accent);
+    const changed = systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', accent);
+    win.on('closed', () => systemPreferences.unsubscribeNotification(changed));
+  }
 
   win.loadFile(join(RENDERER_DIR, 'vowe.html'));
   return win;

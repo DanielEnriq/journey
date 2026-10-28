@@ -229,7 +229,7 @@
 .vm-gate-quiet { gap: 10px; }
 .vm-gate-head { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .vm-gate-from { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-6); }
-.vm-gate-room { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 32px; line-height: 1.05; letter-spacing: -.016em; color: var(--ink-bright); }
+.vm-gate-room { margin: 0; font-family: var(--v-font-display); font-weight: 600; font-size:26px; line-height: 1.05; letter-spacing: -.022em; color: var(--ink-bright); }
 .vm-gate-role { font-size: 12px; color: var(--ink-7); }
 .vm-gate-role b { font-weight: 600; color: var(--ink-3); }
 .vm-gate-title { margin: 4px 0 0; font-size: 18px; line-height: 1.25; font-weight: 700; letter-spacing: -.016em; color: var(--ink-bright); }
