@@ -137,6 +137,9 @@
 .vm-pillsel:hover, .vm-pillsel[aria-expanded='true'] { box-shadow: inset 0 0 0 1px var(--border-4); }
 .vm-link-url { display: flex; align-items: center; gap: 10px; }
 .vm-link-url .vm-mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+.vm-link-text { appearance: none; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+.vm-link-text:hover { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.vm-link-text:focus-visible { outline: 2px solid var(--v-focus); outline-offset: 2px; border-radius: 2px; }
 .vm-btn-copy { min-width: 92px; }
 .vm-btn-copy.vm-copied { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
 .vm-link-foot { display: flex; align-items: center; gap: 8px; }

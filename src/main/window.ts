@@ -12,9 +12,10 @@ export function isAppPage(url: string): boolean {
 }
 
 /**
- * Electron grants every permission by default. Allow only what calls need, the microphone, and
- * only to our own page; camera, screen capture, notifications, etc. are refused. The OS has its
- * own microphone prompt on top of this (calls:requestMicrophone).
+ * Electron grants every permission by default. Allow only what the app needs, and only to our own
+ * page: the microphone for calls, and writing to the clipboard for its Copy buttons. Camera, screen
+ * capture, reading the clipboard, notifications, etc. are refused. The OS has its own microphone
+ * prompt on top of this (calls:requestMicrophone).
  */
 export function restrictPermissions() {
   const { defaultSession } = session;
@@ -24,7 +25,8 @@ export function restrictPermissions() {
       'mediaTypes' in details &&
       details.mediaTypes?.length &&
       details.mediaTypes.every((type) => type === 'audio');
-    callback(Boolean(audioOnly) && isAppPage(details.requestingUrl));
+    const copy = permission === 'clipboard-sanitized-write';
+    callback((Boolean(audioOnly) || copy) && isAppPage(details.requestingUrl));
   });
   // Synchronous checks (e.g. enumerateDevices labels, permissions.query) follow the same rule.
   defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) => {

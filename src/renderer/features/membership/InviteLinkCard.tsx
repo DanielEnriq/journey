@@ -111,7 +111,7 @@ export function InviteLinkCard({ link, now, suggestedDomain, canManage, onCreate
         <span class="vm-link-ico"><Icon.link /></span>
         {live.url ? (
           <>
-            <span class="vm-mono" title="Copy to share">{live.url}</span>
+            <button type="button" class="vm-mono vm-link-text" title="Click to copy" aria-label="Copy invite link" onClick={() => void copy(live.url!)}>{live.url}</button>
             <button type="button" class={`vm-btn vm-btn-copy${copied ? ' vm-copied' : ''}`} onClick={() => void copy(live.url!)} aria-live="polite">
               {copied && <Icon.check />}
               {copied ? 'Copied' : 'Copy link'}
