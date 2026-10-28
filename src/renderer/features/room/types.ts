@@ -43,18 +43,18 @@ export interface RoomSummary {
   spaceId?: string;
   /** The room's first repository (its Space's, its own first); null when the Space has none. */
   repo: string | null;
-  /** Every repository the room can use: its Space's. Absent where that isn't known (the demo). */
+  /** Every repository the room can use: its Space's. Absent until known. */
   repos?: string[];
   /**
-   * When the room was kept; null while it's quick. Absent in the demo, where every room is kept. A room keeps
+   * When the room was kept; null while it's quick; absent until known. A room keeps
    * itself once it holds a decision or a plan; a quick one that goes quiet drops into Earlier.
    */
   keptAt?: string | null;
   /** Who is in the room's call right now, you included once you join; empty when there is no call. */
   inCall: PersonRef[];
-  /** Who has the room open right now, in the call or not; absent where that isn't known (the demo). */
+  /** Who has the room open right now, in the call or not; absent until known. */
   here?: PersonRef[];
-  /** Your role in the room; absent in the demo. Viewers read, comment and listen. */
+  /** Your role in the room; absent until known. Viewers read, comment and listen. */
   role?: 'owner' | 'member' | 'viewer';
   /** What needs you here, in a few words; null when nothing does. The only amber in the list. */
   needs: string | null;
@@ -63,8 +63,6 @@ export interface RoomSummary {
   activityAt: string | null;
   /** What its coding agents are doing: one at least is running, or one waits on you; null when none is. Absent until known. */
   work?: 'running' | 'waiting' | null;
-  /** Rooms with a scripted example canvas. Only Payment Reliability has one. */
-  demo?: 'payments';
 }
 
 /** Kind is felt from shape: queues are pills with rails, stores have a lip, externals are washed out. */

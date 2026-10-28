@@ -4,7 +4,7 @@ import type { RoomDataSource } from '../../../features/room/data/sources.js';
 import type { SpaceSummary } from '../../../features/room/types.js';
 import { NO_FILTER, type SidebarFilter } from './sidebar-model.js';
 
-// Where the sidebar reads Spaces from: the workspace on screen (your rooms or the demo's), set once by the app, so
+// Where the sidebar reads Spaces from: the workspace, set once by the app, so
 // every screen's sidebar sees the same Spaces without each passing them down. And what its filter menu chose,
 // kept on this machine like the sidebar's other choices (prefs.ts): every read and write tolerates no storage.
 

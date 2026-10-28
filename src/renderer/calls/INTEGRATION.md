@@ -45,7 +45,7 @@ real app with a CSP error:
 connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud
 ```
 
-That's the same allowance `index.html` has. For self-hosted LiveKit, add its host instead. A local dev server
+That's the allowance `vowe.html` has. For self-hosted LiveKit, add its host instead. A local dev server
 would need `ws://127.0.0.1:7880 http://127.0.0.1:7880`, which belongs in development builds only.
 
 Microphone permission needs nothing more: `restrictPermissions` (`main/window.ts`) already lets `vowe.html`

@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const RENDERER_DIR = join(import.meta.dirname, '..', 'renderer');
-/** vowe.html is the app; index.html is the earlier setup screen, reachable from its developer menu. */
-const RENDERER_URLS = new Set(['vowe.html', 'index.html'].map((page) => pathToFileURL(join(RENDERER_DIR, page)).href));
+/** vowe.html is the app, and its only page. */
+const RENDERER_URLS = new Set([pathToFileURL(join(RENDERER_DIR, 'vowe.html')).href]);
 
 /** True only for our own bundled pages; IPC handlers use this to reject other senders. */
 export function isAppPage(url: string): boolean {
@@ -34,15 +34,7 @@ export function restrictPermissions() {
   });
 }
 
-export interface WindowOptions {
-  /**
-   * The development preview: no preload, so the page has no bridge to the main process, auth or any
-   * service, and runs on its mock data alone.
-   */
-  preview?: boolean;
-}
-
-export function createMainWindow({ preview = false }: WindowOptions = {}): BrowserWindow {
+export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -54,7 +46,7 @@ export function createMainWindow({ preview = false }: WindowOptions = {}): Brows
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 18, y: 14 }, vibrancy: 'sidebar' as const, backgroundColor: '#00000000' } : {}),
     webPreferences: {
       // CommonJS: sandboxed preloads can't be ES modules.
-      ...(preview ? {} : { preload: join(import.meta.dirname, '..', 'preload', 'index.cjs') }),
+      preload: join(import.meta.dirname, '..', 'preload', 'index.cjs'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,

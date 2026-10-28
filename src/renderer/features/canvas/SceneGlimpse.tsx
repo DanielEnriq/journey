@@ -4,8 +4,8 @@ import type { Scene } from '../../../shared/canvas/index.js';
 import { Inside } from '../room/canvas/Part.js';
 import type { PartDef } from '../room/types.js';
 
-// A real room's last shared view, as the room's preview shows it: the same still as the demo's Glimpse
-// (room/preview/Glimpse.tsx), drawn from a saved canvas's scene. Nothing to press, no camera, no
+// A real room's last shared view, as the room's preview shows it: a still,
+// drawn from a saved canvas's scene. Nothing to press, no camera, no
 // cursors: the canvas itself is in the call. The still sits in its own `.room-screen` scope, so the room's part
 // styles (scoped to rooms) draw it the same on Home's Inbox as in a room.
 

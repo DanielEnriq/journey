@@ -24,20 +24,16 @@ import { localWork, realStatus, realWorkspace, repositories, roomCheckouts } fro
 // ui/pass2 never fetch: this reads what they show from the real workspace (rooms and their records,
 // invitations, rooms.checkout, each room's canvas, this machine's repositories and their Claude Code
 // work) and maps it to their view models. What Journey can't know is passed as null, so it's left out.
-//
-// The demo (Payment Reliability, from the developer menu) shows the same pages over its example rooms
-// only: no repositories, invitations, work or canvases are read for it, and nothing real appears in it.
 
 export type HomePage = ShellRoute;
 
 export interface HomeProps {
   page: HomePage;
-  demo: boolean;
   rooms: RoomSummary[];
-  /** The composer's repositories: this machine's, or the demo's examples. */
+  /** The composer's repositories: this machine's. */
   repos: RepoChoice[];
   repoNote: string;
-  /** Adds a repository from disk for the composer; absent in the demo. */
+  /** Adds a repository from disk for the composer. */
   onAddRepo?: () => Promise<RepoChoice | null>;
   /** Why the rooms couldn't be read; shown instead of pretending there are none. */
   notice: string | null;
@@ -45,15 +41,12 @@ export interface HomeProps {
   onOpenRoom(id: string): void;
   /** Makes the room and opens its preview; rejects with a message to show. Never starts a call. */
   onCreate(room: NewRoom): Promise<void>;
-  /** New room, in the repository whose + was pressed in the sidebar (null: none chosen). */
   /** New room, in a Space (null: none chosen). */
   onNewRoom(space?: string | null): void;
   /** Joins a room's call (asking first if you're in another); absent: opening the room offers it. */
   onJoinCall?(id: string): void;
-  /** Absent in the demo: its pages have no invitations or link field. */
+  /** Opens an invite from a pasted link. */
   onOpenInvite?(key: InviteKey): void;
-  /** The New room sheet, when open. */
-  overlay?: ComponentChildren;
   /** An invite being opened: shown in place of the page. */
   invite?: ComponentChildren;
   /** The workspace's Inbox; when absent, the one in `activeInbox`. With neither, Home shows its rooms instead. */
@@ -65,7 +58,6 @@ export interface HomeProps {
 
 export function Home(p: HomeProps) {
   const { user } = useStore(account);
-  const real = !p.demo;
   const status = useStore(realStatus);
   const [theme, pickTheme] = useThemeSetting();
   const gpt = useStore(chatgpt);
@@ -78,36 +70,35 @@ export function Home(p: HomeProps) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // What's read for your real rooms only.
-  const [invitations, setInvitations] = useState<IncomingInvitation[] | null>(real ? null : []);
-  const [local, setLocal] = useState<Repository[] | null>(real ? null : []);
+  const [invitations, setInvitations] = useState<IncomingInvitation[] | null>(null);
+  const [local, setLocal] = useState<Repository[] | null>(null);
   const [checkouts, setCheckouts] = useState(() => new Map<string, RoomCheckout | null>());
   const [work, setWork] = useState<WorkItem[] | null>(null);
   const [found, setFound] = useState<DetectedRepository[] | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
   const [repoError, setRepoError] = useState<string | null>(null);
 
-  const reloadRepos = () => { if (real) repositories.list().then(setLocal, () => setLocal([])); };
-  useEffect(() => { if (real) realWorkspace.invites.mine().then(setInvitations, () => setInvitations([])); }, [real, p.rooms.length]);
-  // The composer's list changes when the New room sheet adds one; re-read ours with it.
-  useEffect(reloadRepos, [real, p.repos]);
+  const reloadRepos = () => { repositories.list().then(setLocal, () => setLocal([])); };
+  useEffect(() => { realWorkspace.invites.mine().then(setInvitations, () => setInvitations([])); }, [p.rooms.length]);
+  // The composer's list changes when it adds one; re-read ours with it.
+  useEffect(reloadRepos, [p.repos]);
   const repoRooms = p.rooms.filter((r) => r.repo).map((r) => r.id).join(',');
-  useEffect(() => { if (real) roomCheckouts(repoRooms ? repoRooms.split(',') : []).then(setCheckouts); }, [real, repoRooms, local]);
+  useEffect(() => { roomCheckouts(repoRooms ? repoRooms.split(',') : []).then(setCheckouts); }, [repoRooms, local]);
   useEffect(() => {
-    if (!real || !local) return;
+    if (!local) return;
     localWork(local).then((all) => setWork(all.map(({ repository, stream: w }) => ({
       id: w.id, title: w.title, agent: w.agent, repository, branch: w.branch, status: w.status, lastActivity: w.lastActivity, lastActivityAt: w.lastActivityAt,
     }))), () => setWork(null));
-  }, [real, local]);
+  }, [local]);
 
-  // You have no rooms once they've been read (or right away in the demo): Home welcomes you instead.
-  const noRooms = !p.rooms.length && !(real && status.state === 'loading');
+  // You have no rooms once they've been read: Home welcomes you instead.
+  const noRooms = !p.rooms.length && status.state !== 'loading';
 
   // Rooms whose repository has been checked and isn't cloned on this machine (null means checked, not found).
   const missingHere = new Set(p.rooms.filter((r) => r.repo && checkouts.get(r.id) === null).map((r) => r.id));
 
-  const addRepo = real ? () => { setRepoError(null); repositories.add().then(reloadRepos, (err: Error) => setRepoError(err.message)); } : undefined;
-  const findRepos = real ? () => { setFound(null); setSheet('find'); repositories.detect().then(setFound, () => setFound([])); } : undefined;
+  const addRepo = () => { setRepoError(null); repositories.add().then(reloadRepos, (err: Error) => setRepoError(err.message)); };
+  const findRepos = () => { setFound(null); setSheet('find'); repositories.detect().then(setFound, () => setFound([])); };
   const addFound = (path: string) => {
     setAdding(path);
     repositories.addDetected(path).then(
@@ -139,7 +130,7 @@ export function Home(p: HomeProps) {
     // The Inbox is bound as soon as you're signed in; until then, your rooms on their own.
     const rooms = (needs?: Record<string, number>, now = new Date().toISOString()) => (
       <YourRooms rooms={p.rooms} now={now} needs={needs ?? {}} scene={(id) => inbox ? inbox.context(id).then((c) => c.scene) : Promise.resolve(null)}
-        onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} work={real ? work : null} missing={missingHere} />
+        onRoom={p.onOpenRoom} onJoin={p.onJoinCall ?? p.onOpenRoom} work={work} missing={missingHere} />
     );
     page = inbox
       ? <InboxHome source={inbox} firstName={firstName(user)} selected={p.selected} onSelect={p.onSelect} onOpenRoom={p.onOpenRoom}
@@ -165,7 +156,6 @@ export function Home(p: HomeProps) {
         </Sheet>
       )}
       {sheet === 'find' && <FindRepositoriesSheet found={found} adding={adding} onAdd={addFound} onPick={addRepo} onClose={() => setSheet(null)} />}
-      {p.overlay}
       {leaving && <SessionSplash label="Signing out…" account={me} />}
       <ChatGptWelcome />
     </>

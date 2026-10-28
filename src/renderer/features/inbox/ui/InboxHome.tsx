@@ -30,8 +30,7 @@ export interface InboxHomeProps {
   idle?(st: InboxState): ComponentChildren;
   /** Something Home itself couldn't do (adding a repository, say), shown under the greeting. */
   notice?: string | null;
-  /** Opens an invite from a pasted link (email invitations arrive as items). Absent in the demo, where the field
-      is still there but says links open in your own workspace: the demo never reads a real invite. */
+  /** Opens an invite from a pasted link (email invitations arrive as items). */
   onOpenInvite?(key: InviteKey): void;
 }
 
@@ -145,7 +144,7 @@ export function InboxHome(p: InboxHomeProps) {
         ) : null}
         {foot === 'link' ? (
           <section class="vi-sec" aria-label="Open an invite link">
-            <div class="vi-link"><JoinByLink onOpen={p.onOpenInvite ?? (() => setToast({ text: 'Invite links open in your own workspace, not in the demo.' }))} autoFocus /></div>
+            <div class="vi-link">{p.onOpenInvite ? <JoinByLink onOpen={p.onOpenInvite} autoFocus /> : null}</div>
           </section>
         ) : foot ? (
           <section class="vi-sec" aria-label={FOOT_TITLE[foot]}>

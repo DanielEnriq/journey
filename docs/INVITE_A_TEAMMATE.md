@@ -7,8 +7,6 @@ teammate's side, from installing to joining, is in [ENGINEER_SETUP.md](ENGINEER_
 
 - **Real rooms** live in the hosted Supabase project, at `#/room/<uuid>`. Their threads, decisions and
   canvas persist, and only members can read them. These are the rooms Share works for.
-- **The Payment Reliability demo** (`#/demo/…`) is a scripted fixture on your machine. It has no database
-  rows, so it can't be shared, and its Share button doesn't make real invitations.
 
 Inviting someone adds them to that exact room. No copy is made, and the room's contents stay as they are.
 

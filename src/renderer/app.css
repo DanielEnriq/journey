@@ -29,28 +29,3 @@ html:has(.vh-app, .win.side-open),html:has(.vh-app, .win.side-open) body,#app:ha
 /* Pass 2 parts sized width:100% (or max-width:100%) plus padding ran past their container, on the board too. */
 .vh-choice,.vh-name-input,.vh-list-row,.vh-gate-card{box-sizing:border-box}
 
-/* ---------- Reference sheets: the design's static boards, scaled to the window width. ---------- */
-.reference{position:fixed;inset:0;display:grid;grid-template-rows:40px minmax(0,1fr);background:#0c0d0f;color:#d7d9de;font-family:'Satoshi',system-ui,sans-serif;font-size:13px}
-.reference .bar{display:flex;align-items:center;gap:6px;padding-left:86px;padding-right:14px;border-bottom:1px solid #ffffff14;-webkit-app-region:drag}
-.reference .bar button{-webkit-app-region:no-drag;appearance:none;border:0;background:transparent;color:#9a9ea8;font:inherit;padding:5px 10px;border-radius:6px;cursor:pointer}
-.reference .bar button:hover{background:#ffffff0f;color:#e8e9ec}
-.reference .bar button.on{background:#ffffff17;color:#f2f3f5}
-.reference .bar .grow{flex:1}
-.reference .scroll{overflow:auto}
-.reference .sheet{position:relative;overflow:hidden}
-.reference iframe{position:absolute;left:0;top:0;width:1440px;border:0;transform-origin:0 0;background:#0c0d0f}
-
-/* ---------- Dev menu (Ctrl+Shift+D): every screen and scenario, and which data is mock. ---------- */
-.devmenu{position:fixed;right:16px;bottom:16px;z-index:100;width:280px;padding:12px;border-radius:10px;background:var(--v-surface-raised);color:var(--v-fg-2);box-shadow:var(--v-shadow-3),inset 0 0 0 1px var(--v-line-2);font:12.5px/1.45 var(--v-font-sans);-webkit-app-region:no-drag}
-.devmenu h2{margin:0 0 8px;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--v-fg-3);display:flex;justify-content:space-between;align-items:center}
-.devmenu h2 button{appearance:none;border:0;background:none;color:var(--v-fg-3);cursor:pointer;font:inherit;text-transform:none;letter-spacing:0}
-.devmenu .grp{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
-.devmenu .grp b{width:100%;font-weight:500;color:var(--v-fg-3);font-size:11.5px}
-.devmenu .grp button{appearance:none;border:0;background:var(--v-surface-hover);color:var(--v-fg-2);font:inherit;padding:4px 8px;border-radius:6px;cursor:pointer}
-.devmenu .grp button:hover{background:var(--v-surface-press);color:var(--v-fg)}
-.devmenu .grp button.on{background:var(--v-fg);color:var(--v-bg)}
-.devmenu .note{margin:0;padding-top:8px;border-top:1px solid var(--v-line);color:var(--v-fg-3);font-size:11.5px}
-.devmenu code{font-family:var(--v-font-mono);font-size:11px;color:var(--v-info-fg)}
-
-/* ---------- Room panel on fixtures (Dev menu): the right column alone, as the design canvas draws it. ---------- */
-.win.panel-dev{display:flex;justify-content:center;padding-top:40px;background:var(--app)}

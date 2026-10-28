@@ -2,7 +2,7 @@ import type { CallLink } from './presence.js';
 import type { CallStatus } from './session.js';
 
 // The call outlives the screen you're on. Going Home or to another room is navigation; only hanging up,
-// leaving the room, signing out or crossing between the demo and your rooms ends a call. Pure, so the app
+// leaving the room or signing out ends a call. Pure, so the app
 // and its tests agree on when the call's room stays mounted (hidden) and when joining asks first.
 
 /** The voice connection's own state, where the call has one (LiveKit's CallService). */

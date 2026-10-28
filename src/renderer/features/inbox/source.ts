@@ -66,7 +66,7 @@ export interface InboxSource {
 }
 
 /**
- * The Inbox of the workspace on screen (your real rooms, or the demo's), set by the app when the workspace
+ * The Inbox of your rooms, set by the app when the workspace
  * changes. Screens that only need the count or the source (the sidebar in a room, Home) read it from here,
  * so no screen has to be handed it through every layer.
  */

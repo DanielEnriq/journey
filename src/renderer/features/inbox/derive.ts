@@ -364,7 +364,7 @@ const DIGEST: Record<string, [string, string]> = {
   question: ['question', 'questions'], finding: ['finding', 'findings'], resolved: ['resolved', 'resolved'],
   joined: ['joined', 'joined'], left: ['left', 'left'], removed: ['removed', 'removed'], role: ['role change', 'role changes'], repository: ['repository change', 'repository changes'],
   'call-started': ['call', 'calls'], 'call-left': ['left a call', 'left a call'],
-  // A sentence already written in full (the demo's example events); shown verbatim, about the room.
+  // A sentence already written in full; shown verbatim, about the room.
   note: ['update', 'updates'],
 };
 const VERB: Record<string, string> = {

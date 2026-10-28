@@ -4,20 +4,18 @@ import { Store } from './store.js';
 // Sign in with ChatGPT, as the renderer sees it: status only. The main process holds the tokens
 // (integrations/openai/chatgpt.ts). Separate from Google sign-in, which is who you are in rooms.
 
-/** `undefined` until main answers; `null` in the preview, which has no main process. */
+/** `undefined` until main answers; `null` when it couldn't. */
 export const chatgpt = new Store<{ status: ChatGptStatus | null | undefined; busy: boolean; error: string | null }>({
-  status: window.journey ? undefined : null,
+  status: undefined,
   busy: false,
   error: null,
 });
 
-if (window.journey) {
-  window.journey.chatgpt.onChange((status) => chatgpt.setState({ status }));
-  window.journey.chatgpt.status().then(
-    (status) => { if (chatgpt.state.status === undefined) chatgpt.setState({ status }); },
-    () => { if (chatgpt.state.status === undefined) chatgpt.setState({ status: null }); },
-  );
-}
+window.journey.chatgpt.onChange((status) => chatgpt.setState({ status }));
+window.journey.chatgpt.status().then(
+  (status) => { if (chatgpt.state.status === undefined) chatgpt.setState({ status }); },
+  () => { if (chatgpt.state.status === undefined) chatgpt.setState({ status: null }); },
+);
 
 async function run(action: () => Promise<unknown>) {
   chatgpt.setState({ busy: true, error: null });

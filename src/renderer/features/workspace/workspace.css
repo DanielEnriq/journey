@@ -177,5 +177,3 @@
 }
 
 /* ---------- The development preview's way into the developer menu. ---------- */
-.devpill{position:fixed;right:14px;bottom:12px;z-index:90;height:24px;padding:0 10px;border:0;border-radius:12px;background:var(--v-surface-raised);color:var(--v-fg-3);font:500 11px/1 var(--v-font-mono);letter-spacing:.02em;box-shadow:var(--v-shadow-2),inset 0 0 0 1px var(--v-line-2);cursor:pointer;-webkit-app-region:no-drag}
-.devpill:hover{color:var(--v-fg)}

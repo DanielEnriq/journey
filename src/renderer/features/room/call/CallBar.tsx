@@ -37,7 +37,7 @@ export interface CallControls {
   voweOn?: boolean;
   /** Your mic can't be used here (a viewer only listens): it's off, and says why. */
   micOff?: string;
-  /** A real call's mic: a click (or Enter or Space) turns it on or off, instead of the demo's hold-to-talk. */
+  /** A real call's mic: a click (or Enter or Space) turns it on or off. */
   micToggle?(): void;
   /** Disconnecting: the bar stays, but leave can't be pressed twice. */
   leaving: boolean;

@@ -89,7 +89,7 @@ export interface RoomCard {
 export type NeedItem =
   | { kind: 'invitation'; invitation: IncomingInvitation }
   | { kind: 'signature'; id: string; roomId: string; roomName: string; title: string; version: number; proposedBy: string }
-  /** Journey addition: a room's own need, in its words (the demo's rooms; RoomSummary.needs). */
+  /** Journey addition: a room's own need, in its words (RoomSummary.needs). */
   | { kind: 'room'; roomId: string; roomName: string; text: string };
 
 /* -------------------------------------------------------------------- work */

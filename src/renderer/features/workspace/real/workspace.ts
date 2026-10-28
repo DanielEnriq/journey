@@ -342,7 +342,7 @@ let workTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Starts listening once someone is signed in; safe to call more than once. */
 export function startRealWorkspace() {
-  if (started || !window.journey) return;
+  if (started) return;
   started = true;
   const j = api();
   j.rooms.onEvent((e) => {

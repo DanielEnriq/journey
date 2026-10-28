@@ -1,4 +1,3 @@
-import { mockLog } from '../../shared/mock.js';
 import { Store } from '../../shared/store.js';
 import type { CallDataSource } from '../room/data/sources.js';
 
@@ -44,13 +43,6 @@ export class CallSession {
     if (!roomId) return;
     this.store.setState({ status: 'leaving' });
     try { await this.call.leave(roomId); } finally { this.store.setState({ roomId: null, status: 'idle', error: null }); }
-  }
-
-  /** Developer menu: the connection drops, as a network change would. */
-  drop() {
-    if (this.state.status !== 'connected') return;
-    mockLog('call', 'connection dropped (dev menu)');
-    this.store.setState({ status: 'dropped' });
   }
 
   /** The real call's connection was lost for good: say so, and offer a rejoin. */

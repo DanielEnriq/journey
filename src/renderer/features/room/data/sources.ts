@@ -2,14 +2,13 @@ import type { Scene } from '../../../../shared/canvas/index.js';
 import type { ChangedFile, PersonRef, RoomSummary, SpaceSummary } from '../types.js';
 import type { RoomPanelProps } from '../panel/types.js';
 
-// The seams between the app and the services behind it. Two workspaces implement them: the real one
+// The seams between the app and the services behind it, implemented by the workspace
 // (features/workspace/real: Supabase rooms and their record, Realtime presence, WorkContextService and
-// Claude Code transcripts over IPC) and the demo (features/workspace/mock: the same shapes, kept in this
-// window). The components only ever see these shapes.
+// Claude Code transcripts over IPC). The components only ever see these shapes.
 
 /* ---------- Rooms: persistent, listed by the workspace, previewed outside the call. ---------- */
 
-/** A repository the room picker offers: one added on this machine, or a demo example. */
+/** A repository the room picker offers: one added on this machine. */
 export interface RepoChoice { id: string; label: string }
 
 /** `repo` is a RepoChoice id. `spaceId`: the Space to make it in; your first Space when left out. */
@@ -77,7 +76,7 @@ export interface RoomDataSource {
   enter?(roomId: string): Promise<void>;
   /** You closed the room. */
   exit?(roomId: string): Promise<void>;
-  /** Repositories a room can be connected to; absent where rooms can't be (the demo). */
+  /** Repositories a room can be connected to; absent where rooms can't be. */
   repos?(): Promise<RepoChoice[]>;
   /** Adds a repository on this machine with a folder picker; null if cancelled. */
   addRepo?(): Promise<RepoChoice | null>;
@@ -170,7 +169,7 @@ export interface RoomWorkstream {
 export interface RoomWorkContext {
   /** The room's first repository; null when its Space has none. */
   repo: string | null;
-  /** All of the room's repositories, and whether each is cloned on this machine. Absent in the demo. */
+  /** All of the room's repositories, and whether each is cloned on this machine. */
   repos?: { repo: string; here: boolean }[];
   generatedAt: string;
   workstreams: RoomWorkstream[];

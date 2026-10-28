@@ -27,7 +27,7 @@ import type { CallDataSource, RoomDataSource, WorkstreamDataSource } from './dat
 import { freshRoom } from './fresh.js';
 import { repoName } from '../../ui/pass2/shell/sidebar-model.js';
 import { CallButton, RoomPreview } from './preview/RoomPreview.js';
-import { Chrome, Lights, RoomTitle, Viewers, Who } from './shell.js';
+import { Chrome, Lights, RoomTitle, Viewers } from './shell.js';
 import type { VoweServices } from '../vowe-room/contracts/services.js';
 import { RealRoom } from '../vowe-room/host/RealRoom.js';
 import { AccountFoot } from '../../shared/components/Account.js';
@@ -38,8 +38,7 @@ import type { Chime, RoomSummary } from './types.js';
 // A room, in one of two states. Outside the call it is a preview: what the room is for, who is in it and
 // in its call, what changed, the work behind it. Joining the call opens the Vowe room in the same window,
 // under the same band: the room's semantic canvas and its Desk over the room's record. Leaving it comes
-// back to the preview, still in the room. The demo's rooms are the same screens over example data; real
-// rooms also carry their membership (Share, People) and a LiveKit voice call.
+// back to the preview, still in the room. A room also carries its membership (Share, People) and a LiveKit voice call.
 
 export interface RoomScreenProps {
   /** The workspace: rooms, calls and work context. */
@@ -48,7 +47,7 @@ export interface RoomScreenProps {
   /** Show the call: the route asks for it and the session is in this room's call. */
   inCall: boolean;
   session: CallSession;
-  /** Where the room's canvas is kept: main's hub over IPC for a real room, this window's storage in the demo. */
+  /** Where the room's canvas is kept: main's hub over IPC. */
   canvas: CanvasTransport;
   /** The room's record (decisions, plans, threads, attention): the Desk's and the Inbox's services. */
   vowe: VoweServices;
@@ -56,8 +55,6 @@ export interface RoomScreenProps {
   agentReply(roomId: string, threadId: string, body: string): Promise<void>;
   /** You, as the record names you. */
   self(): string;
-  /** The demo's example rooms: no audio, and Vowe isn't asked about them. */
-  example?: boolean;
   /** Why the room's repository couldn't be attached when it was made. */
   attachError?: string;
   light: boolean;
@@ -68,11 +65,9 @@ export interface RoomScreenProps {
   onJoin(opts?: { talk: boolean }): void;
   /** Ends your part in the call; the app decides what's on screen after. */
   onLeave(): void | Promise<void>;
-  /** Drawn inside the window, over everything: the New room sheet. */
-  overlay?: ComponentChildren;
-  /** Who's in the room and their invitations; absent in the demo. */
+  /** Who's in the room and their invitations. */
   membership?: MembershipSource;
-  /** The room's voice call; absent in the demo, whose call has no audio. */
+  /** The room's voice call; null until it's connected. */
   voice?: CallService | null;
   /** Kept mounted for its call while you're elsewhere: drawn hidden and inert, deaf to the keyboard. */
   hidden?: boolean;
@@ -188,7 +183,6 @@ function PreviewRoom(props: InnerProps) {
   return (
     <div class={`win ${light ? 'light ' : ''}${side ? 'side-open' : ''} outside`}>
       <Lights />
-      {props.overlay}
       {ui.toasts}
       <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} actions={<><Viewers people={looking} />{call}{ui.share}</>}
         desk={summary ? inspector : null} deskName="inspector" toggleDesk={toggleInspector} />
@@ -210,7 +204,7 @@ function PreviewRoom(props: InnerProps) {
 
 /** The room's call: the Vowe room (its canvas, Desk and record) under the call bar, in a real room or the demo. */
 function CallRoom(props: InnerProps) {
-  const { sources, roomId, session, onOpenRoom, onNewRoom, onLeave, onJoin, light, ui, membership, voice, example } = props;
+  const { sources, roomId, session, onOpenRoom, onNewRoom, onLeave, onJoin, light, ui, membership, voice } = props;
   const snap = useVoice(voice);
   const now = useNow();
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -223,7 +217,7 @@ function CallRoom(props: InnerProps) {
   const [cc, setCc] = useState(false);
   // What this room calls its agent (renamed by an owner), for the call cluster on other screens.
   const [agentName, setAgentName] = useState('Vowe');
-  useEffect(() => { if (window.journey && !example) agentNameOf(roomId).then(setAgentName, () => { /* keeps Vowe */ }); }, [roomId]);
+  useEffect(() => { agentNameOf(roomId).then(setAgentName, () => { /* keeps Vowe */ }); }, [roomId]);
   const [partOpen, setPartOpen] = useState(false);
   const [chime, setChime] = useState<Chime>('pauses');
   // Read by your Vowe as you finish each thing you say: whether it chimes in, or waits to be asked.
@@ -234,10 +228,7 @@ function CallRoom(props: InnerProps) {
   const board = useMemo(() => new CanvasClient(roomId, props.canvas), [roomId, props.canvas]);
   useEffect(() => () => board.dispose(), [board]);
   // Asking Vowe by text, on this person's own model sign-in; what it changes on the canvas is shared.
-  // The demo's rooms are example data: Vowe isn't asked about them.
-  const asker = useMemo(() => window.journey && !example
-    ? new AskVowe(roomId, board, () => ({ userId: selfCloudId(), name: account.state.user?.name ?? null }))
-    : null, [board]);
+  const asker = useMemo(() => new AskVowe(roomId, board, () => ({ userId: selfCloudId(), name: account.state.user?.name ?? null })), [board]);
   useEffect(() => () => asker?.close(), [asker]);
 
   useEffect(() => { if (snap?.error === MICROPHONE_DENIED) micRefused = true; else if (snap?.micEnabled) micRefused = false; }, [snap?.error, snap?.micEnabled]);
@@ -252,17 +243,16 @@ function CallRoom(props: InnerProps) {
   const act = (p: Promise<void>) => p.then(() => setFailure(null), (err: Error) => { setFailure(err.message); throw err; });
 
   const others = summary?.inCall.filter((p) => p.tone !== 'me') ?? [];
-  // A real room's call is people talking on LiveKit; the demo's call has no audio, and its mic only
-  // pretends. Without a voice connection in a real room, the mic is off and says so.
+  // A room's call is people talking on LiveKit. Without a voice connection, the mic is off and says so.
   const live = !!(voice && snap);
-  const talks = example || can(summary?.role, 'talk');
+  const talks = can(summary?.role, 'talk');
   const micMuted = live ? !snap!.micEnabled : muted;
-  const voiceOff = !example && !voice ? 'Voice isn’t connected in this build' : undefined;
+  const voiceOff = !voice ? 'Voice isn’t connected in this build' : undefined;
   // Your Vowe in this call: it hears your microphone while it's on, answers on your model sign-in, and
   // speaks into the call as "Vowe (for you)". Its turns show in the Ask Vowe panel, like typed asks.
   const callVoice = useMemo(() => {
     const userId = selfCloudId();
-    if (!live || !asker || !voice || !window.journey?.voice || !userId) return null;
+    if (!live || !asker || !voice || !window.journey.voice || !userId) return null;
     return new CallVoice({
       api: window.journey,
       roomId,
@@ -279,7 +269,7 @@ function CallRoom(props: InnerProps) {
   const [vowe, setVowe] = useState<VoiceStatus | null>(null);
   const [voweError, setVoweError] = useState<string | null>(null);
   useEffect(() => {
-    const api = window.journey?.voice;
+    const api = window.journey.voice;
     if (!api || !asker) return;
     void api.status().then(setVowe, () => {});
     const offStatus = api.onStatus((s) => { setVowe(s); if (s.status === 'failed' && s.error) setVoweError(s.error); });
@@ -291,8 +281,8 @@ function CallRoom(props: InnerProps) {
   // Captions: your speech while your Vowe hears you, and what it says back.
   const captions = useMemo(() => new Captions(), [roomId]);
   useEffect(() => {
-    const api = window.journey?.voice;
-    if (!api || example) return;
+    const api = window.journey.voice;
+    if (!api) return;
     const offSpeech = api.onSpeech(({ roomId: r, speech }) => { if (r === roomId) captions.heard(speech); });
     const offSaid = api.onSaid(({ roomId: r, turnId, text }) => { if (r === roomId) captions.said(turnId, text); });
     return () => { offSpeech(); offSaid(); };
@@ -306,7 +296,7 @@ function CallRoom(props: InnerProps) {
     if (voweOn) void callVoice.stop().catch((err: Error) => setVoweError(err.message));
     else callVoice.start().catch((err: Error) => setVoweError(err.message)); // from the click: speech needs a gesture
   };
-  const agentOff = example ? 'The demo’s Vowe is example data' : live && !callVoice ? 'Vowe’s voice isn’t connected in this build' : undefined;
+  const agentOff = live && !callVoice ? 'Vowe’s voice isn’t connected in this build' : undefined;
   const micOff = !live ? undefined
     : !talks ? 'Viewers listen. Ask an owner to make you a member to talk.'
     : snap!.status !== 'connected' ? 'Connecting to the call…' : undefined;
@@ -417,7 +407,7 @@ function CallRoom(props: InnerProps) {
       agentReply={(threadId, body) => act(props.agentReply(roomId, threadId, body))}
       access={ui.access} role={summary?.role ?? ui.access?.members.find((m) => m.userId === ui.access?.viewerId)?.role ?? null} me={props.self()}
       call={call} people={[me, ...others]} speaking={speaking} inCall={summary?.inCall.length ?? 1} overlays={notices}
-      share={ui.share} openShare={ui.openShare} light={light} windowOverlay={<>{props.overlay}{ui.toasts}</>}
+      share={ui.share} openShare={ui.openShare} light={light} windowOverlay={ui.toasts}
       peoplePanel={ui.people && membership && ui.access ? (
         <div class="vm-desk-people">
           <MembersPanel access={ui.access} source={membership} now={now} onBack={() => ui.setPeople(false)} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} />
