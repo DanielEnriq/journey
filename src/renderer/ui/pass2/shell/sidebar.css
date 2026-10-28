@@ -144,3 +144,17 @@ body.vh-sb-resizing .vh-app, body.vh-sb-resizing .win { transition: none; }
 .vh-sb-hfilter { color: var(--v-signal); }
 .vh-sb-htitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vh-sb-earliern { margin-left: 4px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; }
+
+/* Who's in a room's call: small overlapping faces, each in its person's colour, ringed in the sidebar's own colour. */
+.vh-sb-faces { display: inline-flex; flex: none; padding-right: 2px; }
+.vh-sb-face { width: 16px; height: 16px; margin-left: -4px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font: 600 7.5px/1 var(--v-font-ui); font-style: normal; letter-spacing: 0; color: #fff; background: var(--v-person-2); box-shadow: 0 0 0 1.5px var(--v-bg-sunken); }
+.vh-sb-face:first-child { margin-left: 0; }
+.vh-sb-face.is-me { background: var(--v-person-1); }
+.vh-sb-face.is-p2 { background: var(--v-person-3); }
+.vh-sb-face.is-p3 { background: var(--v-person-4); }
+.vh-sb-face.is-more { background: var(--v-surface-selected); color: var(--v-fg-2); font-size: 8px; }
+.vh-sb-row:hover .vh-sb-face, .vh-sb-row[aria-current="page"] .vh-sb-face { box-shadow: 0 0 0 1.5px var(--v-surface-raised); }
+/* Agents working: a quiet spinner, as Claude Code marks a running session. */
+.vh-sb-running { flex: none; width: 10px; height: 10px; margin-right: 3px; border-radius: 50%; border: 1.5px solid var(--v-line-strong); border-top-color: var(--v-fg-3); animation: vh-sb-spin 0.9s linear infinite; }
+@keyframes vh-sb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .vh-sb-running { animation: none; border-top-color: var(--v-line-strong); } }

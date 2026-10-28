@@ -24,8 +24,10 @@ import { agentNameOf } from '../workspace/real/vowe-services.js';
 import type { CallControls } from './call/CallBar.js';
 import { Captions, captionText, type CaptionLine } from './captions.js';
 import type { CallDataSource, RoomDataSource, WorkstreamDataSource } from './data/sources.js';
+import { freshRoom } from './fresh.js';
+import { repoName } from '../../ui/pass2/shell/sidebar-model.js';
 import { CallButton, RoomPreview } from './preview/RoomPreview.js';
-import { Chrome, Lights, Who } from './shell.js';
+import { Chrome, Lights, RoomTitle, Viewers, Who } from './shell.js';
 import type { VoweServices } from '../vowe-room/contracts/services.js';
 import { RealRoom } from '../vowe-room/host/RealRoom.js';
 import { AccountFoot } from '../../shared/components/Account.js';
@@ -178,18 +180,22 @@ function PreviewRoom(props: InnerProps) {
   // Joining asks how first (muted or talking) where there's a sheet for it; otherwise it's immediate.
   const join = joinSheet ? () => setSheetOpen(!sheetOpen) : () => onJoin();
   const call = summary ? <CallButton room={summary} session={session} onJoin={join} sheet={sheetOpen ? joinSheet : undefined} /> : null;
+  // Who else has it open, not in its call: faded faces before the call's own.
+  const looking = summary?.here?.filter((p) => p.tone !== 'me' && !summary.inCall.some((c) => c.initials === p.initials)) ?? [];
+  const space = summary?.spaceId ? sources.room.spaces?.().find((s) => s.id === summary.spaceId)?.name ?? null : null;
+  const rename = summary && sources.room.update && (summary.role ?? 'owner') === 'owner'
+    ? (name: string) => sources.room.update!(roomId, { name }) : undefined;
   return (
     <div class={`win ${light ? 'light ' : ''}${side ? 'side-open' : ''} outside`}>
       <Lights />
       {props.overlay}
       {ui.toasts}
-      <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} actions={<>{call}{ui.share}</>}
+      <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} actions={<><Viewers people={looking} />{call}{ui.share}</>}
         desk={summary ? inspector : null} deskName="inspector" toggleDesk={toggleInspector} />
       <RoomSidebar rooms={rooms} current={roomId} side={side} onOpenRoom={onOpenRoom} onNewRoom={onNewRoom} />
       <main class="room">
         <div class="room-identity">
-          <h1>{summary?.name ?? 'Room'}</h1>
-          {summary?.repo && <span class="meta">{summary.repo}</span>}
+          <RoomTitle name={summary?.name ?? 'Room'} space={space ?? (summary?.repo ? repoName(summary.repo) : null)} onRename={rename} />
         </div>
         {summary ? (
           <RoomPreview sources={sources} roomId={roomId} session={session} attachError={props.attachError} onJoin={join} inspector={inspector}
@@ -432,6 +438,9 @@ export function RoomScreen(props: RoomScreenProps) {
   const access = useAccess(membership, roomId);
   const [toasts, note] = useToasts();
   const [shareOpen, setShareOpen] = useState(false);
+  // A room just made with New Room opens with Share showing: asking someone in is what comes next.
+  const fresh = useStore(freshRoom).id;
+  useEffect(() => { if (fresh === roomId) { setShareOpen(true); freshRoom.setState({ id: null }); } }, [fresh, roomId]);
   const [people, setPeople] = useState(false);
   const lost = membership?.lost(roomId) ?? null;
   useEffect(() => { if (lost && session.state.roomId === roomId) void session.leave(); }, [lost]);

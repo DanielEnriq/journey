@@ -77,7 +77,16 @@
   .glimpse-fit{position:absolute;left:0;top:0;transform-origin:0 0}
   .glimpse-fit .stage{left:0;top:0;transform:none}
   .glimpse-fit .node,.glimpse-fit .wire,.glimpse-fit .step,.glimpse-fit .part{transition:none}
-  .gl-empty{display:grid;place-items:center;min-height:132px;padding:20px 28px;box-sizing:border-box;border-radius:14px;border:1px dashed var(--border-3);text-align:center;font-size:12.5px;line-height:1.55;color:var(--ink-7)}
+  /* An empty canvas: the canvas's own dot grid, with the call it waits for in the middle. */
+  .gl-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:280px;padding:20px 28px;box-sizing:border-box;border-radius:14px;background:var(--studio-field);background-image:radial-gradient(circle,var(--border-3) 1px,transparent 1.2px);background-size:18px 18px;box-shadow:inset 0 0 0 1px var(--hairline);text-align:center;font-size:12px;color:var(--ink-7)}
+  .gl-call{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 14px 0 11px;border:0;border-radius:999px;background:var(--good);color:#fff;font:600 12.5px/1 var(--v-font-ui);cursor:default;box-shadow:0 1px 2px rgba(0,0,0,.18)}
+  .gl-call:hover{filter:brightness(1.06)}
+  .gl-call:active{filter:brightness(.94)}
+  .gl-call:focus-visible{outline:2px solid var(--v-info);outline-offset:2px}
+  /* What a new room is for: the goal line itself, typed into. */
+  .lhead .goal-field{display:block;width:100%;resize:none;overflow:hidden;border:0;background:none;outline:none;font-family:inherit;color:var(--ink-bright)}
+  .lhead .goal-field::placeholder{color:var(--ink-8)}
+  .lhead .goal-field:disabled{opacity:.6}
 
   /* What happened. */
   .evlist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}

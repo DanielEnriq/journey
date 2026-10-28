@@ -350,6 +350,3 @@
 .vh-sub { display: block; margin-top: 2px; font-size: 12px; line-height: 1.45; color: var(--v-fg-3); }
 
 /* New room in a Space: the repositories it can use, as the Space links them. */
-.vh-in-space { display: flex; flex-wrap: wrap; gap: 6px; }
-.vh-in-space > span { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border-radius: 7px; background: var(--v-surface-hover); color: var(--v-fg-2); font: 12px/1 var(--v-font-mono); }
-.vh-in-space .v-icon { color: var(--v-fg-3); }

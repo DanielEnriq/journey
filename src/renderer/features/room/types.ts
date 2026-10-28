@@ -61,6 +61,8 @@ export interface RoomSummary {
   /** The last thing that happened here, in words, and when (ISO 8601). */
   activity: string;
   activityAt: string | null;
+  /** What its coding agents are doing: one at least is running, or one waits on you; null when none is. Absent until known. */
+  work?: 'running' | 'waiting' | null;
   /** Rooms with a scripted example canvas. Only Payment Reliability has one. */
   demo?: 'payments';
 }

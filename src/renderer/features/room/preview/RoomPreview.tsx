@@ -1,10 +1,10 @@
 import { Fragment, h, type ComponentChildren } from '../../../vendor/preact.js';
-import { useEffect, useState } from '../../../vendor/preact-hooks.js';
+import { useEffect, useRef, useState } from '../../../vendor/preact-hooks.js';
 import { useStore } from '../../../shared/store.js';
 import { ago } from '../../../shared/time.js';
 import type { CallSession } from '../../call/session.js';
 import { useLoaded } from '../../workspace/hooks.js';
-import type { EventKind, RoomDataSource, RoomEvent, WorkstreamDataSource } from '../data/sources.js';
+import { nameFromGoal, UNTITLED, type EventKind, type RoomDataSource, type RoomEvent, type WorkstreamDataSource } from '../data/sources.js';
 import type { RoomSummary } from '../types.js';
 import { Icon, type IconName } from '../../../ui/icons.js';
 import { listNames, Who } from '../shell.js';
@@ -14,9 +14,9 @@ import { CodeText } from './code.js';
 import { pendingAnchor } from '../../../shared/nav.js';
 
 // A room from outside its call, laid out the way a Mac window would: the call is an action, so it sits in the
-// toolbar (who's there, and a phone); the page is the room itself (its goal, what waits on you, where the
-// canvas was left); and what's been going on (the work behind it, its history) is in an inspector on the right.
-// It answers "do I want to join?"; the canvas itself only opens in the call.
+// toolbar (who's there, and a phone); the page is the room itself (its goal, what waits on you, and its canvas,
+// as it was left); and what's been going on (the work behind it, its history) is in an inspector on the right.
+// A new room asks one thing, what it's for, and its empty canvas offers the call; nothing joins one for you.
 
 type Sources = { room: RoomDataSource; work: WorkstreamDataSource };
 
@@ -25,6 +25,24 @@ const KIND_ICON: Record<EventKind, IconName> = {
   call: 'phone', thread: 'comment', reply: 'reply', decision: 'decision', signed: 'pen', work: 'branch',
   resolved: 'check', question: 'question', repo: 'folder', people: 'people', room: 'room',
 };
+
+/** What a new room is for, asked once in its own words: Return keeps it (and names an untitled room from it). */
+function GoalField({ onSave }: { onSave(goal: string): Promise<void> }) {
+  const field = useRef<HTMLTextAreaElement>(null);
+  const [busy, setBusy] = useState(false);
+  const save = () => {
+    const goal = field.current?.value.trim() ?? '';
+    if (!goal || busy) return;
+    setBusy(true);
+    onSave(goal).catch(() => setBusy(false));
+  };
+  return (
+    <textarea ref={field} class="goal-line goal-field" rows={1} placeholder="What are we figuring out?" aria-label="What this room is for" disabled={busy}
+      onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; }}
+      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); } else if (e.key === 'Escape') e.currentTarget.blur(); }}
+      onBlur={save} />
+  );
+}
 
 /** The exact time, for a tooltip under an "ago". */
 export const exact = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -118,8 +136,10 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
                 <h2 class="goal-line">{p.goal.text}</h2>
                 <span class="goal-by"><span class={'mav' + (p.goal.by.tone === 'me' ? '' : ' ' + p.goal.by.tone)}>{p.goal.by.initials}</span>{p.goal.by.tone === 'me' ? 'Your' : p.goal.by.name + '’s'} goal</span>
               </>
+            ) : room.update && (p.room.role ?? 'owner') === 'owner' ? (
+              <GoalField onSave={(goal) => room.update!(roomId, p.room.name === UNTITLED ? { goal, name: nameFromGoal(goal) } : { goal })} />
             ) : (
-              <h2 class="goal-line quiet">No goal written down yet. The first call usually finds one.</h2>
+              <h2 class="goal-line quiet">No goal written down yet.</h2>
             )}
           </div>
 
@@ -154,7 +174,6 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
           )}
 
           <div class="lsec glimpse">
-            <span class="lk">Where the canvas was left</span>
             {p.lastView?.scene ? (
               <>
                 <SceneGlimpse scene={p.lastView.scene} />
@@ -165,7 +184,10 @@ export function RoomPreview({ sources, roomId, session, attachError, onJoin, ins
                   </span></span>
               </>
             ) : (
-              <div class="gl-empty">Nothing has been drawn here yet. Vowe draws on the shared canvas once the room starts talking in a call.</div>
+              <div class="gl-empty">
+                <button type="button" class="gl-call" onClick={onJoin}><Icon name="phone" size={16} />{live ? 'Join the Call' : 'Start a Call'}</button>
+                <span>Vowe draws here as you talk.</span>
+              </div>
             )}
           </div>
         </div>

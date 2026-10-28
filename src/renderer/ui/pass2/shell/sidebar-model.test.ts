@@ -79,6 +79,11 @@ describe('sidebar model', () => {
     assert.deepEqual(groupSpaces(spaces, rooms, { ...NO_FILTER, needs: true }).map((s) => s.name), ['Storefront']);
     assert.deepEqual(groupSpaces(spaces, rooms, { ...NO_FILTER, repo: 'github.com/acme/ledger' }).map((s) => s.name), ['Payments']);
   });
+  it('puts you first among the faces in a call, and carries the agents’ mark', () => {
+    const [r] = sidebarRooms([room('a', null, NOW, { inCall: [{ name: 'Priya', initials: 'P', tone: 'peer' }, { name: 'You', initials: 'DE', tone: 'me' }], work: 'waiting' })], { now: NOW, callRoomId: 'a' });
+    assert.deepEqual(r.faces.map((f) => f.initials), ['DE', 'P']);
+    assert.equal(r.work, 'waiting');
+  });
   it('suggests a Space’s name from its repositories', () => {
     assert.equal(suggestSpaceName([]), 'New Space');
     assert.equal(suggestSpaceName([{ label: 'payments', identity: 'github.com/acme/payments' }]), 'payments');

@@ -1,4 +1,4 @@
-import type { RoomSummary, SpaceSummary } from '../../../features/room/types.js';
+import type { PersonRef, RoomSummary, SpaceSummary } from '../../../features/room/types.js';
 
 // What the sidebar shows, as pure rules (tested in sidebar-model.test.ts): rooms grouped under their Space
 // (or, where Spaces aren't known, their repository), which groups start open, which rooms are quick or have
@@ -25,7 +25,14 @@ export interface SidebarRoom {
   quick: boolean;
   /** Quick, and nothing has moved there for a day: it waits under Earlier, never deleted. */
   earlier: boolean;
+  /** Who's in its call, as faces: you first once you're in it. Empty without a call. */
+  faces: PersonRef[];
+  /** Its coding agents, in one mark: running, or waiting on you. */
+  work: 'running' | 'waiting' | null;
 }
+
+/** At most this many faces on a row; past it, "+N". */
+export const MAX_FACES = 3;
 
 /** A Space as the sidebar draws it: its rooms, and the quick ones gone quiet, under Earlier. */
 export interface SidebarSpace { id: string; name: string; repos: string[]; role: SpaceSummary['role']; rooms: SidebarRoom[]; earlier: SidebarRoom[] }
@@ -145,6 +152,8 @@ export function sidebarRooms(rooms: RoomSummary[], o: { now: string; callRoomId:
       needs: o.needsByRoom ? o.needsByRoom[r.id] ?? 0 : r.needs ? 1 : 0,
       quiet: Date.parse(o.now) - Date.parse(at) > quiet,
       at,
+      faces: [...r.inCall].sort((a, b) => (a.tone === 'me' ? -1 : b.tone === 'me' ? 1 : 0)),
+      work: r.work ?? null,
     };
   });
 }

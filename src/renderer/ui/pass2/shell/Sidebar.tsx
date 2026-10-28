@@ -3,11 +3,11 @@ import { useEffect, useReducer, useRef, useState } from '../../../vendor/preact-
 import { useStore } from '../../../shared/store.js';
 import { useActiveInbox } from '../../../features/inbox/ui/hooks.js';
 import { callPresence } from '../../../features/call/presence.js';
-import type { RoomSummary, SpaceSummary } from '../../../features/room/types.js';
+import type { PersonRef, RoomSummary, SpaceSummary } from '../../../features/room/types.js';
 import { Icon, type IconName } from '../../icons.js';
 import { setSidebarWidth, shellPrefs, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_W } from './prefs.js';
 import {
-  countByRoom, filtering, groupRooms, groupSpaces, openByDefault, repoName, since, sidebarRooms, spaceOpenByDefault,
+  countByRoom, filtering, groupRooms, MAX_FACES, groupSpaces, openByDefault, repoName, since, sidebarRooms, spaceOpenByDefault,
   type SidebarRoom, type SidebarSpace,
 } from './sidebar-model.js';
 import { setSidebarFilter, sidebarFilter, useSpaces } from './spaces.js';
@@ -20,8 +20,10 @@ import { ContextMenu, FilterMenu, SpacePicker, type At, type MenuLine, type Pick
 //   Space row        a folder, open or closed. On hover or keyboard focus it becomes the chevron that says
 //                    what a click does, and a + starts a room in it. Right-click: new room, rename, link a
 //                    repository, and the repositories it links. Double-click the name to rename it.
-//   room row         a dot (sage: a call is on; signal: something needs you; grey otherwise; a ring while the room
-//                    is quick, not kept yet), the name, how long since it moved. Right-click keeps it.
+//   room row         a dot (signal: something, or an agent, waits on you; grey otherwise; a ring while the room is
+//                    quick, not kept yet) and the name. On the right, who's in its call as faces, or a spinner while
+//                    its agents work; nothing when it's quiet. How long since it moved is in its tooltip. Right-click
+//                    keeps it.
 //   Earlier          quick rooms quiet for a day fold under it, at the foot of their Space; never deleted.
 // Without Spaces (a workspace that doesn't have them), rooms group under their repository as before.
 // Only the Inbox carries a number, and only for what needs you (a waiting invitation among it).
@@ -55,7 +57,7 @@ const PLACES: { key: SidebarPlace; label: string; icon: IconName; tip?: string }
 ];
 
 const roomLabel = (r: SidebarRoom, now: string) =>
-  `${r.name}${r.quick ? ', quick' : ''}${r.inCall ? ', your call is here' : r.live ? ', a call is on' : ''}${r.needs ? `, ${r.needs} need${r.needs > 1 ? '' : 's'} you` : ''}${since(r.at, now) === 'now' ? ', just now' : since(r.at, now) ? `, ${since(r.at, now)} ago` : ''}`;
+  `${r.name}${r.quick ? ', quick' : ''}${r.inCall ? ', your call is here' : r.live ? `, ${r.faces.map((f) => (f.tone === 'me' ? 'you' : f.name)).join(', ')} in the call` : ''}${r.work === 'running' ? ', agents working' : ''}${r.needs ? `, ${r.needs} need${r.needs > 1 ? '' : 's'} you` : ''}${since(r.at, now) === 'now' ? ', just now' : since(r.at, now) ? `, ${since(r.at, now)} ago` : ''}`;
 
 type Menu = { kind: 'filter'; at: At } | { kind: 'picker'; at: At; mode: PickerMode } | { kind: 'lines'; at: At; label: string; lines: MenuLine[] };
 
@@ -134,10 +136,10 @@ export function Sidebar(p: SidebarProps) {
 
   const roomRow = (r: SidebarRoom) => (
     <button key={r.id} type="button" class="vh-sb-row vh-sb-room" aria-current={p.current === r.id ? 'page' : undefined} onClick={() => p.onRoom(r.id)}
-      onContextMenu={(e) => roomMenu(r, e)} aria-label={roomLabel(r, p.now)}>
-      <span class="vh-sb-glyph" aria-hidden="true"><i class={'vh-sb-dot' + (r.live ? ' is-live' : r.needs ? ' is-needs' : r.quick ? ' is-quick' : '')} /></span>
+      onContextMenu={(e) => roomMenu(r, e)} aria-label={roomLabel(r, p.now)} title={since(r.at, p.now) === 'now' ? 'Just now' : since(r.at, p.now) ? `${since(r.at, p.now)} ago` : undefined}>
+      <span class="vh-sb-glyph" aria-hidden="true"><i class={'vh-sb-dot' + (r.needs || r.work === 'waiting' ? ' is-needs' : r.quick ? ' is-quick' : '')} /></span>
       <span class="vh-sb-name">{r.name}</span>
-      <span class="vh-sb-ago" aria-hidden="true">{since(r.at, p.now)}</span>
+      {r.faces.length ? <Faces people={r.faces} /> : r.work === 'running' ? <span class="vh-sb-running" aria-hidden="true" /> : null}
     </button>
   );
 
@@ -234,6 +236,17 @@ export function Sidebar(p: SidebarProps) {
       ) : null}
       {menu?.kind === 'lines' ? <ContextMenu at={menu.at} label={menu.label} lines={menu.lines} onClose={close} /> : null}
     </nav>
+  );
+}
+
+/** Who's in a room's call, as Slack shows a huddle on its channel: up to three faces, overlapping, then "+N". */
+function Faces({ people }: { people: PersonRef[] }) {
+  const shown = people.slice(0, MAX_FACES), more = people.length - shown.length;
+  return (
+    <span class="vh-sb-faces" aria-hidden="true">
+      {shown.map((f) => <i key={f.initials + f.name} class={'vh-sb-face is-' + f.tone}>{f.initials.slice(0, 2)}</i>)}
+      {more > 0 ? <i class="vh-sb-face is-more">+{more}</i> : null}
+    </span>
   );
 }
 

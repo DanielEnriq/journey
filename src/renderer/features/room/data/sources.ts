@@ -15,6 +15,17 @@ export interface RepoChoice { id: string; label: string }
 /** `repo` is a RepoChoice id. `spaceId`: the Space to make it in; your first Space when left out. */
 export interface NewRoom { name: string; goal: string; repo: string | null; spaceId?: string }
 
+/** What a room is called until someone names it, or says what it's for (then it's named from that). */
+export const UNTITLED = 'Untitled';
+
+/** A name for an untitled room from what it's for: its first line, cut at a word to fit a sidebar row. */
+export function nameFromGoal(goal: string, max = 48): string {
+  const line = goal.trim().split('\n')[0].replace(/[.?!:;,\s]+$/, '');
+  if (line.length <= max) return line;
+  const cut = line.slice(0, max + 1).replace(/\s+\S*$/, '');
+  return (cut.length >= max / 2 ? cut : line.slice(0, max)).replace(/[.?!:;,\s]+$/, '') + '…';
+}
+
 /** A repository added on this machine, with the identity it's shared as; null where it has no shareable remote. */
 export interface LocalRepo { id: string; label: string; identity: string | null }
 
@@ -71,6 +82,8 @@ export interface RoomDataSource {
   /** Adds a repository on this machine with a folder picker; null if cancelled. */
   addRepo?(): Promise<RepoChoice | null>;
   attach?(roomId: string, repoId: string): Promise<void>;
+  /** Names the room or says what it's working toward; owners only. */
+  update?(roomId: string, patch: { name?: string; goal?: string }): Promise<void>;
   /** Keeps a room, or lets it be quick again. */
   keep?(roomId: string, keep: boolean): Promise<void>;
   /** Your Spaces, the ones you made first; read with list() and changed with the same subscribe(). */
@@ -118,6 +131,10 @@ export interface CallDataSource {
  * a person; `unknown` nothing recent was observed, so whether it is still running can't be told.
  */
 export type WorkStatus = 'active' | 'completed' | 'attention' | 'unknown';
+
+/** A room's agents in one mark for the sidebar: any waiting on you, else any running, else none. */
+export const workMark = (statuses: WorkStatus[]): 'running' | 'waiting' | null =>
+  statuses.includes('attention') ? 'waiting' : statuses.includes('active') ? 'running' : null;
 
 export interface WorkCheck { text: string; result: 'pass' | 'fail' | 'running' | 'not-run' }
 

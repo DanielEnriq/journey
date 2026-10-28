@@ -19,14 +19,14 @@ import { Home, type HomePage } from './features/home/Home.js';
 import { bindInbox } from './features/inbox/real.js';
 import { activeInbox } from './features/inbox/source.js';
 import { LoginScreen, OpeningVowe } from './features/welcome/LoginScreen.js';
-import { CreateRoomSheet } from './ui/pass2/rooms/CreateRoom.js';
 import { spaceSource } from './ui/pass2/shell/spaces.js';
 import { InviteGate } from './ui/pass2/invites/InviteGate.js';
 import { devFlags, type DevFlags } from './shared/devflags.js';
 import { useStore } from './shared/store.js';
 import { useAppearance, useThemeSetting } from './shared/theme/theme.js';
 import { account, signIn } from './shared/account.js';
-import type { NewRoom, RepoChoice } from './features/room/data/sources.js';
+import { UNTITLED, type NewRoom, type RepoChoice } from './features/room/data/sources.js';
+import { freshRoom } from './features/room/fresh.js';
 import type { InviteKey, Theme } from '../shared/api.js';
 
 // Vowe's renderer: sign-in → Home, your Inbox (invitations arrive there) → a room's preview → its call, plus the design's reference
@@ -224,8 +224,8 @@ function DevMenu({ route, go, onClose }: { route: Route; go(r: Route): void; onC
 function App() {
   const [route, go] = useRoute();
   const [dev, setDev] = useState(false);
-  /** The New room sheet, open on the Space it's made in (null: none chosen). */
-  const [newRoom, setNewRoom] = useState<{ space: string | null } | null>(null);
+  /** Making a room didn't work: says why, and offers to try again. */
+  const [newFailed, setNewFailed] = useState<{ space: string | null; message: string } | null>(null);
   /** Joining another room's call while you're in one asks first. */
   const [switching, setSwitching] = useState<{ id: string; talk: boolean } | null>(null);
   const [repos, setRepos] = useState<RepoChoice[]>([]);
@@ -258,7 +258,7 @@ function App() {
   useEffect(() => { bindInbox(inboxOf); }, [inboxOf]);
   // Repositories added on this machine, for the room pickers.
   const loadRepos = () => { if (!PREVIEW && user) localRepos().then(setRepos, () => setRepos([])); };
-  useEffect(loadRepos, [user, !!newRoom]);
+  useEffect(loadRepos, [user]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); setDev((d) => !d); }
@@ -285,9 +285,9 @@ function App() {
   const home = () => go({ screen: 'home', demo });
   const openRoom = (id: string) => go({ screen: 'room', id, call: layout.keep === id, demo });
   const create = async (r: NewRoom) => {
-    const made = await ws.room.create(newRoom?.space && !r.spaceId ? { ...r, spaceId: newRoom.space } : r);
-    setNewRoom(null);
+    const made = await ws.room.create(r);
     openRoom(made.id);
+    return made.id;
   };
   const join = async (id: string, talk: boolean) => {
     // Out of a dropped call in another room first; a connected one is left by session.join.
@@ -322,12 +322,18 @@ function App() {
   const choices = demo ? EXAMPLE_REPOS : repos;
   const repoNote = demo ? 'examples · this is the demo' : repos.length ? 'added on this machine · only its remote is shared' : 'none added on this machine yet';
   const addRepo = demo ? undefined : () => addLocalRepo().then((r) => { loadRepos(); return r; });
-  // A Space's +: the room is made in that Space and uses its repositories. Where there are no Spaces, the sidebar's +
-  // is on a repository, and the sheet starts with it chosen.
-  const newIn = newRoom?.space ? ws.room.spaces?.().find((s) => s.id === newRoom.space) ?? null : null;
-  const overlay = newRoom ? <CreateRoomSheet repos={choices} repoNote={repoNote} onAddRepo={addRepo} onCreate={create} onClose={() => setNewRoom(null)}
-    space={newIn} initialRepo={newIn ? null : newRoom.space} /> : null;
-  const onNewRoom = (space?: string | null) => setNewRoom({ space: space ?? null });
+  // New Room is FaceTime's Create Link: no form. It makes an untitled room at once, in the Space asked for (else
+  // the room on screen's Space, else the first), and opens it with Share showing, so the next step is asking
+  // someone in. Where there are no Spaces, what's passed is a repository, and the room uses it.
+  const overlay = undefined;
+  const onNewRoom = (space?: string | null) => {
+    const spaces = ws.room.spaces?.() ?? null;
+    const here = route.screen === 'room' ? rooms.find((r) => r.id === route.id)?.spaceId : undefined;
+    const spaceId = spaces ? (spaces.find((s) => s.id === space) ?? spaces.find((s) => s.id === here) ?? spaces[0])?.id : undefined;
+    setNewFailed(null);
+    create({ name: UNTITLED, goal: '', repo: spaces ? null : space ?? null, ...(spaceId ? { spaceId } : {}) })
+      .then((id) => freshRoom.setState({ id }), (err: Error) => setNewFailed({ space: space ?? null, message: err.message }));
+  };
   const roomProps = (id: string) => ({
     sources: ws, roomId: id, session, light,
     ...(demo || !realCanvas ? demoRoom : {
@@ -353,7 +359,7 @@ function App() {
     // Keyed by workspace: nothing Home read for your rooms carries over into the demo, or back.
     screen = <Home key={demo ? 'demo' : 'real'} page={page} demo={demo} rooms={rooms} repos={choices} repoNote={repoNote} onAddRepo={addRepo} notice={notice}
       onNavigate={(to) => { setInvite(null); go({ screen: 'home', demo, ...(to === 'home' ? {} : { page: to }) }); }}
-      onOpenRoom={(id) => { setInvite(null); openRoom(id); }} onCreate={create} onNewRoom={onNewRoom}
+      onOpenRoom={(id) => { setInvite(null); openRoom(id); }} onCreate={async (r) => { await create(r); }} onNewRoom={onNewRoom}
       inbox={inbox} selected={selected} onSelect={(item) => go({ screen: 'home', demo, ...(item ? { item } : {}) })}
       onJoinCall={(id) => { openRoom(id); askJoin(id, false); }}
       onOpenInvite={demo ? undefined : setInvite} overlay={overlay}
@@ -371,6 +377,10 @@ function App() {
     <>
       {kept}
       {screen}
+      {newFailed && (
+        <ConfirmDialog title="Couldn’t make a room" destructive={false} confirmLabel="Try Again" body={newFailed.message}
+          onCancel={() => setNewFailed(null)} onConfirm={() => onNewRoom(newFailed.space)} />
+      )}
       {switching && (
         <ConfirmDialog title={`Leave the call in ${callName(session.state.roomId)}?`} destructive={false} confirmLabel="Leave and join"
           body={<>You can be in one call at a time. Joining {callName(switching.id)} ends your part in the call in {callName(session.state.roomId)}.</>}

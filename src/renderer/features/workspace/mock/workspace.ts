@@ -5,6 +5,7 @@ import { account, initials } from '../../../shared/account.js';
 import type {
   CallDataSource, LocalRepo, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomWorkContext, RoomWorkstream, WorkstreamDataSource,
 } from '../../room/data/sources.js';
+import { workMark } from '../../room/data/sources.js';
 import type { PersonRef, RoomSummary, SpaceSummary } from '../../room/types.js';
 import { AGENT, type RecordEvent, type VoweRecord } from '../../vowe-room/contracts/model.js';
 import { classify } from '../../work/status.js';
@@ -227,7 +228,7 @@ function summaryOf(id: string): RoomSummary | null {
     const role = rec.members.find((m) => m.who === DEMO_ME)?.role ?? 'member';
     return {
       id, name: example.name, repo: example.repo, inCall: withYou(id, example.inCall()), role,
-      spaceId: DEMO_ROOM_SPACE[id], keptAt: id in saved.kept ? saved.kept[id] : saved.demo ? new Date(saved.demo.at).toISOString() : null,
+      spaceId: DEMO_ROOM_SPACE[id], work: workMark(example.work(saved.demo!.at).map((w) => w.status)), keptAt: id in saved.kept ? saved.kept[id] : saved.demo ? new Date(saved.demo.at).toISOString() : null,
       needs: attentionOf(rec)[0]?.text ?? null, activity: changed(events), activityAt: events[0]?.at ?? null,
     };
   }
@@ -295,6 +296,11 @@ const room: RoomDataSource = {
   visited(id) {
     saved = { ...saved, visits: { ...saved.visits, [id]: iso() } };
     persist();
+  },
+  async update(id, { name, goal }) {
+    if (!saved.rooms.some((r) => r.id === id)) throw new Error('The example rooms keep their names');
+    mockLog('room', `updated room ${id} (stored in localStorage)`, { name, goal });
+    commit({ rooms: saved.rooms.map((r) => (r.id === id ? { ...r, ...(name !== undefined ? { name } : {}), ...(goal !== undefined ? { goal } : {}) } : r)) });
   },
   async keep(id, keep) {
     commit({ kept: { ...saved.kept, [id]: keep ? summaryOf(id)?.keptAt ?? iso() : null } });

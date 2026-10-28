@@ -11,6 +11,7 @@ import type {
   CallDataSource, LocalRepo, NewRoom, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomRecordSource, RoomRecordView,
   RoomWorkContext, Transcript, TranscriptLine, WorkstreamDataSource,
 } from '../../room/data/sources.js';
+import { workMark } from '../../room/data/sources.js';
 import type { Person as PanelPerson, PersonTone, Stream } from '../../room/panel/types.js';
 import type { PersonRef, RoomSummary, SpaceSummary } from '../../room/types.js';
 import { toRoomWorkContext } from '../../work/adapter.js';
@@ -162,6 +163,8 @@ function summaryOf(k: Known): RoomSummary {
     repo: reposOf(k.room)[0] ?? null,
     repos: reposOf(k.room),
     keptAt: k.room.keptAt,
+    // Known once the room's work has been read on this machine (opening it, or the Inbox reading it).
+    work: work.has(k.room.id) ? workMark(work.get(k.room.id)!.room.workstreams.map((w) => w.status)) : undefined,
     inCall: (presence.get(k.room.id) ?? []).filter((p) => p.call).map((p) => who(p.userId, { name: p.name, email: '' })),
     here: (presence.get(k.room.id) ?? []).map((p) => who(p.userId, { name: p.name, email: '' })),
     role: k.room.role,
@@ -454,6 +457,12 @@ const room: RoomDataSource = {
   attach,
   repos: localRepos,
   addRepo: addLocalRepo,
+  async update(roomId, patch) {
+    const details = await unwrap(api().rooms.update(roomId, patch));
+    const k = known.get(roomId);
+    if (k) k.room = { ...k.room, name: details.name, goal: details.goal };
+    notify();
+  },
   async keep(roomId, keep) {
     const details = await unwrap(api().rooms.keep(roomId, keep));
     const k = known.get(roomId);
