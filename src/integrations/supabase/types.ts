@@ -1284,6 +1284,7 @@ export type Database = {
           created_by: string
           goal: string | null
           id: string
+          kept_at: string | null
           name: string
           repository: string | null
           updated_at: string
@@ -1295,6 +1296,7 @@ export type Database = {
           created_by?: string
           goal?: string | null
           id?: string
+          kept_at?: string | null
           name: string
           repository?: string | null
           updated_at?: string
@@ -1306,6 +1308,7 @@ export type Database = {
           created_by?: string
           goal?: string | null
           id?: string
+          kept_at?: string | null
           name?: string
           repository?: string | null
           updated_at?: string
@@ -1782,6 +1785,42 @@ export type Database = {
           },
         ]
       }
+      workspace_repositories: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          repository: string
+          workspace_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          repository: string
+          workspace_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          repository?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_repositories_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_repositories_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           agent_name: string
@@ -1861,6 +1900,10 @@ export type Database = {
           invited_email: string
           resent: boolean
         }[]
+      }
+      keep_room: {
+        Args: { keep: boolean; room: string }
+        Returns: string
       }
       my_room_invitations: {
         Args: never

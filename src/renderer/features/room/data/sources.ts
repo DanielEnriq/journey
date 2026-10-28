@@ -1,5 +1,5 @@
 import type { Scene } from '../../../../shared/canvas/index.js';
-import type { ChangedFile, PersonRef, RoomSummary } from '../types.js';
+import type { ChangedFile, PersonRef, RoomSummary, SpaceSummary } from '../types.js';
 import type { RoomPanelProps } from '../panel/types.js';
 
 // The seams between the app and the services behind it. Two workspaces implement them: the real one
@@ -12,8 +12,11 @@ import type { RoomPanelProps } from '../panel/types.js';
 /** A repository the room picker offers: one added on this machine, or a demo example. */
 export interface RepoChoice { id: string; label: string }
 
-/** `repo` is a RepoChoice id. */
-export interface NewRoom { name: string; goal: string; repo: string | null }
+/** `repo` is a RepoChoice id. `spaceId`: the Space to make it in; your first Space when left out. */
+export interface NewRoom { name: string; goal: string; repo: string | null; spaceId?: string }
+
+/** A repository added on this machine, with the identity it's shared as; null where it has no shareable remote. */
+export interface LocalRepo { id: string; label: string; identity: string | null }
 
 /** What kind of thing happened, so a list can draw it with its icon. */
 export type EventKind = 'call' | 'thread' | 'reply' | 'decision' | 'signed' | 'work' | 'resolved' | 'question' | 'repo' | 'people' | 'room';
@@ -68,6 +71,20 @@ export interface RoomDataSource {
   /** Adds a repository on this machine with a folder picker; null if cancelled. */
   addRepo?(): Promise<RepoChoice | null>;
   attach?(roomId: string, repoId: string): Promise<void>;
+  /** Keeps a room, or lets it be quick again. */
+  keep?(roomId: string, keep: boolean): Promise<void>;
+  /** Your Spaces, the ones you made first; read with list() and changed with the same subscribe(). */
+  spaces?(): SpaceSummary[];
+  /** Repositories on this machine that a Space can link, with their shared identities. */
+  localRepos?(): Promise<LocalRepo[]>;
+  /** Makes a Space and links the given repositories (LocalRepo ids) to it. */
+  createSpace?(space: { name: string; repos: string[] }): Promise<SpaceSummary>;
+  /** Owners only. */
+  renameSpace?(spaceId: string, name: string): Promise<void>;
+  /** Links a repository added on this machine (a LocalRepo id) to a Space. */
+  linkRepo?(spaceId: string, repoId: string): Promise<void>;
+  /** Unlinks one of a Space's repositories: whoever linked it, or a Space owner. */
+  unlinkRepo?(spaceId: string, repository: string): Promise<void>;
 }
 
 /** What a part draws inside itself in a given view. */
@@ -129,11 +146,15 @@ export interface RoomWorkstream {
   /** Observed events, newest first. */
   observed: { at: string; text: string }[];
   files?: ChangedFile[];
+  /** Which of the room's repositories it's in, where the room has several. */
+  repo?: string;
 }
 
 export interface RoomWorkContext {
-  /** Null when the room has no repository attached. */
+  /** The room's first repository; null when its Space has none. */
   repo: string | null;
+  /** All of the room's repositories, and whether each is cloned on this machine. Absent in the demo. */
+  repos?: { repo: string; here: boolean }[];
   generatedAt: string;
   workstreams: RoomWorkstream[];
   /** Why there is nothing to show even though the room has a repository, e.g. it isn't cloned here. */

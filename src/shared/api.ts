@@ -626,8 +626,22 @@ export interface RoomSummary {
   createdAt: string;
   /** Last change to the room's own fields (name, goal, repository). */
   updatedAt: string;
+  /**
+   * When the room was kept; null while it's quick. A room keeps itself once it holds a decision or a plan,
+   * and a quick one that goes quiet drops out of the sidebar into Earlier. Neither is ever deleted.
+   */
+  keptAt: string | null;
   /** Your role in it. */
   role: RoomRole;
+}
+
+/** A repository linked to a Space (a workspace). Every room in the Space can use all of its repositories. */
+export interface SpaceRepository {
+  workspaceId: string;
+  /** Shared identity, e.g. `github.com/acme/payments`; each member maps it to their own clone. */
+  repository: string;
+  addedBy: string | null;
+  addedAt: string;
 }
 
 export interface RoomDetails extends RoomSummary {
@@ -709,6 +723,13 @@ export interface RoomCheckout {
   /** Local Repository.id. */
   repositoryId: string;
   path: string;
+}
+
+/** One of a room's repositories and its clone on this machine; nulls when it isn't cloned here. Never stored in the cloud. */
+export interface RoomRepositoryCheckout {
+  repository: string;
+  repositoryId: string | null;
+  path: string | null;
 }
 
 /**
@@ -1059,6 +1080,8 @@ export interface Channels {
     'repos:remove': (id: string) => void;
     /** Looks for repositories in the usual code folders, leaving out ones already added. */
     'repos:detect': () => DetectedRepository[];
+    /** Each added repository's shared identity (its `origin`, as host/path), or null where it has none. */
+    'repos:identities': () => { id: string; identity: string | null }[];
     /** Only accepts a path the last repos:detect returned, so this can't add arbitrary paths. */
     'repos:addDetected': (path: string) => Repository;
     /** Records the repository as opened, which moves it to the top of the list. */
@@ -1094,6 +1117,16 @@ export interface Channels {
     'rooms:attachRepository': (roomId: string, repositoryId: string) => RoomResult<RoomDetails>;
     /** The room's repository checked out on this machine: an added local repository whose origin matches. */
     'rooms:checkout': (roomId: string) => RoomResult<RoomCheckout | null>;
+    /** Each of the room's repositories (its Space's), and where it's checked out here if it is. */
+    'rooms:checkouts': (roomId: string) => RoomResult<RoomRepositoryCheckout[]>;
+    /** Keeps a room, or lets it be quick again. Owners and members. */
+    'rooms:keep': (roomId: string, keep: boolean) => RoomResult<RoomDetails>;
+    'spaces:repositories': (workspaceId: string) => RoomResult<SpaceRepository[]>;
+    /** Links a local repository's `origin` identity to the Space; its path stays local. */
+    'spaces:link': (workspaceId: string, repositoryId: string) => RoomResult<SpaceRepository>;
+    'spaces:unlink': (workspaceId: string, repository: string) => RoomResult<void>;
+    /** Owners only. */
+    'spaces:rename': (workspaceId: string, name: string) => RoomResult<void>;
     'record:get': (roomId: string) => RoomResult<RoomRecord>;
     'record:addThread': (roomId: string, thread: NewThread) => RoomResult<RoomThread>;
     'record:reply': (roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent') => RoomResult<RoomComment>;
@@ -1244,6 +1277,8 @@ export interface JourneyApi {
     addDetected(path: string): Promise<Repository>;
     /** Marks the repository as the one being worked on (most recently opened). */
     open(id: string): Promise<Repository>;
+    /** Each added repository's shared identity from its `origin`; null where it has no shareable remote. */
+    identities(): Promise<{ id: string; identity: string | null }[]>;
   };
   git: {
     /** Current branch, upstream, and changed files of the repository's working tree. */
@@ -1289,6 +1324,14 @@ export interface JourneyApi {
     list(): Promise<Workspace[]>;
     /** Creates a workspace owned by the signed-in user. */
     create(name: string): Promise<Workspace>;
+    /** The Space's repositories, the order they were linked in. */
+    repositories(workspaceId: string): Promise<RoomResult<SpaceRepository[]>>;
+    /** Links a local repository to the Space by its `origin` remote; only the identity leaves this machine. */
+    link(workspaceId: string, repositoryId: string): Promise<RoomResult<SpaceRepository>>;
+    /** Whoever linked it, or a Space owner. */
+    unlink(workspaceId: string, repository: string): Promise<RoomResult<void>>;
+    /** Owners only. */
+    rename(workspaceId: string, name: string): Promise<RoomResult<void>>;
   };
   rooms: {
     // Persistent rooms. Each resolves with a RoomResult rather than rejecting, so the UI can tell
@@ -1314,6 +1357,10 @@ export interface JourneyApi {
     attachRepository(roomId: string, repositoryId: string): Promise<RoomResult<RoomDetails>>;
     /** Where this room's repository is checked out on this machine; null when it isn't, or the room has none. */
     checkout(roomId: string): Promise<RoomResult<RoomCheckout | null>>;
+    /** Every repository the room can use (its Space's), each with where it's checked out here, or nulls. */
+    checkouts(roomId: string): Promise<RoomResult<RoomRepositoryCheckout[]>>;
+    /** Keeps the room, or lets it be quick again; owners and members. */
+    keep(roomId: string, keep: boolean): Promise<RoomResult<RoomDetails>>;
 
     // The live room: Realtime channel and presence. Members only.
     /** Connects and announces you to the room. Members only; joining twice is a no-op. */

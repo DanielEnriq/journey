@@ -8,11 +8,11 @@ import { account, initials } from '../../../shared/account.js';
 import { Store } from '../../../shared/store.js';
 import { shortAgo } from '../../../shared/time.js';
 import type {
-  CallDataSource, NewRoom, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomRecordSource, RoomRecordView,
+  CallDataSource, LocalRepo, NewRoom, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomRecordSource, RoomRecordView,
   RoomWorkContext, Transcript, TranscriptLine, WorkstreamDataSource,
 } from '../../room/data/sources.js';
 import type { Person as PanelPerson, PersonTone, Stream } from '../../room/panel/types.js';
-import type { PersonRef, RoomSummary } from '../../room/types.js';
+import type { PersonRef, RoomSummary, SpaceSummary } from '../../room/types.js';
 import { toRoomWorkContext } from '../../work/adapter.js';
 import { createVoweServices } from './vowe-services.js';
 import type {
@@ -68,7 +68,11 @@ const linkUrls = new Map<string, string>();
 /** Rooms you lost access to while you had them open. */
 const lostRooms = new Map<string, AccessLost>();
 /** The last work context read for a room, for its transcripts and the call's Running list. */
-const work = new Map<string, { repositoryId: string; context: WorkContext; room: RoomWorkContext }>();
+const work = new Map<string, { contexts: { repository: string; repositoryId: string; context: WorkContext }[]; room: RoomWorkContext }>();
+/** Each Space's repositories, by workspace id: every room in a Space can use all of them. */
+const spaceRepos = new Map<string, string[]>();
+/** Your Spaces (workspaces), the ones you made first. */
+let spaceList: { id: string; name: string; createdBy: string }[] = [];
 /** Your cloud user id: learned from a room's members (by email) or from joining a room. */
 let selfId: string | null = null;
 let workspaceId: string | null = null;
@@ -154,7 +158,10 @@ function summaryOf(k: Known): RoomSummary {
   return {
     id: k.room.id,
     name: k.room.name,
-    repo: k.room.repository,
+    spaceId: k.room.workspaceId,
+    repo: reposOf(k.room)[0] ?? null,
+    repos: reposOf(k.room),
+    keptAt: k.room.keptAt,
     inCall: (presence.get(k.room.id) ?? []).filter((p) => p.call).map((p) => who(p.userId, { name: p.name, email: '' })),
     here: (presence.get(k.room.id) ?? []).map((p) => who(p.userId, { name: p.name, email: '' })),
     role: k.room.role,
@@ -162,6 +169,27 @@ function summaryOf(k: Known): RoomSummary {
     activity: changed ? eventOf(changed, who).text : '',
     activityAt: latest?.createdAt ?? k.room.createdAt,
   };
+}
+
+/** The repositories a room can use: its Space's, its own first (rooms made before Spaces each named one). */
+function reposOf(room: CloudRoom): string[] {
+  const linked = spaceRepos.get(room.workspaceId) ?? [];
+  const own = room.repository;
+  if (!own) return linked;
+  return [own, ...linked.filter((r) => r.toLowerCase() !== own.toLowerCase())];
+}
+
+/** Reads the Space's repositories again. A Space that can't be read keeps what was last known. */
+async function readSpaceRepos(workspaceId: string) {
+  const linked = await unwrap(api().workspaces.repositories(workspaceId)).catch(() => null);
+  if (linked) spaceRepos.set(workspaceId, linked.map((r) => r.repository));
+}
+
+/** Reads your Spaces and their repositories; `also` are Spaces your rooms are in, in case the list missed one. */
+async function readSpaces(also: string[] = []) {
+  const list = await api().workspaces.list().catch(() => null);
+  if (list) spaceList = list.map((w) => ({ id: w.id, name: w.name, createdBy: w.created_by }));
+  await Promise.all([...new Set([...spaceList.map((w) => w.id), ...also])].map(readSpaceRepos));
 }
 
 /** Reads a room's record and members, and keeps them. */
@@ -186,6 +214,7 @@ async function refresh() {
     const rooms = await unwrap(api().rooms.list());
     order = rooms.map((r) => r.id);
     for (const id of [...known.keys()]) if (!order.includes(id)) known.delete(id);
+    await readSpaces(rooms.map((r) => r.workspaceId));
     // The list shows what needs you and what happened last, which only each room's record says.
     await Promise.all(rooms.map((r) => read(r.id, r).catch(() => { known.set(r.id, { room: r, record: null, members: [] }); })));
     realStatus.setState({ state: 'ready', error: null });
@@ -369,6 +398,7 @@ export async function addLocalRepo(): Promise<RepoChoice | null> {
 async function attach(roomId: string, repositoryId: string) {
   const details: RoomDetails = await unwrap(api().rooms.attachRepository(roomId, repositoryId));
   work.delete(roomId);
+  await readSpaceRepos(details.workspaceId);
   await read(roomId, details);
   notify();
 }
@@ -377,8 +407,8 @@ const room: RoomDataSource = {
   list: () => order.map((id) => known.get(id)).filter((k): k is Known => !!k).map(summaryOf),
   subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   me,
-  async create({ name, goal, repo }) {
-    const ws = await ensureWorkspace();
+  async create({ name, goal, repo, spaceId }) {
+    const ws = spaceId ?? await ensureWorkspace();
     const made = await unwrap(api().rooms.create({ workspaceId: ws, name, goal: goal || null }));
     await read(made.id, made);
     if (repo) {
@@ -424,6 +454,48 @@ const room: RoomDataSource = {
   attach,
   repos: localRepos,
   addRepo: addLocalRepo,
+  async keep(roomId, keep) {
+    const details = await unwrap(api().rooms.keep(roomId, keep));
+    const k = known.get(roomId);
+    if (k) k.room = { ...k.room, keptAt: details.keptAt };
+    notify();
+  },
+  spaces: () => spaceList.map((w): SpaceSummary => ({
+    id: w.id, name: w.name, repos: spaceRepos.get(w.id) ?? [], role: isMe(w.createdBy) ? 'owner' : 'member',
+  })),
+  async localRepos() {
+    const [repos, ids] = await Promise.all([api().repos.list(), api().repos.identities()]);
+    const identity = new Map(ids.map((r) => [r.id, r.identity]));
+    return repos.map((r): LocalRepo => ({ id: r.id, label: r.name, identity: identity.get(r.id) ?? null }));
+  },
+  async createSpace({ name, repos }) {
+    const made = await api().workspaces.create(name);
+    if (!workspaceId) workspaceId = made.id;
+    // A repository that can't be linked (no shareable remote) leaves the Space made, with the rest linked.
+    const failed: string[] = [];
+    for (const id of repos) await unwrap(api().workspaces.link(made.id, id)).catch((err: Error) => failed.push(err.message));
+    await readSpaces();
+    notify();
+    if (failed.length) console.warn('[spaces] some repositories weren’t linked', failed);
+    return room.spaces!().find((w) => w.id === made.id) ?? { id: made.id, name: made.name, repos: [], role: 'owner' };
+  },
+  async renameSpace(spaceId, name) {
+    await unwrap(api().workspaces.rename(spaceId, name));
+    spaceList = spaceList.map((w) => (w.id === spaceId ? { ...w, name } : w));
+    notify();
+  },
+  async linkRepo(spaceId, repoId) {
+    await unwrap(api().workspaces.link(spaceId, repoId));
+    await readSpaceRepos(spaceId);
+    work.clear();
+    notify();
+  },
+  async unlinkRepo(spaceId, repository) {
+    await unwrap(api().workspaces.unlink(spaceId, repository));
+    await readSpaceRepos(spaceId);
+    work.clear();
+    notify();
+  },
 };
 
 /** Why a room's repository couldn't be attached when it was made. */
@@ -490,27 +562,37 @@ const call: CallDataSource = {
 
 const workSource: WorkstreamDataSource = {
   async context(roomId) {
-    const k = known.get(roomId) ?? await read(roomId);
     const generatedAt = new Date().toISOString();
-    const repo = k.room.repository;
-    if (!repo) return { repo: null, generatedAt, workstreams: [] };
-    const checkout = await unwrap(api().rooms.checkout(roomId));
-    if (!checkout) {
-      return { repo, generatedAt, workstreams: [], unavailable: `${repo} isn’t added on this machine, so its Claude Code sessions can’t be read here. Add your clone of it.` };
+    const checkouts = await unwrap(api().rooms.checkouts(roomId));
+    const repos = checkouts.map((c) => ({ repo: c.repository, here: c.repositoryId !== null }));
+    const repo = checkouts[0]?.repository ?? null;
+    if (!repo) return { repo: null, repos, generatedAt, workstreams: [] };
+    const here = checkouts.filter((c): c is typeof c & { repositoryId: string } => c.repositoryId !== null);
+    if (!here.length) {
+      const which = checkouts.length === 1 ? `${repo} isn’t` : 'None of this Space’s repositories are';
+      return { repo, repos, generatedAt, workstreams: [], unavailable: `${which} added on this machine, so their Claude Code sessions can’t be read here. Add your clone.` };
     }
-    const context = await api().context.work(checkout.repositoryId);
-    const shown = { ...toRoomWorkContext(context), repo };
-    work.set(roomId, { repositoryId: checkout.repositoryId, context, room: shown });
+    // One repository that can't be read leaves the others' work showing.
+    const contexts = (await Promise.all(here.map(async (c) => {
+      const context = await api().context.work(c.repositoryId).catch(() => null);
+      return context && { repository: c.repository, repositoryId: c.repositoryId, context };
+    }))).filter((c) => c !== null);
+    const workstreams = contexts
+      .flatMap(({ repository, context }) => toRoomWorkContext(context).workstreams.map((w) => ({ ...w, repo: repository })))
+      .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''));
+    const shown: RoomWorkContext = { repo, repos, generatedAt, workstreams };
+    work.set(roomId, { contexts, room: shown });
     return shown;
   },
   async transcript(roomId, streamId) {
-    const w = work.get(roomId);
-    const stream = w?.context.workstreams.find((s) => s.id === streamId);
-    if (!w || !stream) throw new Error('This workstream isn’t in the room’s work any more.');
-    const linked = new Set(stream.sessions.map((s) => s.sessionId));
-    const session = w.context.sessions.find((s) => linked.has(s.id));
+    const found = work.get(roomId)?.contexts
+      .map((c) => ({ ...c, stream: c.context.workstreams.find((s) => s.id === streamId) }))
+      .find((c) => c.stream);
+    if (!found?.stream) throw new Error('This workstream isn’t in the room’s work any more.');
+    const linked = new Set(found.stream.sessions.map((s) => s.sessionId));
+    const session = found.context.sessions.find((s) => linked.has(s.id));
     if (!session) throw new Error('No Claude Code session is linked to this workstream.');
-    const page = await api().claudeCode.messages(w.repositoryId, session.id, { limit: 40 });
+    const page = await api().claudeCode.messages(found.repositoryId, session.id, { limit: 40 });
     return { title: session.title, total: page.total, lines: page.messages.flatMap(linesOf) } satisfies Transcript;
   },
 };

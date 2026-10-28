@@ -22,12 +22,34 @@ export interface Person {
 /** Someone shown by their initials; `tone` picks their colour (you are `me`). */
 export interface PersonRef { name: string; initials: string; tone: 'me' | 'peer' | 'p2' | 'p3' }
 
+/**
+ * A Space: the repositories a team links once, and the rooms that work in them. Every room in a Space can use
+ * all of its repositories. Your first room makes one ("Personal") if you have none.
+ */
+export interface SpaceSummary {
+  id: string;
+  name: string;
+  /** Shared identities (`github.com/acme/payments`), the order they were linked in. */
+  repos: string[];
+  /** Your role; owners rename it and unlink anyone's repositories. */
+  role: 'owner' | 'member';
+}
+
 /** A room as the workspace lists it. Rooms persist; calls in them come and go. */
 export interface RoomSummary {
   id: string;
   name: string;
-  /** The repository the room works in; null when none is attached. */
+  /** The Space it's in; absent where that isn't known. */
+  spaceId?: string;
+  /** The room's first repository (its Space's, its own first); null when the Space has none. */
   repo: string | null;
+  /** Every repository the room can use: its Space's. Absent where that isn't known (the demo). */
+  repos?: string[];
+  /**
+   * When the room was kept; null while it's quick. Absent in the demo, where every room is kept. A room keeps
+   * itself once it holds a decision or a plan; a quick one that goes quiet drops into Earlier.
+   */
+  keptAt?: string | null;
   /** Who is in the room's call right now, you included once you join; empty when there is no call. */
   inCall: PersonRef[];
   /** Who has the room open right now, in the call or not; absent where that isn't known (the demo). */

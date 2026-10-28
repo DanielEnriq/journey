@@ -373,4 +373,55 @@ describe('persistent rooms (local Supabase)', integration, () => {
     const signedOut = createClient<Database>(url!, publishableKey!, { auth: { persistSession: false } });
     await rejectsWith(createRoomService(async () => signedOut).listRooms(), 'signed-out');
   });
+
+  it('links repositories to the Space, for its members only', async () => {
+    const { alice, bob, carol, dave } = people;
+    // An earlier test removed Carol from the workspace; she's a plain member again from here.
+    const { error: back } = await alice.cloud.from('workspace_members').insert({ workspace_id: workspaceId, user_id: carol.id });
+    assert.equal(back, null);
+    const linked = await alice.rooms.linkRepository(workspaceId, 'git@github.com:Acme/Payments.git');
+    assert.equal(linked.repository, 'github.com/Acme/Payments');
+    assert.equal(linked.addedBy, alice.id);
+    // The same repository again, spelled differently, is still one row.
+    const again = await bob.rooms.linkRepository(workspaceId, 'https://GitHub.com/Acme/Payments');
+    assert.equal(again.addedBy, alice.id);
+    await bob.rooms.linkRepository(workspaceId, 'github.com/Acme/Ledger');
+    assert.deepEqual((await carol.rooms.listSpaceRepositories(workspaceId)).map((r) => r.repository), ['github.com/Acme/Payments', 'github.com/Acme/Ledger']);
+
+    // Outside the Space there's nothing to read or link; local paths never become Space data.
+    assert.deepEqual(await dave.rooms.listSpaceRepositories(workspaceId), []);
+    await rejectsWith(dave.rooms.linkRepository(workspaceId, 'github.com/Acme/Sneaky'), 'not-found');
+    await rejectsWith(alice.rooms.linkRepository(workspaceId, '/Users/alice/payments'), 'invalid');
+
+    // Whoever linked one, or a Space owner, unlinks it.
+    await rejectsWith(carol.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Payments'), 'permission-denied');
+    await rejectsWith(bob.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Payments'), 'permission-denied');
+    await bob.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Ledger');
+    await rejectsWith(bob.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Ledger'), 'not-found');
+    await alice.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Payments');
+    assert.deepEqual(await alice.rooms.listSpaceRepositories(workspaceId), []);
+  });
+
+  it('starts rooms quick, and keeps them when asked or once they hold a decision', async () => {
+    const { alice, bob, carol, dave } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Quick look' });
+    assert.equal(room.keptAt, null);
+    await alice.rooms.addMember(room.id, bob.id);
+    await alice.rooms.addMember(room.id, carol.id, 'viewer');
+
+    const kept = await bob.rooms.keepRoom(room.id, true);
+    assert.ok(kept.keptAt);
+    assert.equal((await bob.rooms.keepRoom(room.id, true)).keptAt, kept.keptAt, 'keeping twice keeps the first time');
+    await rejectsWith(carol.rooms.keepRoom(room.id, false), 'permission-denied');
+    await rejectsWith(dave.rooms.keepRoom(room.id, false), 'not-found');
+    // Not by writing the column directly either: only owners update rooms, and only through keep_room for members.
+    const direct = await bob.cloud.from('rooms').update({ kept_at: null }).eq('id', room.id).select();
+    assert.ok(direct.error || !direct.data?.length, 'a member can’t write kept_at directly');
+    assert.equal((await bob.rooms.getRoom(room.id)).keptAt, kept.keptAt);
+    assert.equal((await alice.rooms.keepRoom(room.id, false)).keptAt, null);
+
+    const { error } = await bob.cloud.from('room_decisions').insert({ room_id: room.id, title: 'Retry with backoff', verify: 'No duplicate charges' });
+    assert.equal(error, null);
+    assert.ok((await alice.rooms.getRoom(room.id)).keptAt, 'a decision keeps the room');
+  });
 });

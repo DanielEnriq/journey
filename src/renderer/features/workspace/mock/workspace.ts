@@ -3,9 +3,9 @@ import { mockLog } from '../../../shared/mock.js';
 import { minutesBefore } from '../../../shared/time.js';
 import { account, initials } from '../../../shared/account.js';
 import type {
-  CallDataSource, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomWorkContext, RoomWorkstream, WorkstreamDataSource,
+  CallDataSource, LocalRepo, RepoChoice, EventKind, RoomDataSource, RoomEvent, RoomPreview, RoomWorkContext, RoomWorkstream, WorkstreamDataSource,
 } from '../../room/data/sources.js';
-import type { PersonRef, RoomSummary } from '../../room/types.js';
+import type { PersonRef, RoomSummary, SpaceSummary } from '../../room/types.js';
 import { AGENT, type RecordEvent, type VoweRecord } from '../../vowe-room/contracts/model.js';
 import { classify } from '../../work/status.js';
 import { clearCanvases, demoScene, seedCanvases } from './canvas.js';
@@ -20,7 +20,8 @@ import { clearRecords, DEMO_ME, demoRecord, onRecords, seedRecords } from './rec
 
 const KEY = 'vowe.workspace';
 
-interface SavedRoom { id: string; name: string; goal: string; repo: string | null; createdAt: string }
+interface SavedRoom { id: string; name: string; goal: string; repo: string | null; createdAt: string; spaceId?: string; keptAt?: string | null }
+interface SavedSpace { id: string; name: string; repos: string[]; createdAt: string }
 interface Saved {
   /** When the demo was loaded; example times count back from then. */
   demo: { at: number } | null;
@@ -31,9 +32,12 @@ interface Saved {
   events: Record<string, RoomEvent[]>;
   /** Local workstreams you shared with the room. */
   shared: string[];
+  /** Spaces you made in the demo, and the example rooms you kept or let go quick. */
+  spaces: SavedSpace[];
+  kept: Record<string, string | null>;
 }
 
-const EMPTY: Saved = { demo: null, rooms: [], visits: {}, events: {}, shared: [] };
+const EMPTY: Saved = { demo: null, rooms: [], visits: {}, events: {}, shared: [], spaces: [], kept: {} };
 
 /** Calls you started, left or ended, saved before events said so: marked, so they stay out of a room's summary. */
 const CALL_TEXT = /^(You started a call|You left the call|Call ended)\b/;
@@ -74,6 +78,29 @@ const nameOf = (who: string | null) => (who === DEMO_ME ? 'You' : who === AGENT 
 
 /** Example repositories the demo's room picker offers; nothing is cloned or read. */
 export const EXAMPLE_REPOS: RepoChoice[] = ['acme/payments', 'acme/web', 'acme/ledger'].map((r) => ({ id: r, label: r }));
+
+/** What the demo's "On this Mac" lists: the examples, two more, and a folder with no remote to share. */
+const EXAMPLE_LOCAL: LocalRepo[] = [
+  ...['payments', 'web', 'ledger', 'infra', 'design-system'].map((n) => ({ id: `acme/${n}`, label: n, identity: `github.com/acme/${n}` })),
+  { id: 'scratch', label: 'scratch', identity: null },
+];
+
+/** The example Spaces, shown once the demo is loaded; your own come after them. */
+const DEMO_SPACES: SavedSpace[] = [
+  { id: 'demo-payments', name: 'Payments', repos: ['github.com/acme/payments', 'github.com/acme/ledger'], createdAt: '' },
+  { id: 'demo-storefront', name: 'Storefront', repos: ['github.com/acme/web'], createdAt: '' },
+];
+const DEMO_ROOM_SPACE: Record<string, string> = { payments: 'demo-payments', ledger: 'demo-payments', webhooks: 'demo-payments', latency: 'demo-storefront' };
+
+/** Quick example rooms: one from this afternoon, one gone quiet two days ago (it shows under Earlier). */
+const DEMO_QUICK = [
+  { id: 'flaky', name: 'Why is the retry test flaky?', spaceId: 'demo-payments', repo: 'acme/payments', minutes: 95, activity: 'Priya pointed at the clock in retry_test.go.' },
+  { id: 'refunds', name: 'Refund path walk-through', spaceId: 'demo-payments', repo: 'acme/ledger', minutes: 60 * 50, activity: 'You traced refunds through the ledger.' },
+  { id: 'fonts', name: 'Font loading on checkout', spaceId: 'demo-storefront', repo: 'acme/web', minutes: 60 * 30, activity: 'Mo compared the two preload strategies.' },
+];
+
+/** Your own rooms with no Space go in this one, made when the first is. */
+const PERSONAL = 'demo-personal';
 
 const now = () => Date.now();
 const iso = () => new Date().toISOString();
@@ -200,13 +227,27 @@ function summaryOf(id: string): RoomSummary | null {
     const role = rec.members.find((m) => m.who === DEMO_ME)?.role ?? 'member';
     return {
       id, name: example.name, repo: example.repo, inCall: withYou(id, example.inCall()), role,
+      spaceId: DEMO_ROOM_SPACE[id], keptAt: id in saved.kept ? saved.kept[id] : saved.demo ? new Date(saved.demo.at).toISOString() : null,
       needs: attentionOf(rec)[0]?.text ?? null, activity: changed(events), activityAt: events[0]?.at ?? null,
+    };
+  }
+  const quick = saved.demo ? DEMO_QUICK.find((r) => r.id === id) : null;
+  if (quick && saved.demo) {
+    const events = ownEvents(id);
+    return {
+      id, name: quick.name, repo: quick.repo, spaceId: quick.spaceId, keptAt: saved.kept[id] ?? null, inCall: withYou(id, []), role: 'owner', needs: null,
+      activity: changed(events) || quick.activity, activityAt: events[0]?.at ?? minutesBefore(saved.demo.at, quick.minutes),
     };
   }
   const mine = saved.rooms.find((r) => r.id === id);
   if (!mine) return null;
   const events = ownEvents(id);
-  return { id, name: mine.name, repo: mine.repo, inCall: withYou(id, []), role: 'owner', needs: null, activity: changed(events), activityAt: events[0]?.at ?? mine.createdAt };
+  // Rooms saved before quick rooms existed have no keptAt: they were made to last.
+  return {
+    id, name: mine.name, repo: mine.repo, spaceId: mine.spaceId ?? PERSONAL,
+    keptAt: id in saved.kept ? saved.kept[id] : mine.keptAt === undefined ? mine.createdAt : mine.keptAt,
+    inCall: withYou(id, []), role: 'owner', needs: null, activity: changed(events), activityAt: events[0]?.at ?? mine.createdAt,
+  };
 }
 
 function record(roomId: string, text: string, kind: EventKind, presence = false) {
@@ -216,16 +257,17 @@ function record(roomId: string, text: string, kind: EventKind, presence = false)
 
 const room: RoomDataSource = {
   list() {
-    const ids = saved.rooms.slice().reverse().map((r) => r.id).concat(saved.demo ? DEMO_ROOMS.map((r) => r.id) : []);
+    const ids = saved.rooms.slice().reverse().map((r) => r.id).concat(saved.demo ? [...DEMO_ROOMS, ...DEMO_QUICK].map((r) => r.id) : []);
     return ids.map(summaryOf).filter((r): r is RoomSummary => !!r);
   },
   subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   me: you,
-  async create({ name, goal, repo }) {
+  async create({ name, goal, repo, spaceId }) {
     const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'room';
     const id = `${base}-${now().toString(36).slice(-4)}`;
-    mockLog('room', `created room "${name}" (stored in localStorage, not shared with anyone)`, { goal, repo });
-    saved = { ...saved, rooms: saved.rooms.concat([{ id, name, goal, repo, createdAt: iso() }]) };
+    mockLog('room', `created room "${name}" (stored in localStorage, not shared with anyone)`, { goal, repo, spaceId });
+    // New rooms start quick, as they do for real: they're kept once someone keeps them.
+    saved = { ...saved, rooms: saved.rooms.concat([{ id, name, goal, repo, createdAt: iso(), spaceId: spaceId ?? PERSONAL, keptAt: null }]) };
     record(id, 'You created this room.', 'room');
     return summaryOf(id)!;
   },
@@ -253,6 +295,38 @@ const room: RoomDataSource = {
   visited(id) {
     saved = { ...saved, visits: { ...saved.visits, [id]: iso() } };
     persist();
+  },
+  async keep(id, keep) {
+    commit({ kept: { ...saved.kept, [id]: keep ? summaryOf(id)?.keptAt ?? iso() : null } });
+  },
+  spaces() {
+    const mine = saved.spaces.slice();
+    if (!mine.some((s) => s.id === PERSONAL) && saved.rooms.some((r) => (r.spaceId ?? PERSONAL) === PERSONAL)) mine.unshift({ id: PERSONAL, name: 'Personal', repos: [], createdAt: '' });
+    // An example Space you renamed or linked a repository to is saved under its own id, in its own place.
+    const examples = saved.demo ? DEMO_SPACES.map((d) => mine.find((s) => s.id === d.id) ?? d) : [];
+    const own = mine.filter((s) => !DEMO_SPACES.some((d) => d.id === s.id));
+    return [...examples, ...own].map((s): SpaceSummary => ({ id: s.id, name: s.name, repos: s.repos, role: 'owner' }));
+  },
+  async localRepos() { await wait(120); return EXAMPLE_LOCAL; },
+  async createSpace({ name, repos }) {
+    const id = `space-${now().toString(36)}`;
+    const identities = repos.map((r) => EXAMPLE_LOCAL.find((l) => l.id === r)?.identity).filter((r): r is string => !!r);
+    mockLog('room', `made Space "${name}" (stored in localStorage)`, { repos: identities });
+    commit({ spaces: saved.spaces.concat([{ id, name, repos: identities, createdAt: iso() }]) });
+    return { id, name, repos: identities, role: 'owner' };
+  },
+  async renameSpace(id, name) {
+    const known = saved.spaces.some((s) => s.id === id);
+    commit({ spaces: known ? saved.spaces.map((s) => (s.id === id ? { ...s, name } : s)) : saved.spaces.concat([{ ...(DEMO_SPACES.find((s) => s.id === id) ?? { id, repos: [], createdAt: '' }), name }]) });
+  },
+  async linkRepo(spaceId, repoId) {
+    const identity = EXAMPLE_LOCAL.find((l) => l.id === repoId)?.identity;
+    if (!identity) throw new Error(`${repoId} has no shareable origin remote`);
+    const base = room.spaces!().find((s) => s.id === spaceId);
+    if (!base) throw new Error('No such Space');
+    // In its place, so linking doesn't move the Space in the sidebar.
+    const next = { id: spaceId, name: base.name, repos: [...new Set([...base.repos, identity])], createdAt: iso() };
+    commit({ spaces: saved.spaces.some((s) => s.id === spaceId) ? saved.spaces.map((s) => (s.id === spaceId ? next : s)) : saved.spaces.concat([next]) });
   },
 };
 

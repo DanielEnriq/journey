@@ -3,6 +3,7 @@ import type {
   MembershipErrorCode,
   NewRoom,
   RoomDetails,
+  SpaceRepository,
   RoomErrorCode,
   RoomMember,
   RoomPatch,
@@ -207,6 +208,81 @@ export function createRoomService(client: () => Promise<Cloud>) {
       if (error) throw toRoomError(error);
       if (!data.length) throw await memberRefusal(supabase, id, target, 'remove members');
     },
+    /**
+     * Keeps a room, or lets it be quick again (owners and members). A room also keeps itself once it holds a
+     * decision or a plan; a quick room that goes quiet only drops out of the sidebar, it's never deleted.
+     */
+    async keepRoom(roomId: string, keep: boolean): Promise<RoomDetails> {
+      const id = requireId(roomId, 'Room');
+      const { supabase } = await signedIn();
+      const { error } = await supabase.rpc('keep_room', { room: id, keep: keep === true });
+      if (error) {
+        if (error.code === '42501') {
+          await getRoom(id);
+          throw new RoomError('permission-denied', 'Only the room’s owners and members can keep it');
+        }
+        throw toRoomError(error);
+      }
+      return getRoom(id);
+    },
+
+    /** The Space's repositories, the order they were linked in. Every room in the Space can use all of them. */
+    async listSpaceRepositories(workspaceId: string): Promise<SpaceRepository[]> {
+      const ws = requireId(workspaceId, 'Space');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase
+        .from('workspace_repositories')
+        .select()
+        .eq('workspace_id', ws)
+        .order('added_at');
+      if (error) throw toRoomError(error);
+      return data.map(spaceRepository);
+    },
+
+    /** Links a repository to a Space you're in, by its remote; linking one that's already there returns it. */
+    async linkRepository(workspaceId: string, remote: string): Promise<SpaceRepository> {
+      const ws = requireId(workspaceId, 'Space');
+      const repository = optionalRepository(remote);
+      if (!repository) throw new RoomError('invalid', 'A repository is needed');
+      const { supabase, selfId } = await signedIn();
+      const { error } = await supabase.from('workspace_repositories').insert({ workspace_id: ws, repository, added_by: selfId });
+      if (error && error.code !== '23505') {
+        if (isRlsRefusal(error)) throw new RoomError('not-found', 'No such Space, or you are not a member of it');
+        throw toRoomError(error);
+      }
+      const linked = (await this.listSpaceRepositories(ws)).find((r) => r.repository.toLowerCase() === repository.toLowerCase());
+      if (!linked) throw new RoomError('not-found', 'No such Space, or you are not a member of it');
+      return linked;
+    },
+
+    /** Owners only. Renames the Space for everyone in it. */
+    async renameSpace(workspaceId: string, name: string): Promise<void> {
+      const ws = requireId(workspaceId, 'Space');
+      const named = requireName(name);
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('workspaces').update({ name: named }).eq('id', ws).select('id');
+      if (error) throw toRoomError(error);
+      if (!data.length) throw new RoomError('permission-denied', 'Only the Space’s owners can rename it');
+    },
+
+    /** Unlinks a repository: whoever linked it, or a Space owner. Rooms keep their history of it. */
+    async unlinkRepository(workspaceId: string, repository: string): Promise<void> {
+      const ws = requireId(workspaceId, 'Space');
+      if (typeof repository !== 'string' || !repository) throw new RoomError('invalid', 'A repository is needed');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase
+        .from('workspace_repositories')
+        .delete()
+        .eq('workspace_id', ws)
+        .eq('repository', repository)
+        .select('repository');
+      if (error) throw toRoomError(error);
+      if (!data.length) {
+        const there = (await this.listSpaceRepositories(ws)).some((r) => r.repository === repository);
+        if (there) throw new RoomError('permission-denied', 'Only whoever linked a repository, or the Space’s owners, can unlink it');
+        throw new RoomError('not-found', 'That repository isn’t linked to this Space');
+      }
+    },
   };
 
   /** Why a write to a room matched nothing: you can read it but not change it, or it isn't yours to see. */
@@ -233,8 +309,9 @@ async function findMember(supabase: Cloud, roomId: string, userId: string): Prom
   return data ? member(data) : undefined;
 }
 
-type RoomRow = Omit<RoomSummary, 'role' | 'workspaceId' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
+type RoomRow = Omit<RoomSummary, 'role' | 'workspaceId' | 'createdBy' | 'createdAt' | 'updatedAt' | 'keptAt'> & {
   workspace_id: string;
+  kept_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -250,8 +327,13 @@ function summary(row: RoomRow, role: RoomRole): RoomSummary {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    keptAt: row.kept_at,
     role,
   };
+}
+
+function spaceRepository(row: { workspace_id: string; repository: string; added_by: string | null; added_at: string }): SpaceRepository {
+  return { workspaceId: row.workspace_id, repository: row.repository, addedBy: row.added_by, addedAt: row.added_at };
 }
 
 function member(row: {
