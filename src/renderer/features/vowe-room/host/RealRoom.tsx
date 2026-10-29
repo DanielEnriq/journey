@@ -35,7 +35,16 @@ export interface RealRoomProps {
   role: RoomRole | null;
   /** You, as the record names you (your cloud user id). */
   me: string;
-  call: CallControls;
+  /** The call's controls while you're in it; null outside it. */
+  call: CallControls | null;
+  /** Start Call, Join or Leave, in the band. */
+  callAction?: ComponentChildren;
+  /** The room itself (what it's for, its repositories, people, sessions), above the Desk. */
+  deskTop?: ComponentChildren;
+  /** Renames the room from its title (owners only). */
+  onRename?(name: string): Promise<void>;
+  /** The Space the room is in, beside its name. */
+  space?: string | null;
   /** Who's here and in the call, as the band draws them, and who's talking now (initials). */
   people: PersonRef[];
   speaking: string | null;
@@ -192,7 +201,7 @@ export function RealRoom(p: RealRoomProps) {
   const n = names(directory);
   const speaker = p.speaking;
   const here = p.access ? p.access.members.filter((m) => m.presence !== 'away').length : p.people.length;
-  const hereLine = `${here} here · ${p.inCall} on the call`;
+  const hereLine = p.inCall ? `${here} here · ${p.inCall} on the call` : `${here} here`;
   const deskStatus: DeskStatus = status.state === 'ready' ? { state: 'ready' } : status.state === 'loading' ? { state: 'loading' } : { state: 'failed', error: status.error, retry };
   const role: RoomRole = p.role ?? 'viewer';
   const one = (comp: string) => ui.setState({ sel: [{ component: comp }], deskOpen: true, focusOn: true, tab: 'discuss', fsec: 'discuss', inspect: null });
@@ -200,7 +209,7 @@ export function RealRoom(p: RealRoomProps) {
   return (
     <VoweRoom room={p.room} rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={p.onNewRoom}
       client={p.client} record={record} directory={directory} role={role} capabilities={capabilitiesOf(services)}
-      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} people={p.people} speaking={speaker} hereLine={hereLine} nav={nav}
+      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} callAction={p.callAction} deskTop={p.deskTop} onRename={p.onRename} space={p.space} people={p.people} speaking={speaker} hereLine={hereLine} nav={nav}
       light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay} deskOverride={p.peoplePanel}
       overlays={<>{p.overlays}{ask.reviewing ? <div class="receipt" role="status"><span class="dot"></span><span>{n.agentName()} is replying in the thread…</span></div> : null}
       {askFailed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>{askFailed}</span><button class="mini ghost" type="button" onClick={() => setAskFailed(null)}>Dismiss</button></div> : null}

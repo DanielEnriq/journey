@@ -100,8 +100,3 @@
 .room-title-name:focus-visible{outline:2px solid var(--v-focus,var(--v-info));outline-offset:0}
 .room-title-field{-webkit-app-region:no-drag;field-sizing:content;min-width:60px;max-width:360px;font:600 13px/1 var(--v-font-ui);color:var(--ink-bright);background:var(--v-surface-raised,var(--pane));border:0;border-radius:5px;padding:3px 5px;margin:-3px -5px;box-shadow:inset 0 0 0 1px var(--v-line-strong),0 0 0 3px color-mix(in srgb,var(--v-info) 40%,transparent);outline:none}
 .room-title-space{font-size:12px;color:var(--ink-8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Who's looking, not in the call: faded, overlapping. */
-.who.viewers{gap:0;margin-right:4px}
-.who.viewers .avatar{opacity:.5;margin-left:-5px}
-.who.viewers .avatar:first-child{margin-left:0}
-.who.viewers .avatar.more{background:var(--v-surface-selected);color:var(--ink-6)}

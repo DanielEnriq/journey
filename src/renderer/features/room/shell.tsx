@@ -147,15 +147,3 @@ export function RoomTitle({ name, space, onRename }: { name: string; space?: str
     </span>
   );
 }
-
-/** Who has the room open but isn't in its call: their faces, faded, as Figma shows who's looking. */
-export function Viewers({ people }: { people: PersonRef[] }) {
-  if (!people.length) return null;
-  const shown = people.slice(0, 3), more = people.length - shown.length;
-  return (
-    <div class="who viewers" role="group" aria-label={`${people.map((p) => p.name).join(', ')} ${people.length === 1 ? 'has' : 'have'} the room open`}>
-      {shown.map((p) => <span key={p.initials} class={`avatar ${p.tone === 'me' ? '' : p.tone}`} title={`${p.name} · looking`}>{p.initials}</span>)}
-      {more > 0 ? <span class="avatar more" title={people.slice(3).map((p) => p.name).join(', ')}>+{more}</span> : null}
-    </div>
-  );
-}

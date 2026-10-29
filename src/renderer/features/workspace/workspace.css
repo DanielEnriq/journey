@@ -9,19 +9,15 @@
 .win .avatar.p3{background:var(--ink-6)}
 .win .mav.p3{background:var(--ink-6)}
 
-/* ---------- A room from outside its call. ---------- */
+/* ---------- The room's own cards, above the Desk in its side panel. ---------- */
 @scope (.room-screen) {
-  .win.outside .room{grid-template-rows:40px minmax(0,1fr)}
-  /* The room is one plane; its inspector is a stack of cards floating on its right, not a column beside it. */
-  .lobby{grid-row:2;min-height:0;position:relative;display:grid;grid-template-columns:minmax(0,1fr);border-top:1px solid var(--hairline);background-color:var(--studio-field);background-image:radial-gradient(ellipse 72% 54% at 50% 0%,var(--studio-glow),transparent 74%);container-type:inline-size;}
-  @keyframes lobbyIn{from{opacity:0}to{opacity:1}}
-  .lobby-main{min-width:0;min-height:0;overflow-y:auto}
-  .lobby:not(.no-inspector) .lobby-main{padding-right:300px}
-  .lobby-col{max-width:680px;margin:0 auto;padding:32px 40px 56px;box-sizing:border-box;display:flex;flex-direction:column;gap:28px}
-  /* The stack: cards keep their own height and the stack scrolls when they outgrow the window. */
-  .lobby-side{position:absolute;top:12px;right:12px;bottom:12px;width:284px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;scrollbar-width:none;}
-  .lobby-side::-webkit-scrollbar{display:none}
-  .icard{flex:none;display:flex;flex-direction:column;border-radius:12px;background:var(--v-surface-raised);box-shadow:0 0 0 .5px var(--hairline),0 1px 2px rgba(0,0,0,.05),0 6px 20px -8px rgba(0,0,0,.14);animation:lobbyIn .18s ease-out}
+  .desk-panel{display:flex;flex-direction:column}
+  .desk-panel > :last-child{flex:1;min-height:0;height:auto}
+  .desk-cards{flex:none;max-height:55%;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:12px 12px 4px;scrollbar-width:none}
+  .desk-cards::-webkit-scrollbar{display:none}
+  /* The Room card says who's here, so the Desk's own heading gives the band back to the call. */
+  .desk-panel:has(> .desk-cards) .nx-desk2 > .rp-rhead{display:none}
+  .icard{flex:none;display:flex;flex-direction:column;border-radius:12px;background:var(--v-surface-raised);box-shadow:0 0 0 .5px var(--hairline),0 1px 2px rgba(0,0,0,.05),0 6px 20px -8px rgba(0,0,0,.14);}
   .icard-h{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:4px;height:34px;padding:0 12px;cursor:default;border-radius:12px}
   .icard-h:focus-visible{box-shadow:inset 0 0 0 2px var(--v-focus)}
   .icard-t{font-size:12px;font-weight:600;color:var(--v-fg-2,var(--ink-5))}
@@ -35,34 +31,33 @@
   .icard-b > .rsec + .rsec{border-top:1px solid var(--hairline);margin-top:10px;padding-top:10px}
   .icard-b .rsec .rk{gap:4px;font-size:11px;font-weight:600;color:var(--ink-7)}
   .icard-b .rsec .rk svg{width:12px;height:12px;color:var(--ink-8)}
+  /* What the room is for: one plain line, or the question that asks it. */
+  .icard-goal{margin:0 0 8px;font-size:12.5px;line-height:1.45;color:var(--ink-3);text-wrap:pretty}
+  .icard-goal.goal-field{display:block;width:100%;padding:0;resize:none;overflow:hidden;border:0;background:none;outline:none;font-family:inherit;color:var(--ink-bright)}
+  .icard-goal.goal-field::placeholder{color:var(--ink-8)}
+  .icard-goal.goal-field:disabled{opacity:.6}
   .icard-repos{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:2px}
   .icard-repos li{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:var(--ink-6);line-height:20px}
   .icard-repos li svg{flex:none;width:13px;height:13px;color:var(--ink-8)}
   .icard-repos li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .icard-repos + .rsec{border-top:1px solid var(--hairline);margin-top:8px;padding-top:10px}
   /* A stream on one line in a card: its title gives way, the agent's name doesn't. */
-  .lobby-side .wstream .top{display:flex;align-items:center;gap:6px;min-width:0}
-  .lobby-side .wstream .wt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .lobby-side .wstream .top .who{margin-left:auto;flex:none;padding-left:6px;white-space:nowrap;font-size:11px;color:var(--ink-8)}
-  .lobby-side .wstream .top .wface{margin-left:auto;flex:none;width:16px;height:16px;font-size:8px;line-height:16px}
+  .desk-cards .wstream .top{display:flex;align-items:center;gap:6px;min-width:0}
+  .desk-cards .wstream .wt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .desk-cards .wstream .top .who{margin-left:auto;flex:none;padding-left:6px;white-space:nowrap;font-size:11px;color:var(--ink-8)}
+  .desk-cards .wstream .top .wface{margin-left:auto;flex:none;width:16px;height:16px;font-size:8px;line-height:16px}
   /* Add Session: one quiet line under the room's sessions; what's on this Mac opens as a menu. */
   .wadd{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:6px;margin-top:4px;padding:5px 6px;border-radius:6px;font-size:12px;color:var(--ink-7);cursor:default}
   .wadd svg{width:12px;height:12px;color:var(--ink-8)}
   .wadd:hover{background:color-mix(in srgb,var(--v-fg) 6%,transparent);color:var(--v-fg-2)}
   .wadd:focus-visible{box-shadow:inset 0 0 0 2px var(--v-focus)}
   .wadd-n{margin-left:auto;font-size:11px;color:var(--ink-8);font-variant-numeric:tabular-nums}
-  /* Too narrow to float beside the page: the cards follow it, in the page's own flow. */
-  @container (max-width: 760px){.lobby{overflow-y:auto}.lobby-main{overflow:visible}.lobby:not(.no-inspector) .lobby-main{padding-right:0}.lobby-side{position:static;width:auto;overflow:visible;padding:0 24px 40px}.lobby-col{padding:24px 24px 32px}}
-  .lhead{display:flex;flex-direction:column;gap:10px;padding:0 2px}
-  .lhead .goal-line{font-size:22px;letter-spacing:-.022em;line-height:1.3;padding:0}
-  .lhead .goal-line.quiet{font-size:17px;color:var(--ink-5);font-weight:500}
-  .lhead .goal-by{padding:0}
   .wnote{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 2px;font-size:12px;line-height:1.5;color:var(--ink-7)}
   .linkish{border:0;background:transparent;padding:0;font-size:inherit;color:var(--ink-3);text-decoration:underline;text-decoration-color:var(--border-4);text-underline-offset:2px}
   .spinlet{width:11px;height:11px;flex:0 0 11px;box-sizing:border-box;border-radius:50%;box-shadow:inset 0 0 0 1.4px var(--fill-3);border-top:1.4px solid var(--ink-5);animation:spinlet 900ms linear infinite}
   @keyframes spinlet{to{transform:rotate(360deg)}}
 
-  /* The call, in the toolbar: who's in it, and a phone. Live, it's a green Join pill, as FaceTime does it. */
+  /* The call, in the toolbar: Start Call, a green Join pill when people are talking (as FaceTime does it), and Leave. */
   .tb-call{display:flex;align-items:center;gap:8px}
   .tb-call .who .avatar{width:20px;height:20px;font-size:8.5px}
   .tb-callbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:26px;min-width:26px;padding:0 5px;border:0;border-radius:6px;background:transparent;color:var(--ink-5);font:500 12px/1 var(--v-font-ui);transition:background 150ms ease,color 150ms ease}
@@ -71,47 +66,20 @@
   .tb-callbtn:disabled{opacity:.7;cursor:default}
   .tb-callbtn.live{padding:0 10px 0 8px;border-radius:13px;background:var(--v-success, #34c759);color:#fff}
   .tb-callbtn.live:hover{background:color-mix(in srgb,var(--v-success, #34c759) 88%,#000);color:#fff}
+  .tb-callbtn.labeled{padding:0 9px 0 7px;font-size:12px;font-weight:500}
+  .tb-callbtn.labeled.live{padding:0 10px 0 8px}
+  .tb-callbtn.leave{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+  .tb-callbtn.leave:hover{background:var(--bad);color:#fff}
   .tb-call .vm-prejoin-pop{left:auto;right:0}
 
-  /* One line the toolbar can't say: the call failed, or where joining lands. */
-  .lnote{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-12px 0 0;padding:8px 10px;border-radius:8px;background:var(--v-info-wash);font-size:12px;line-height:1.45;color:var(--ink-4)}
-  .lnote svg{flex:0 0 auto;color:var(--v-info-fg)}
-  .lnote b{font-weight:600;color:var(--ink-2)}
-  .lnote.err{background:var(--attention-wash);color:var(--attention-text)}
-  .lnote.err svg{color:var(--attention-ink)}
 
-  /* A section of the page: a small heading, then its content. */
-  .lsec{display:flex;flex-direction:column;gap:8px}
-  .lk{padding:0 2px;font-size:11px;font-weight:600;color:var(--ink-7)}
 
-  /* What waits on you: rows, as a Mac list groups them, with the one action on the right. */
-  .needlist{margin:0;padding:4px 0;list-style:none;border-radius:10px;background:var(--studio-card);box-shadow:inset 0 0 0 1px var(--hairline)}
-  .needrow{display:grid;grid-template-columns:6px minmax(0,1fr) auto;align-items:center;gap:12px;padding:9px 12px}
-  .needrow + .needrow{box-shadow:inset 0 1px 0 var(--hairline)}
-  .nr-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
-  .nr-txt b{font-size:13px;font-weight:600;color:var(--ink-bright)}
-  .nr-txt span{font-size:12px;line-height:1.45;color:var(--ink-6);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .nr-acts{display:flex;gap:6px}
 
   /* The last shared view, as a still. */
-  .glimpse{gap:8px}
-  .gl-cap{display:flex;align-items:baseline;gap:4px;padding:0 2px;font-size:12px;color:var(--ink-6);min-width:0}
-  .gl-cap b{font-weight:600;color:var(--ink-3)}
-  .gl-meta{margin-left:auto;padding-left:12px;font-size:11px;color:var(--ink-8);white-space:nowrap}
   .glimpse-view{position:relative;overflow:hidden;border-radius:14px;background:var(--studio-field);background-image:radial-gradient(ellipse 72% 64% at 50% 44%,var(--studio-glow),transparent 74%);box-shadow:inset 0 0 0 1px var(--hairline);pointer-events:none;user-select:none}
   .glimpse-fit{position:absolute;left:0;top:0;transform-origin:0 0}
   .glimpse-fit .stage{left:0;top:0;transform:none}
   .glimpse-fit .node,.glimpse-fit .wire,.glimpse-fit .step,.glimpse-fit .part{transition:none}
-  /* An empty canvas: the canvas's own dot grid, with the call it waits for in the middle. */
-  .gl-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:280px;padding:20px 28px;box-sizing:border-box;border-radius:14px;background:var(--studio-field);background-image:radial-gradient(circle,var(--border-3) 1px,transparent 1.2px);background-size:18px 18px;box-shadow:inset 0 0 0 1px var(--hairline);text-align:center;font-size:12px;color:var(--ink-7)}
-  .gl-call{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 14px 0 11px;border:0;border-radius:999px;background:var(--good);color:#fff;font:600 12.5px/1 var(--v-font-ui);cursor:default;box-shadow:0 1px 2px rgba(0,0,0,.18)}
-  .gl-call:hover{filter:brightness(1.06)}
-  .gl-call:active{filter:brightness(.94)}
-  .gl-call:focus-visible{outline:2px solid var(--v-info);outline-offset:2px}
-  /* What a new room is for: the goal line itself, typed into. */
-  .lhead .goal-field{display:block;width:100%;resize:none;overflow:hidden;border:0;background:none;outline:none;font-family:inherit;color:var(--ink-bright)}
-  .lhead .goal-field::placeholder{color:var(--ink-8)}
-  .lhead .goal-field:disabled{opacity:.6}
 
   /* What happened. */
   .evlist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
@@ -147,8 +115,6 @@
   .wstream.stale:not(.open){opacity:.55;transition:opacity .15s}
   .wstream.stale:not(.open):hover,.wstream.stale:focus-within{opacity:1}
 
-  /* "Changed since you were here" on the canvas caption. */
-  .gl-new{display:inline-block;margin-right:8px;padding:0 6px;border-radius:999px;background:var(--v-info-wash);font-size:10.5px;line-height:17px;font-weight:550;color:var(--v-info-fg)}
   .when{font-size:11px;color:var(--ink-8);white-space:nowrap}
 
   /* What waits on someone. */

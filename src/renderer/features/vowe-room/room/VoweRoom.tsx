@@ -2,6 +2,7 @@ import { h, Fragment, useEffect, useState, useStore, Lights, Chrome, Who, CallBa
 import { AccountFoot } from '../../../shared/components/Account.js';
 import { shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui/pass2/shell/prefs.js';
 import { ShellSidebar } from '../../../ui/pass2/shell/Sidebar.js';
+import { RoomTitle } from '../../room/shell.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
 import { focusCrumbs } from '../desk/Focus.js';
@@ -56,6 +57,14 @@ export interface VoweRoomProps {
   onMarks(component: string): void;
   /** Journey's call controls; null when there's no call (the normal state). */
   call: CallControls | null;
+  /** Start Call, Join or Leave, first among the band's actions. */
+  callAction?: ComponentChildren;
+  /** The room itself, above the Desk in its column: Journey's Room and Sessions cards. */
+  deskTop?: ComponentChildren;
+  /** Renames the room from its title (owners); absent, the name is plain. */
+  onRename?(name: string): Promise<void>;
+  /** The Space the room is in, grey beside its name; the repository when there's no Space. */
+  space?: string | null;
   /** Who's here, as Journey's presence shows them. `speaking` rings one of them. */
   people: PersonRef[];
   speaking?: string | null;
@@ -166,14 +175,13 @@ export function VoweRoom(p: VoweRoomProps) {
           <Lights />
           {p.windowOverlay}
           <Chrome side={side} sideName="sidebar" desk={u.deskOpen} deskUnseen={!u.deskOpen && !!top} toggleSide={toggleSidebar} toggleDesk={() => p.ui.setState(u.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' })}
-            nav={p.nav} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
+            nav={p.nav} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.callAction}{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
           <aside class="sidebar vh-sb-host" aria-hidden={!side} inert={!side}>
             <ShellSidebar place={null} rooms={rooms} current={p.room.id} onRoom={p.onOpenRoom} onNew={(space) => p.onNewRoom(space)} foot={<AccountFoot />} />
           </aside>
           <main class="room">
             <div class="room-identity">
-              <h1>{p.room.name}</h1>
-              {p.room.repo ? <span class="meta">{p.room.repo}</span> : null}
+              <RoomTitle name={p.room.name} space={p.space ?? p.room.repo} onRename={p.onRename} />
               <div class="presence"><Who people={p.people} vowe={!!p.call && rec.vowe && u.vowe !== 'off'} ring={p.speaking ? { [p.speaking]: 'speaking' } : {}} /></div>
             </div>
             <Surface client={p.client} ui={p.ui} marks={p.marks} lit={p.lit} onAsk={rec.vowe ? p.onAsk : undefined} onScenario={p.onScenario} onCopies={p.onCopies}
@@ -193,6 +201,7 @@ export function VoweRoom(p: VoweRoomProps) {
           <aside class="desk" aria-label="Where the room is" aria-hidden={!u.deskOpen}>
             {u.deskOpen && !sheet && !focusMode ? <div class="nx-split" role="separator" aria-orientation="vertical" aria-label="Resize the Desk" title="Drag to widen or narrow · double-click to switch" onPointerDown={startDrag} onDblClick={() => p.act.depth(depth === 'expanded' ? 'compact' : 'expanded')}><i></i></div> : null}
             <div class="desk-panel">
+              {p.deskTop && !p.deskOverride && !focusMode ? p.deskTop : null}
               {p.deskOverride ? p.deskOverride : !p.deskStatus || p.deskStatus.state === 'ready' ? <Desk {...deskProps} /> : <DeskPending status={p.deskStatus} />}
             </div>
           </aside>
