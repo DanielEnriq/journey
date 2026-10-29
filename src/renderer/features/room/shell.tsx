@@ -1,4 +1,5 @@
 import { h, type ComponentChildren } from '../../vendor/preact.js';
+import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
 import { PanelRight } from '../../shared/components/icons.js';
 import { IconButton } from '../../ui/components.js';
 import { AccountFoot } from '../../shared/components/Account.js';
@@ -118,5 +119,31 @@ export function Who({ people, vowe, ring }: { people: PersonRef[]; vowe: boolean
       {people.map((p) => <span key={p.initials} class={`avatar ${p.tone === 'me' ? '' : p.tone} ${ring?.[p.initials] ?? ''}`} title={p.name}>{p.initials}</span>)}
       {vowe && <span class="orb small" title="Vowe"></span>}
     </div>
+  );
+}
+
+/**
+ * The room's name in the toolbar, and the Space it's in beside it in grey. Owners click the name to rename it in
+ * place, as a Mac window's title is renamed: Return keeps it, Escape puts it back, clicking away keeps it.
+ */
+export function RoomTitle({ name, space, onRename }: { name: string; space?: string | null; onRename?: (name: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) field.current?.select(); }, [editing]);
+  const done = (keep: boolean) => {
+    const next = field.current?.value.trim() ?? '';
+    setEditing(false);
+    if (keep && onRename && next && next !== name) void onRename(next).catch(() => { /* the name stays as it was */ });
+  };
+  return (
+    <span class="room-title">
+      {editing ? (
+        <input ref={field} class="room-title-field" defaultValue={name} aria-label="Room name"
+          onKeyDown={(e) => { if (e.key === 'Enter') done(true); else if (e.key === 'Escape') done(false); }} onBlur={() => done(true)} />
+      ) : onRename ? (
+        <h1><button type="button" class="room-title-name" title="Rename" onClick={() => setEditing(true)}>{name}</button></h1>
+      ) : <h1>{name}</h1>}
+      {space ? <span class="room-title-space">{space}</span> : null}
+    </span>
   );
 }

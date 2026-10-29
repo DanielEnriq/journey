@@ -914,19 +914,25 @@ export type Database = {
       }
       room_members: {
         Row: {
+          archived_at: string | null
           joined_at: string
+          pin_order: number | null
           role: Database["public"]["Enums"]["room_role"]
           room_id: string
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           joined_at?: string
+          pin_order?: number | null
           role?: Database["public"]["Enums"]["room_role"]
           room_id: string
           user_id: string
         }
         Update: {
+          archived_at?: string | null
           joined_at?: string
+          pin_order?: number | null
           role?: Database["public"]["Enums"]["room_role"]
           room_id?: string
           user_id?: string
@@ -944,6 +950,72 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_sessions: {
+        Row: {
+          activity: string | null
+          agent: string
+          attached_at: string
+          attached_by: string | null
+          branch: string | null
+          changed_files: number | null
+          last_seen_at: string | null
+          repository: string
+          room_id: string
+          session_id: string
+          status: string
+          status_at: string | null
+          title: string
+          waiting_on: string | null
+        }
+        Insert: {
+          activity?: string | null
+          agent?: string
+          attached_at?: string
+          attached_by?: string | null
+          branch?: string | null
+          changed_files?: number | null
+          last_seen_at?: string | null
+          repository: string
+          room_id: string
+          session_id: string
+          status?: string
+          status_at?: string | null
+          title: string
+          waiting_on?: string | null
+        }
+        Update: {
+          activity?: string | null
+          agent?: string
+          attached_at?: string
+          attached_by?: string | null
+          branch?: string | null
+          changed_files?: number | null
+          last_seen_at?: string | null
+          repository?: string
+          room_id?: string
+          session_id?: string
+          status?: string
+          status_at?: string | null
+          title?: string
+          waiting_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_sessions_attached_by_fkey"
+            columns: ["attached_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_sessions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
             referencedColumns: ["id"]
           },
         ]
@@ -1284,6 +1356,7 @@ export type Database = {
           created_by: string
           goal: string | null
           id: string
+          kept_at: string | null
           name: string
           repository: string | null
           updated_at: string
@@ -1295,6 +1368,7 @@ export type Database = {
           created_by?: string
           goal?: string | null
           id?: string
+          kept_at?: string | null
           name: string
           repository?: string | null
           updated_at?: string
@@ -1306,6 +1380,7 @@ export type Database = {
           created_by?: string
           goal?: string | null
           id?: string
+          kept_at?: string | null
           name?: string
           repository?: string | null
           updated_at?: string
@@ -1782,6 +1857,42 @@ export type Database = {
           },
         ]
       }
+      workspace_repositories: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          repository: string
+          workspace_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          repository: string
+          workspace_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          repository?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_repositories_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_repositories_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           agent_name: string
@@ -1861,6 +1972,18 @@ export type Database = {
           invited_email: string
           resent: boolean
         }[]
+      }
+      archive_room: {
+        Args: { archive: boolean; room: string }
+        Returns: string
+      }
+      keep_room: {
+        Args: { keep: boolean; room: string }
+        Returns: string
+      }
+      pin_room: {
+        Args: { pin_order: number; room: string }
+        Returns: number
       }
       my_room_invitations: {
         Args: never

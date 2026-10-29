@@ -204,11 +204,11 @@ export interface ClaudeCodeSession {
 }
 
 /**
- * What Vowe observes of a Claude Code session, named after the hook events. Hooks report all six
+ * What Vowe observes of a Claude Code session, named after the hook events. Hooks report all seven
  * (agents/claude-code-hooks.ts); the transcript watcher (agents/claude-code-watcher.ts) sees prompts,
  * tool results, and completed turns, but never a session starting or ending.
  */
-export type ClaudeCodeEventType = 'SessionStart' | 'UserPromptSubmit' | 'PostToolUse' | 'PostToolUseFailure' | 'Stop' | 'SessionEnd';
+export type ClaudeCodeEventType = 'SessionStart' | 'UserPromptSubmit' | 'PostToolUse' | 'PostToolUseFailure' | 'Notification' | 'Stop' | 'SessionEnd';
 
 /** One observed event, reduced to a summary line; tool inputs and outputs aren't kept. */
 export interface ClaudeCodeEvent {
@@ -225,7 +225,8 @@ export interface ClaudeCodeEvent {
   toolName: string | null;
   /**
    * One redacted line: the tool's command, file, or pattern (plus the error on a failure), the
-   * prompt, the end of Claude's reply on Stop, the start source, or the end reason.
+   * prompt, the end of Claude's reply on Stop, what it asked for on Notification, the start source,
+   * or the end reason.
    */
   summary: string | null;
   /** Fired inside a subagent rather than the main conversation. */
@@ -239,11 +240,12 @@ export interface ClaudeCodeEvent {
  * a long tool call and a killed process look the same from outside.
  * - `active`: new activity (a start, prompt, or tool call) was observed in the last few minutes;
  *   it lapses to `unknown` after that.
+ * - `waiting`: Claude asked its user for permission or an answer, and nothing has happened since.
  * - `turn-completed`: Claude finished a reply and was waiting on its user.
  * - `ended`: the session exited; only a SessionEnd hook confirms this.
  * - `unknown`: nothing observed recently enough to say.
  */
-export type ClaudeCodeActivityState = 'active' | 'turn-completed' | 'ended' | 'unknown';
+export type ClaudeCodeActivityState = 'active' | 'waiting' | 'turn-completed' | 'ended' | 'unknown';
 
 export interface ClaudeCodeActivity {
   state: ClaudeCodeActivityState;
@@ -626,9 +628,67 @@ export interface RoomSummary {
   createdAt: string;
   /** Last change to the room's own fields (name, goal, repository). */
   updatedAt: string;
+  /**
+   * When the room was kept; null while it's quick. A room keeps itself once it holds a decision or a plan,
+   * and a quick one that goes quiet drops out of the sidebar into Earlier. Neither is ever deleted.
+   */
+  keptAt: string | null;
   /** Your role in it. */
   role: RoomRole;
+  /** Where it sits among the rooms you pinned, smallest first; null when you haven't pinned it. Yours alone. */
+  pinOrder: number | null;
+  /** When you archived it out of your sidebar; null while it's there. Yours alone: the room is untouched. */
+  archivedAt: string | null;
 }
+
+/** A repository linked to a Space (a workspace). Every room in the Space can use all of its repositories. */
+export interface SpaceRepository {
+  workspaceId: string;
+  /** Shared identity, e.g. `github.com/acme/payments`; each member maps it to their own clone. */
+  repository: string;
+  addedBy: string | null;
+  addedAt: string;
+}
+
+/** What a coding session was last seen doing, by the machine running it. */
+/** `waiting`: the agent asked whoever runs it for something and has done nothing since (see RoomSessionWaitingOn). */
+export type RoomSessionStatus = 'active' | 'waiting' | 'completed' | 'attention' | 'unknown';
+/** What a waiting session asked for: permission to use a tool, or an answer to a question it put. */
+export type RoomSessionWaitingOn = 'permission' | 'input';
+/** Which coding agent runs a session. */
+export type RoomSessionAgent = 'claude-code' | 'codex';
+
+/**
+ * A Claude Code session attached to a room: the room's members see it, its title and what it's doing.
+ * Its transcript stays on the machine that ran it; that machine publishes the status when it changes.
+ */
+export interface AttachedSession {
+  roomId: string;
+  /** The agent's own session id. */
+  sessionId: string;
+  agent: RoomSessionAgent;
+  /** The Space repository it runs in, by shared identity. */
+  repository: string;
+  title: string;
+  branch: string | null;
+  /** Whose machine it runs on: whoever attached it. Null once their account is gone. */
+  attachedBy: string | null;
+  attachedAt: string;
+  status: RoomSessionStatus;
+  /** Set exactly when the status is `waiting`. Whoever attached it is who it waits on. */
+  waitingOn: RoomSessionWaitingOn | null;
+  /** The latest thing it did, in words. */
+  activity: string | null;
+  changedFiles: number | null;
+  /** When the status was last published; null until it first is. */
+  statusAt: string | null;
+  /** When the machine running it last observed it do anything; null until that's published. */
+  lastSeenAt: string | null;
+}
+
+export type NewRoomSession = Pick<AttachedSession, 'sessionId' | 'repository' | 'title' | 'branch'> & Partial<Pick<AttachedSession, 'agent'> & RoomSessionReport>;
+/** What the machine running a session publishes about it. */
+export type RoomSessionReport = Pick<AttachedSession, 'status' | 'activity' | 'changedFiles'> & Partial<Pick<AttachedSession, 'waitingOn' | 'lastSeenAt'>>;
 
 export interface RoomDetails extends RoomSummary {
   memberCount: number;
@@ -711,6 +771,13 @@ export interface RoomCheckout {
   path: string;
 }
 
+/** One of a room's repositories and its clone on this machine; nulls when it isn't cloned here. Never stored in the cloud. */
+export interface RoomRepositoryCheckout {
+  repository: string;
+  repositoryId: string | null;
+  path: string | null;
+}
+
 /**
  * A line of coding work (a branch in a worktree, with its Claude Code sessions) linked to a room.
  * `local` ones come from WorkContextService on this machine; `room` ones were shared with members.
@@ -768,7 +835,7 @@ export interface RoomEvents {
    * settings such as the assistant's name); members re-read it. The database sends it too, after each
    * vowe_* write.
    */
-  'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' | 'work' | 'plan' | 'settings' };
+  'record:changed': { what: 'thread' | 'reply' | 'decision' | 'signature' | 'work' | 'plan' | 'settings' | 'sessions' };
   /**
    * Who's in the room changed: someone joined, left, was removed or got another role, or an invitation
    * changed. Members re-read the room's access; `userId` (when it's about a person) lets the person it's
@@ -1059,6 +1126,8 @@ export interface Channels {
     'repos:remove': (id: string) => void;
     /** Looks for repositories in the usual code folders, leaving out ones already added. */
     'repos:detect': () => DetectedRepository[];
+    /** Each added repository's shared identity (its `origin`, as host/path), or null where it has none. */
+    'repos:identities': () => { id: string; identity: string | null }[];
     /** Only accepts a path the last repos:detect returned, so this can't add arbitrary paths. */
     'repos:addDetected': (path: string) => Repository;
     /** Records the repository as opened, which moves it to the top of the list. */
@@ -1094,6 +1163,27 @@ export interface Channels {
     'rooms:attachRepository': (roomId: string, repositoryId: string) => RoomResult<RoomDetails>;
     /** The room's repository checked out on this machine: an added local repository whose origin matches. */
     'rooms:checkout': (roomId: string) => RoomResult<RoomCheckout | null>;
+    /** Each of the room's repositories (its Space's), and where it's checked out here if it is. */
+    'rooms:checkouts': (roomId: string) => RoomResult<RoomRepositoryCheckout[]>;
+    /** Keeps a room, or lets it be quick again. Owners and members. */
+    'rooms:keep': (roomId: string, keep: boolean) => RoomResult<RoomDetails>;
+    /** Pins a room at a place among yours, moves it, or unpins it (null). Yours alone. */
+    'rooms:pin': (roomId: string, order: number | null) => RoomResult<RoomDetails>;
+    /** Archives a room out of your sidebar, or brings it back. Yours alone. */
+    'rooms:archive': (roomId: string, archive: boolean) => RoomResult<RoomDetails>;
+    'rooms:sessions': (roomId: string) => RoomResult<AttachedSession[]>;
+    /** Owners and members; the session must be in one of the Space's repositories. */
+    'rooms:attachSession': (roomId: string, session: NewRoomSession) => RoomResult<AttachedSession>;
+    /** Whoever attached it, or a room owner. */
+    'rooms:detachSession': (roomId: string, sessionId: string) => RoomResult<void>;
+    /** Whoever attached it: what it's doing now, on their machine. */
+    'rooms:reportSession': (roomId: string, sessionId: string, report: RoomSessionReport) => RoomResult<void>;
+    'spaces:repositories': (workspaceId: string) => RoomResult<SpaceRepository[]>;
+    /** Links a local repository's `origin` identity to the Space; its path stays local. */
+    'spaces:link': (workspaceId: string, repositoryId: string) => RoomResult<SpaceRepository>;
+    'spaces:unlink': (workspaceId: string, repository: string) => RoomResult<void>;
+    /** Owners only. */
+    'spaces:rename': (workspaceId: string, name: string) => RoomResult<void>;
     'record:get': (roomId: string) => RoomResult<RoomRecord>;
     'record:addThread': (roomId: string, thread: NewThread) => RoomResult<RoomThread>;
     'record:reply': (roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent') => RoomResult<RoomComment>;
@@ -1244,6 +1334,8 @@ export interface JourneyApi {
     addDetected(path: string): Promise<Repository>;
     /** Marks the repository as the one being worked on (most recently opened). */
     open(id: string): Promise<Repository>;
+    /** Each added repository's shared identity from its `origin`; null where it has no shareable remote. */
+    identities(): Promise<{ id: string; identity: string | null }[]>;
   };
   git: {
     /** Current branch, upstream, and changed files of the repository's working tree. */
@@ -1289,6 +1381,14 @@ export interface JourneyApi {
     list(): Promise<Workspace[]>;
     /** Creates a workspace owned by the signed-in user. */
     create(name: string): Promise<Workspace>;
+    /** The Space's repositories, the order they were linked in. */
+    repositories(workspaceId: string): Promise<RoomResult<SpaceRepository[]>>;
+    /** Links a local repository to the Space by its `origin` remote; only the identity leaves this machine. */
+    link(workspaceId: string, repositoryId: string): Promise<RoomResult<SpaceRepository>>;
+    /** Whoever linked it, or a Space owner. */
+    unlink(workspaceId: string, repository: string): Promise<RoomResult<void>>;
+    /** Owners only. */
+    rename(workspaceId: string, name: string): Promise<RoomResult<void>>;
   };
   rooms: {
     // Persistent rooms. Each resolves with a RoomResult rather than rejecting, so the UI can tell
@@ -1314,6 +1414,22 @@ export interface JourneyApi {
     attachRepository(roomId: string, repositoryId: string): Promise<RoomResult<RoomDetails>>;
     /** Where this room's repository is checked out on this machine; null when it isn't, or the room has none. */
     checkout(roomId: string): Promise<RoomResult<RoomCheckout | null>>;
+    /** Every repository the room can use (its Space's), each with where it's checked out here, or nulls. */
+    checkouts(roomId: string): Promise<RoomResult<RoomRepositoryCheckout[]>>;
+    /** Keeps the room, or lets it be quick again; owners and members. */
+    keep(roomId: string, keep: boolean): Promise<RoomResult<RoomDetails>>;
+    /** Pins the room at a place among yours (smallest first), moves it, or unpins it (null). Yours alone. */
+    pin(roomId: string, order: number | null): Promise<RoomResult<RoomDetails>>;
+    /** Archives the room out of your sidebar (unpinning it), or brings it back. Yours alone. */
+    archive(roomId: string, archive: boolean): Promise<RoomResult<RoomDetails>>;
+    /** The coding sessions attached to the room, in the order they were attached. Members. */
+    sessions(roomId: string): Promise<RoomResult<AttachedSession[]>>;
+    /** Attaches one of your sessions to the room (owners and members); attaching it again updates it. */
+    attachSession(roomId: string, session: NewRoomSession): Promise<RoomResult<AttachedSession>>;
+    /** Detaches a session: whoever attached it, or a room owner. Nothing on any machine changes. */
+    detachSession(roomId: string, sessionId: string): Promise<RoomResult<void>>;
+    /** Publishes what a session you attached is doing now. */
+    reportSession(roomId: string, sessionId: string, report: RoomSessionReport): Promise<RoomResult<void>>;
 
     // The live room: Realtime channel and presence. Members only.
     /** Connects and announces you to the room. Members only; joining twice is a no-op. */

@@ -135,8 +135,9 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
   const me = client.transport.me();
   const doc = s.doc;
   // Lenses: in a call, switching views moves everyone (the document's shared activeView). "Just me" keeps
-  // a personal lens: your view changes, nobody else's does, and nothing is saved.
-  const personal = u.lens === 'mine' && inCall;
+  // a personal lens: your view changes, nobody else's does, and nothing is saved. Outside the call you're
+  // always on your own lens, so looking around the room never moves a call someone else is in.
+  const personal = inCall ? u.lens === 'mine' : true;
   const shared = s.scenes[doc.activeView] ? doc.activeView : 'architecture';
   const view = personal && u.myView && s.scenes[u.myView] ? u.myView : shared;
   const scene = s.scenes[view] as Scene | undefined;

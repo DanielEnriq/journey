@@ -3,11 +3,18 @@ import type {
   MembershipErrorCode,
   NewRoom,
   RoomDetails,
+  SpaceRepository,
   RoomErrorCode,
   RoomMember,
   RoomPatch,
   RoomRole,
   RoomSummary,
+  NewRoomSession,
+  AttachedSession,
+  RoomSessionAgent,
+  RoomSessionReport,
+  RoomSessionStatus,
+  RoomSessionWaitingOn,
 } from '../../shared/api.js';
 import type { Cloud } from './index.js';
 
@@ -60,14 +67,14 @@ export function createRoomService(client: () => Promise<Cloud>) {
     const { supabase, selfId } = await signedIn();
     const { data, error } = await supabase
       .from('rooms')
-      .select('*, membership:room_members!inner(role), room_members(count)')
+      .select('*, membership:room_members!inner(role, pin_order, archived_at), room_members(count)')
       .eq('id', id)
       .eq('membership.user_id', selfId)
       .maybeSingle();
     if (error) throw toRoomError(error);
     if (!data) throw notFound();
     const { membership, room_members, ...room } = data;
-    return { ...summary(room, membership[0]!.role), memberCount: room_members[0]?.count ?? 0 };
+    return { ...summary(room, membership[0]!), memberCount: room_members[0]?.count ?? 0 };
   }
 
   return {
@@ -76,13 +83,13 @@ export function createRoomService(client: () => Promise<Cloud>) {
       const { supabase, selfId } = await signedIn();
       let query = supabase
         .from('rooms')
-        .select('*, membership:room_members!inner(role)')
+        .select('*, membership:room_members!inner(role, pin_order, archived_at)')
         .eq('membership.user_id', selfId)
         .order('updated_at', { ascending: false });
       if (workspaceId !== undefined) query = query.eq('workspace_id', requireId(workspaceId, 'Workspace'));
       const { data, error } = await query;
       if (error) throw toRoomError(error);
-      return data.map(({ membership, ...room }) => summary(room, membership[0]!.role));
+      return data.map(({ membership, ...room }) => summary(room, membership[0]!));
     },
 
     getRoom,
@@ -207,6 +214,175 @@ export function createRoomService(client: () => Promise<Cloud>) {
       if (error) throw toRoomError(error);
       if (!data.length) throw await memberRefusal(supabase, id, target, 'remove members');
     },
+    /**
+     * Keeps a room, or lets it be quick again (owners and members). A room also keeps itself once it holds a
+     * decision or a plan; a quick room that goes quiet only drops out of the sidebar, it's never deleted.
+     */
+    async keepRoom(roomId: string, keep: boolean): Promise<RoomDetails> {
+      const id = requireId(roomId, 'Room');
+      const { supabase } = await signedIn();
+      const { error } = await supabase.rpc('keep_room', { room: id, keep: keep === true });
+      if (error) {
+        if (error.code === '42501') {
+          await getRoom(id);
+          throw new RoomError('permission-denied', 'Only the room’s owners and members can keep it');
+        }
+        throw toRoomError(error);
+      }
+      return getRoom(id);
+    },
+
+    /**
+     * Pins a room to the top of your sidebar at `order` among your pins (smallest first), moves it there, or
+     * unpins it (null). Yours alone: nobody else's sidebar changes. Pinning a quick room keeps it too.
+     */
+    async pinRoom(roomId: string, order: number | null): Promise<RoomDetails> {
+      const id = requireId(roomId, 'Room');
+      if (order !== null && (typeof order !== 'number' || !Number.isFinite(order) || Math.abs(order) > 1e15)) {
+        throw new RoomError('invalid', 'A pin’s place must be a finite number');
+      }
+      const { supabase } = await signedIn();
+      const { error } = await supabase.rpc('pin_room', { room: id, pin_order: order as number });
+      if (error) throw toRoomError(error);
+      return getRoom(id);
+    },
+    /** Archives a room out of your sidebar (unpinning it), or brings it back. Yours alone; the room is untouched. */
+    async archiveRoom(roomId: string, archive: boolean): Promise<RoomDetails> {
+      const id = requireId(roomId, 'Room');
+      const { supabase } = await signedIn();
+      const { error } = await supabase.rpc('archive_room', { room: id, archive: archive === true });
+      if (error) throw toRoomError(error);
+      return getRoom(id);
+    },
+
+    /** The coding sessions attached to the room, the order they were attached in. Members. */
+    async listSessions(roomId: string): Promise<AttachedSession[]> {
+      const id = requireId(roomId, 'Room');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('room_sessions').select().eq('room_id', id).order('attached_at');
+      if (error) throw toRoomError(error);
+      // RLS returns nothing to non-members; say so rather than "no sessions".
+      if (!data.length) await getRoom(id);
+      return data.map(roomSession);
+    },
+
+    /**
+     * Attaches one of your Claude Code sessions to the room, in one of its Space's repositories. Owners and
+     * members. Attaching a session that's already attached returns it as it is.
+     */
+    async attachSession(roomId: string, session: NewRoomSession): Promise<AttachedSession> {
+      const id = requireId(roomId, 'Room');
+      if (!isRecord(session)) throw new RoomError('invalid', 'A session is needed');
+      const sessionId = requireId(session.sessionId, 'Session');
+      const repository = optionalRepository(session.repository);
+      if (!repository) throw new RoomError('invalid', 'A repository is needed');
+      const title = requireText(session.title, 'A session’s title', MAX_NAME) ?? sessionId.slice(0, 8);
+      const branch = requireText(session.branch, 'A branch', 255);
+      const agent = session.agent === undefined ? 'claude-code' : requireAgent(session.agent);
+      const report = session.status === undefined ? null : requireReport(session as RoomSessionReport);
+      const { supabase, selfId } = await signedIn();
+      const { error } = await supabase.from('room_sessions').insert({
+        room_id: id, session_id: sessionId, agent, repository, title, branch, attached_by: selfId,
+        ...(report && reportRow(report)),
+      });
+      if (error && error.code !== '23505') {
+        if (isRlsRefusal(error)) {
+          const room = await getRoom(id);
+          if (room.role === 'viewer') throw new RoomError('permission-denied', 'Only the room’s owners and members can attach sessions');
+          throw new RoomError('invalid', 'That session isn’t in one of this Space’s repositories');
+        }
+        throw toRoomError(error);
+      }
+      const { data, error: readError } = await supabase.from('room_sessions').select().eq('room_id', id).eq('session_id', sessionId).maybeSingle();
+      if (readError) throw toRoomError(readError);
+      if (!data) throw notFound();
+      return roomSession(data);
+    },
+
+    /** Detaches a session from the room: whoever attached it, or a room owner. Nothing on any machine changes. */
+    async detachSession(roomId: string, sessionId: string): Promise<void> {
+      const id = requireId(roomId, 'Room');
+      const session = requireId(sessionId, 'Session');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('room_sessions').delete().eq('room_id', id).eq('session_id', session).select('session_id');
+      if (error) throw toRoomError(error);
+      if (!data.length) {
+        await getRoom(id);
+        const { data: there } = await supabase.from('room_sessions').select('session_id').eq('room_id', id).eq('session_id', session).maybeSingle();
+        if (there) throw new RoomError('permission-denied', 'Only whoever attached a session, or the room’s owners, can detach it');
+      }
+    },
+
+    /** Publishes what a session you attached is doing now, from the machine it runs on. */
+    async reportSession(roomId: string, sessionId: string, report: RoomSessionReport): Promise<void> {
+      const id = requireId(roomId, 'Room');
+      const session = requireId(sessionId, 'Session');
+      const r = requireReport(report);
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('room_sessions')
+        .update(reportRow(r))
+        .eq('room_id', id).eq('session_id', session).select('session_id');
+      if (error) throw toRoomError(error);
+      if (!data.length) throw new RoomError('permission-denied', 'Only whoever attached a session publishes what it’s doing');
+    },
+
+    /** The Space's repositories, the order they were linked in. Every room in the Space can use all of them. */
+    async listSpaceRepositories(workspaceId: string): Promise<SpaceRepository[]> {
+      const ws = requireId(workspaceId, 'Space');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase
+        .from('workspace_repositories')
+        .select()
+        .eq('workspace_id', ws)
+        .order('added_at');
+      if (error) throw toRoomError(error);
+      return data.map(spaceRepository);
+    },
+
+    /** Links a repository to a Space you're in, by its remote; linking one that's already there returns it. */
+    async linkRepository(workspaceId: string, remote: string): Promise<SpaceRepository> {
+      const ws = requireId(workspaceId, 'Space');
+      const repository = optionalRepository(remote);
+      if (!repository) throw new RoomError('invalid', 'A repository is needed');
+      const { supabase, selfId } = await signedIn();
+      const { error } = await supabase.from('workspace_repositories').insert({ workspace_id: ws, repository, added_by: selfId });
+      if (error && error.code !== '23505') {
+        if (isRlsRefusal(error)) throw new RoomError('not-found', 'No such Space, or you are not a member of it');
+        throw toRoomError(error);
+      }
+      const linked = (await this.listSpaceRepositories(ws)).find((r) => r.repository.toLowerCase() === repository.toLowerCase());
+      if (!linked) throw new RoomError('not-found', 'No such Space, or you are not a member of it');
+      return linked;
+    },
+
+    /** Owners only. Renames the Space for everyone in it. */
+    async renameSpace(workspaceId: string, name: string): Promise<void> {
+      const ws = requireId(workspaceId, 'Space');
+      const named = requireName(name);
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase.from('workspaces').update({ name: named }).eq('id', ws).select('id');
+      if (error) throw toRoomError(error);
+      if (!data.length) throw new RoomError('permission-denied', 'Only the Space’s owners can rename it');
+    },
+
+    /** Unlinks a repository: whoever linked it, or a Space owner. Rooms keep their history of it. */
+    async unlinkRepository(workspaceId: string, repository: string): Promise<void> {
+      const ws = requireId(workspaceId, 'Space');
+      if (typeof repository !== 'string' || !repository) throw new RoomError('invalid', 'A repository is needed');
+      const { supabase } = await signedIn();
+      const { data, error } = await supabase
+        .from('workspace_repositories')
+        .delete()
+        .eq('workspace_id', ws)
+        .eq('repository', repository)
+        .select('repository');
+      if (error) throw toRoomError(error);
+      if (!data.length) {
+        const there = (await this.listSpaceRepositories(ws)).some((r) => r.repository === repository);
+        if (there) throw new RoomError('permission-denied', 'Only whoever linked a repository, or the Space’s owners, can unlink it');
+        throw new RoomError('not-found', 'That repository isn’t linked to this Space');
+      }
+    },
   };
 
   /** Why a write to a room matched nothing: you can read it but not change it, or it isn't yours to see. */
@@ -233,14 +409,18 @@ async function findMember(supabase: Cloud, roomId: string, userId: string): Prom
   return data ? member(data) : undefined;
 }
 
-type RoomRow = Omit<RoomSummary, 'role' | 'workspaceId' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
+type RoomRow = Omit<RoomSummary, 'role' | 'workspaceId' | 'createdBy' | 'createdAt' | 'updatedAt' | 'keptAt' | 'pinOrder' | 'archivedAt'> & {
   workspace_id: string;
+  kept_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
 };
 
-function summary(row: RoomRow, role: RoomRole): RoomSummary {
+/** Your own membership row: your role, and where the room sits in your sidebar. */
+type Membership = { role: RoomRole; pin_order: number | null; archived_at: string | null };
+
+function summary(row: RoomRow, mine: Membership): RoomSummary {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -250,8 +430,61 @@ function summary(row: RoomRow, role: RoomRole): RoomSummary {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    role,
+    keptAt: row.kept_at,
+    role: mine.role,
+    pinOrder: mine.pin_order,
+    archivedAt: mine.archived_at,
   };
+}
+
+function spaceRepository(row: { workspace_id: string; repository: string; added_by: string | null; added_at: string }): SpaceRepository {
+  return { workspaceId: row.workspace_id, repository: row.repository, addedBy: row.added_by, addedAt: row.added_at };
+}
+
+function roomSession(row: {
+  room_id: string; session_id: string; repository: string; title: string; branch: string | null; attached_by: string | null;
+  attached_at: string; status: string; activity: string | null; changed_files: number | null; status_at: string | null;
+  agent: string; waiting_on: string | null; last_seen_at: string | null;
+}): AttachedSession {
+  const status = isSessionStatus(row.status) ? row.status : 'unknown';
+  return {
+    roomId: row.room_id,
+    sessionId: row.session_id,
+    agent: isAgent(row.agent) ? row.agent : 'claude-code',
+    repository: row.repository,
+    title: row.title,
+    branch: row.branch,
+    attachedBy: row.attached_by,
+    attachedAt: row.attached_at,
+    status,
+    waitingOn: status === 'waiting' && isWaitingOn(row.waiting_on) ? row.waiting_on : null,
+    activity: row.activity,
+    changedFiles: row.changed_files,
+    statusAt: row.status_at,
+    lastSeenAt: row.last_seen_at,
+  };
+}
+
+/** The columns a report writes. A session that isn't waiting waits on nothing. */
+function reportRow(r: Required<RoomSessionReport>) {
+  return {
+    status: r.status, waiting_on: r.status === 'waiting' ? r.waitingOn : null, last_seen_at: r.lastSeenAt,
+    activity: r.activity, changed_files: r.changedFiles, status_at: new Date().toISOString(),
+  };
+}
+
+const SESSION_STATUSES: RoomSessionStatus[] = ['active', 'waiting', 'completed', 'attention', 'unknown'];
+function isSessionStatus(value: unknown): value is RoomSessionStatus {
+  return SESSION_STATUSES.includes(value as RoomSessionStatus);
+}
+const WAITING_ON: RoomSessionWaitingOn[] = ['permission', 'input'];
+const isWaitingOn = (value: unknown): value is RoomSessionWaitingOn => WAITING_ON.includes(value as RoomSessionWaitingOn);
+const AGENTS: RoomSessionAgent[] = ['claude-code', 'codex'];
+const isAgent = (value: unknown): value is RoomSessionAgent => AGENTS.includes(value as RoomSessionAgent);
+
+function requireAgent(value: unknown): RoomSessionAgent {
+  if (!isAgent(value)) throw new RoomError('invalid', 'A session’s agent must be claude-code or codex');
+  return value;
 }
 
 function member(row: {
@@ -294,6 +527,31 @@ function requireName(value: unknown): string {
   if (!name) throw new RoomError('invalid', 'Room name must not be empty');
   if (name.length > MAX_NAME) throw new RoomError('invalid', `Room name must be at most ${MAX_NAME} characters`);
   return name;
+}
+
+/** Trimmed text of at most `max` characters, or null when there's none. */
+function requireText(value: unknown, what: string, max: number): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') throw new RoomError('invalid', `${what} must be text`);
+  const text = value.trim();
+  if (text.length > max) return text.slice(0, max - 1) + '…';
+  return text || null;
+}
+
+function requireReport(value: unknown): Required<RoomSessionReport> {
+  if (!isRecord(value) || !isSessionStatus(value.status)) throw new RoomError('invalid', 'A session’s status must be active, waiting, completed, attention or unknown');
+  const files = value.changedFiles;
+  if (files !== null && files !== undefined && !(Number.isInteger(files) && (files as number) >= 0)) throw new RoomError('invalid', 'Changed files must be a count');
+  const waitingOn = value.waitingOn ?? null;
+  if (value.status === 'waiting' ? !isWaitingOn(waitingOn) : waitingOn !== null) {
+    throw new RoomError('invalid', 'A waiting session must say whether it waits on a permission or an answer, and only then');
+  }
+  const seen = value.lastSeenAt ?? null;
+  if (seen !== null && (typeof seen !== 'string' || Number.isNaN(Date.parse(seen)))) throw new RoomError('invalid', 'Last seen must be a time');
+  return {
+    status: value.status, waitingOn: waitingOn as RoomSessionWaitingOn | null, lastSeenAt: seen as string | null,
+    activity: requireText(value.activity, 'Activity', 300), changedFiles: (files as number | null | undefined) ?? null,
+  };
 }
 
 function optionalGoal(value: unknown): string | null {
@@ -374,6 +632,8 @@ export function toRoomError(error: unknown): RoomError {
   switch (code) {
     case '42501': // RLS or column privileges
       return new RoomError('permission-denied', 'You don’t have permission to do that');
+    case 'P0002': // pin_room, archive_room: not a member, or no such room
+      return notFound();
     case 'VR001': // keep_room_owner
       return new RoomError('conflict', message, 'last_owner');
     case 'VI001': // the invitation functions: the message is the reason

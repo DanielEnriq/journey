@@ -3,21 +3,20 @@ import type { InboxItem } from '../model.js';
 // How the Inbox says time and moves through its list, as pure rules (tested in time.test.ts). Times are said
 // against the view's own `now`, so a row never disagrees with the derivation it came from.
 
-/** "now", "41m", "3h", "4:10 pm", "Yesterday", "Tue", "Oct 12". */
+/** "now", "41m", "3h", "2d", "3w", "4mo", "1y": time since, the way Linear says it. */
 export function ago(iso: string, now: string): string {
   const t = Date.parse(iso), n = Date.parse(now);
   if (!Number.isFinite(t) || !Number.isFinite(n)) return '';
-  const m = Math.round((n - t) / 60_000);
+  const m = Math.floor((n - t) / 60_000);
   if (m < 1) return 'now';
   if (m < 60) return `${m}m`;
-  const h = Math.round(m / 60);
-  if (h < 12) return `${h}h`;
-  const day = new Date(t), today = new Date(n);
-  const days = Math.round((Date.parse(today.toDateString()) - Date.parse(day.toDateString())) / 86_400_000);
-  if (days === 0) return day.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return day.toLocaleDateString('en-US', { weekday: 'short' });
-  return day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  if (d < 30) return `${Math.floor(d / 7)}w`;
+  if (d < 365) return `${Math.floor(d / 30)}mo`;
+  return `${Math.floor(d / 365)}y`;
 }
 
 /** "Morning" / "Afternoon" / "Evening", for the greeting. */

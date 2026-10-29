@@ -1,4 +1,4 @@
-import type { ClaudeCodeEvent, WorkContext, Workstream } from '../../../shared/api.js';
+import type { ClaudeCodeEvent, RoomSessionWaitingOn, WorkContext, Workstream } from '../../../shared/api.js';
 import type { RoomWorkContext, RoomWorkstream } from '../room/data/sources.js';
 import { classify } from './status.js';
 
@@ -34,6 +34,7 @@ export function toRoomWorkstream(w: Workstream, context: Pick<WorkContext, 'sess
     worktree: w.worktreePath,
     lastActivityAt: w.lastActivity?.timestamp ?? null,
     lastActivity: w.lastActivity ? describe(w.lastActivity) : null,
+    ...(w.lastActivity && waitingOnOf(w.lastActivity) && { waitingOn: waitingOnOf(w.lastActivity)! }),
     changedFiles: w.changedFiles,
     sessions: w.sessions.length,
     visibility: 'local',
@@ -47,6 +48,7 @@ const EVENT_WORDS: Record<ClaudeCodeEvent['type'], string> = {
   UserPromptSubmit: 'Prompted',
   PostToolUse: 'Used',
   PostToolUseFailure: 'Failed',
+  Notification: 'Asked',
   Stop: 'Finished a reply',
   SessionEnd: 'Session ended',
 };
@@ -55,6 +57,12 @@ const EVENT_WORDS: Record<ClaudeCodeEvent['type'], string> = {
 export function describe(e: ClaudeCodeEvent): string {
   const head = e.toolName ? `${EVENT_WORDS[e.type]} ${e.toolName}` : EVENT_WORDS[e.type];
   return e.summary ? `${head}: ${e.summary}` : head;
+}
+
+/** What a Notification says the session waits for: a permission prompt names it, a question doesn't. */
+export function waitingOnOf(e: Pick<ClaudeCodeEvent, 'type' | 'summary'>): RoomSessionWaitingOn | null {
+  if (e.type !== 'Notification') return null;
+  return /permission/i.test(e.summary ?? '') ? 'permission' : 'input';
 }
 
 function basename(path: string): string {

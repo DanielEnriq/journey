@@ -1,8 +1,8 @@
 import { h } from '../../../vendor/preact.js';
-import { Captions, Leave, Mic } from '../../../shared/components/icons.js';
+import { Captions, Mic } from '../../../shared/components/icons.js';
 import type { Chime } from '../types.js';
 
-// The call, docked under the canvas: Vowe's orb (and how it takes part), the mic, captions, leave.
+// The call, docked under the canvas: Vowe's orb (and how it takes part), the mic, captions. Leaving is in the band.
 // Only ever about the call; whoever renders it supplies the state.
 
 const CHIMES: { id: Chime; title: string; sub: string }[] = [
@@ -37,7 +37,7 @@ export interface CallControls {
   voweOn?: boolean;
   /** Your mic can't be used here (a viewer only listens): it's off, and says why. */
   micOff?: string;
-  /** A real call's mic: a click (or Enter or Space) turns it on or off, instead of the demo's hold-to-talk. */
+  /** A real call's mic: a click (or Enter or Space) turns it on or off. */
   micToggle?(): void;
   /** Disconnecting: the bar stays, but leave can't be pressed twice. */
   leaving: boolean;
@@ -73,8 +73,6 @@ export function CallBar({ c }: { c: CallControls }) {
         </button>
       )}
       <button class={c.ccCls} type="button" aria-pressed={c.cc} aria-label="Captions" title={agentOff ?? 'Captions'} disabled={!!agentOff} onClick={c.toggleCc}><Captions /></button>
-      <span class="sep"></span>
-      <button class="cbtn leave" type="button" aria-label={c.leaving ? 'Leaving the call' : 'Leave call'} title={c.leaving ? 'Leaving…' : 'Leave call'} disabled={c.leaving} onClick={c.leave}><Leave /></button>
     </div>
   );
 }

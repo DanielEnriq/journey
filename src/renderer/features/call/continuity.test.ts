@@ -30,7 +30,7 @@ describe('call continuity', () => {
   it('reads the link from the session and the voice connection', () => {
     assert.equal(callLink('idle', null), null);
     assert.equal(callLink('connecting', null), 'connecting');
-    assert.equal(callLink('connected', null), 'connected'); // the demo: no voice link
+    assert.equal(callLink('connected', null), 'connected'); // no voice link (yet)
     assert.equal(callLink('connected', 'reconnecting'), 'reconnecting');
     assert.equal(callLink('connected', 'dropped'), 'dropped');
     assert.equal(callLink('connected', 'connecting'), 'connecting');

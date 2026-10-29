@@ -38,7 +38,7 @@ export interface HomeFirstProps {
   composer: Omit<ComposerProps, 'tries'>;
   /** `invites.mine()`; empty hides the list. */
   invitations: IncomingInvitation[];
-  /** Opens an invite; absent in the demo, which has no invitations to open. */
+  /** Opens an invite from a pasted link. */
   onOpenInvite?: (key: InviteKey) => void;
   /** Repositories added on this machine. */
   repoCount: number;
@@ -63,7 +63,7 @@ export function HomeFirst(p: HomeFirstProps) {
         <section class="vh-way" aria-labelledby="vh-way-join">
           <h2 id="vh-way-join" class="v-label">Joining someone’s room?</h2>
           {p.invitations.length && p.onOpenInvite ? <InvitationList invitations={p.invitations} onOpen={p.onOpenInvite} /> : null}
-          {p.onOpenInvite ? <JoinByLink onOpen={p.onOpenInvite} /> : <p class="vh-empty">Invite links open in your own rooms, not in the demo.</p>}
+          {p.onOpenInvite ? <JoinByLink onOpen={p.onOpenInvite} /> : null}
         </section>
         <section class="vh-way" aria-labelledby="vh-way-code">
           <h2 id="vh-way-code" class="v-label">Your code</h2>

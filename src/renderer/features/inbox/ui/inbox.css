@@ -19,7 +19,7 @@
 :is(.vi-tb, .vi-bar, .vi-sec-h) :is(button, a, input, [role=button]), .vi-sec-h { -webkit-app-region: no-drag; }
 
 .vi-head { padding: 32px 0 4px; }
-.vi-hello { margin: 10px 0 0; font: 400 34px/1.05 var(--v-font-serif); letter-spacing: -.015em; }
+.vi-hello { margin: 10px 0 0; font: 600 28px/1.05 var(--v-font-display); letter-spacing: -.022em; }
 .vi-hello em { font-style: italic; color: var(--v-fg-3); }
 .vi-loading { display: flex; align-items: center; gap: 10px; padding: 28px 24px; font-size: 13px; color: var(--v-fg-3); }
 .vi-error { display: flex; align-items: center; gap: 10px; margin: 0 16px 12px; padding: 10px 12px; border-radius: var(--v-radius-md); background: var(--v-fault-wash); color: var(--v-fault-fg); font-size: 12.5px; line-height: 1.45; }
@@ -42,16 +42,19 @@
 .vi-none { margin: 4px 18px 10px; font-size: 13px; color: var(--v-fg-3); }
 
 /* A row, two lines: who, the headline and the glyph for what it is (signal when it's yours to do); then what happened
-   and where, with when at the right. An unread dot sits in the gutter. No fills, no hairlines: a row is tinted only on
-   hover and when selected (slate while the list has focus). */
-.vi-row { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; margin: 0 6px; padding: 8px 10px 8px 12px; border-radius: 6px; color: var(--v-fg-2); cursor: default; outline: 0; }
+   and where, with when at the right. No fills, no hairlines: a row is tinted only on
+   hover, when selected, and while unread. */
+.vi-row { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; margin: 0 6px; padding: 8px 10px 8px 12px; border-radius: 6px; color: var(--v-fg-2); cursor: default; outline: 0; }
 .vi-row:hover { background: var(--v-surface-hover); }
+/* Unread, the row itself is tinted (no dot); hovering lightens the tint, and selection takes over. */
+.vi-row.is-unread { background: var(--v-info-wash); }
+.vi-row.is-unread:hover { background: linear-gradient(var(--v-surface-hover), var(--v-surface-hover)), var(--v-info-wash); }
 .vi-row[aria-selected="true"] { background: var(--v-surface-selected); }
-.vi-row[aria-selected="true"]:focus { background: var(--v-selection); }
-.vi-row.is-unread::before { content: ''; position: absolute; left: 3px; top: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--v-info-fg); }
 .vi-face { grid-row: 1 / span 2; display: inline-flex; }
-.vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--v-fg-2); }
-.vi-row.is-unread .vi-hl { color: var(--v-fg); font-weight: 500; }
+.vi-hl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--v-fg-3); }
+/* Unread, the headline stands out bright and bold; read, the row settles into one grey. */
+.vi-row.is-unread .vi-hl { color: var(--v-fg); font-weight: 600; }
+.vi-row:not(.is-unread) .vi-where { color: inherit; }
 .vi-r { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .vi-glyph { display: inline-flex; color: var(--v-fg-4); }
 .vi-row.is-needs .vi-glyph { color: var(--v-signal-fg); }
@@ -97,7 +100,7 @@
 .vi-kicker.is-needs::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
 .vi-kicker i { font-style: normal; color: var(--v-fg-4); }
 .vi-when { letter-spacing: .04em; text-transform: none; font-family: var(--v-font-sans); color: var(--v-fg-3); }
-.vi-title { margin: 12px 0 0; font: 400 30px/1.15 var(--v-font-serif); letter-spacing: -.012em; text-wrap: balance; }
+.vi-title { margin: 12px 0 0; font: 600 25px/1.15 var(--v-font-display); letter-spacing: -.022em; text-wrap: balance; }
 .vi-title.is-q { font-size: 24px; line-height: 1.3; }
 .vi-title.is-sm { font-size: 22px; }
 .vi-lede { margin: 14px 0 0; font-size: 14.5px; line-height: 1.6; color: var(--v-fg-2); }
@@ -179,7 +182,7 @@
 .vi-idle { display: flex; flex-direction: column; }
 .vi-idle > .vi-head { box-sizing: border-box; width: 100%; max-width: 760px; margin: 0 auto; padding: 36px clamp(20px, 6%, 48px) 0; }
 .vi-idle > .vi-rooms { overflow: visible; padding-top: 28px; }
-.vi-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 32px; text-align: center; font: italic 400 17px/1.5 var(--v-font-serif); color: var(--v-fg-3); }
+.vi-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 32px; text-align: center; font: 400 15px/1.5 var(--v-font-sans); color: var(--v-fg-3); }
 .vi-empty p { margin: 0; max-width: 360px; }
 
 .vi-sysav { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--v-bg-sunken); color: var(--v-fg-3); box-shadow: inset 0 0 0 1px var(--v-line); }
@@ -196,7 +199,7 @@
 .vi-rooms h2 { margin: 0; font: 600 15px/1.2 var(--v-font-ui); color: var(--v-fg); }
 .vi-lead { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 20px; border-radius: 14px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--v-line-2, var(--v-line)); background: var(--v-bg); }
 .vi-lead .glimpse-view { border-radius: 0; box-shadow: none; }
-.vi-lead-blank { display: grid; place-items: center; height: 180px; padding: 0 16px; text-align: center; font: italic 400 15px/1.4 var(--v-font-serif); color: var(--v-fg-4); }
+.vi-lead-blank { display: grid; place-items: center; height: 180px; padding: 0 16px; text-align: center; font: 400 15px/1.4 var(--v-font-sans); color: var(--v-fg-4); }
 .vi-lead-cap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 12px 16px; box-shadow: inset 0 1px 0 var(--v-line); }
 .vi-lead-txt { display: flex; flex: 1 1 160px; flex-direction: column; gap: 3px; min-width: 0; }
 .vi-lead-txt b { font: 600 14px/1.25 var(--v-font-ui); color: var(--v-fg); }

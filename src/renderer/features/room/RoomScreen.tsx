@@ -18,26 +18,27 @@ import { MembersPanel } from '../membership/MembersPanel.js';
 import { can, type MembershipSource, type RoomAccess } from '../membership/model.js';
 import { PreJoinSheet } from '../membership/PreJoinSheet.js';
 import { Toasts, useToasts } from '../membership/primitives.js';
-import { useRooms } from '../workspace/hooks.js';
+import { useLoaded, useRooms } from '../workspace/hooks.js';
 import { selfCloudId } from '../workspace/real/workspace.js';
 import { agentNameOf } from '../workspace/real/vowe-services.js';
 import type { CallControls } from './call/CallBar.js';
 import { Captions, captionText, type CaptionLine } from './captions.js';
-import type { CallDataSource, RoomDataSource, WorkstreamDataSource } from './data/sources.js';
-import { CallButton, RoomPreview } from './preview/RoomPreview.js';
-import { Chrome, Lights, Who } from './shell.js';
+import type { CallDataSource, RoomDataSource, RoomWorkContext, WorkstreamDataSource } from './data/sources.js';
+import { freshRoom } from './fresh.js';
+import { CallButton, LeaveButton } from './call/CallButton.js';
+import { RoomCards } from './panel/RoomCards.js';
+import { waitsOnYou } from './panel/WorkContext.js';
+import type { MentionItem } from '../vowe-room/state/mentions.js';
+import { Lights } from './shell.js';
+import { repoName } from '../../ui/pass2/shell/sidebar-model.js';
 import type { VoweServices } from '../vowe-room/contracts/services.js';
 import { RealRoom } from '../vowe-room/host/RealRoom.js';
-import { AccountFoot } from '../../shared/components/Account.js';
-import { shellPrefs, toggleSidebar, useSidebarKey } from '../../ui/pass2/shell/prefs.js';
-import { ShellSidebar } from '../../ui/pass2/shell/Sidebar.js';
-import type { Chime, RoomSummary } from './types.js';
+import type { Chime } from './types.js';
 
-// A room, in one of two states. Outside the call it is a preview: what the room is for, who is in it and
-// in its call, what changed, the work behind it. Joining the call opens the Vowe room in the same window,
-// under the same band: the room's semantic canvas and its Desk over the room's record. Leaving it comes
-// back to the preview, still in the room. The demo's rooms are the same screens over example data; real
-// rooms also carry their membership (Share, People) and a LiveKit voice call.
+// A room is its canvas and its Desk, in the call or not: opening one opens the room, and the call is something
+// you start, join or leave from its band. The same screen stays mounted across joining and leaving, so the
+// canvas never reloads. Its side panel carries the room itself (what it's for, its repositories, people and
+// shared sessions) above the Desk. A room also carries its membership (Share, People) and a LiveKit voice call.
 
 export interface RoomScreenProps {
   /** The workspace: rooms, calls and work context. */
@@ -46,7 +47,7 @@ export interface RoomScreenProps {
   /** Show the call: the route asks for it and the session is in this room's call. */
   inCall: boolean;
   session: CallSession;
-  /** Where the room's canvas is kept: main's hub over IPC for a real room, this window's storage in the demo. */
+  /** Where the room's canvas is kept: main's hub over IPC. */
   canvas: CanvasTransport;
   /** The room's record (decisions, plans, threads, attention): the Desk's and the Inbox's services. */
   vowe: VoweServices;
@@ -54,23 +55,19 @@ export interface RoomScreenProps {
   agentReply(roomId: string, threadId: string, body: string): Promise<void>;
   /** You, as the record names you. */
   self(): string;
-  /** The demo's example rooms: no audio, and Vowe isn't asked about them. */
-  example?: boolean;
   /** Why the room's repository couldn't be attached when it was made. */
   attachError?: string;
   light: boolean;
   onOpenRoom(id: string): void;
-  onNewRoom(repo?: string | null): void;
+  onNewRoom(space?: string | null): void;
   onHome(): void;
   /** Joins the call: muted, unless you chose to talk (which is what asks for the microphone). */
   onJoin(opts?: { talk: boolean }): void;
   /** Ends your part in the call; the app decides what's on screen after. */
   onLeave(): void | Promise<void>;
-  /** Drawn inside the window, over everything: the New room sheet. */
-  overlay?: ComponentChildren;
-  /** Who's in the room and their invitations; absent in the demo. */
+  /** Who's in the room and their invitations. */
   membership?: MembershipSource;
-  /** The room's voice call; absent in the demo, whose call has no audio. */
+  /** The room's voice call; null until it's connected. */
   voice?: CallService | null;
   /** Kept mounted for its call while you're elsewhere: drawn hidden and inert, deaf to the keyboard. */
   hidden?: boolean;
@@ -128,83 +125,23 @@ function Dropped({ session, onJoin, onLeave }: { session: CallSession; onJoin():
     <div class="receipt dropped" role="alert">
       <span class="dot needs"></span>
       <span>The call disconnected. The canvas stays as it was.</span>
-      <button class="mini ghost" type="button" onClick={onLeave}>Back to the room</button>
+      <button class="mini ghost" type="button" onClick={onLeave}>Leave the call</button>
       <button class="mini" type="button" onClick={onJoin}>Rejoin</button>
     </div>
   );
 }
 
-/** The app's one sidebar, as the room's left column (the same one Home and a call show). */
-function RoomSidebar(p: { rooms: RoomSummary[]; current: string; side: boolean; onOpenRoom(id: string): void; onNewRoom(repo?: string | null): void }) {
-  return (
-    <aside class="sidebar vh-sb-host" aria-hidden={!p.side} inert={!p.side}>
-      <ShellSidebar place={null} rooms={p.rooms} current={p.current} onRoom={p.onOpenRoom} onNew={(repo) => p.onNewRoom(repo)} foot={<AccountFoot />} />
-    </aside>
-  );
+/** The coding sessions attached to the room, as the Desk's @ menu lists them: what needs you first. */
+function sessionMentions(ctx: RoomWorkContext | null | undefined): MentionItem[] {
+  const state = (w: RoomWorkContext['workstreams'][number]) => w.status === 'attention' ? (waitsOnYou(w) ? 'attention' : 'waiting') : w.status === 'unknown' ? undefined : w.status;
+  const order = ['attention', 'active', 'waiting', 'completed', undefined];
+  return (ctx?.workstreams ?? []).filter((w) => w.visibility === 'room')
+    .map((w): MentionItem => ({ kind: 'session', id: w.id, label: w.title, key: w.branch ?? undefined, also: `${w.agent} ${w.repo ?? ''}`, state: state(w) }))
+    .sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state));
 }
 
-/** The room's inspector, shown or not; kept on this machine (storage may be unavailable). */
-const INSPECTOR_KEY = 'vowe.room.inspector';
-const readInspector = () => { try { return localStorage.getItem(INSPECTOR_KEY) !== '0'; } catch { return true; } };
-const keepInspector = (on: boolean) => { try { localStorage.setItem(INSPECTOR_KEY, on ? '1' : '0'); } catch { /* lasts this session */ } };
-
-function PreviewRoom(props: InnerProps) {
-  const { sources, roomId, light, onOpenRoom, onNewRoom, onHome, session, onJoin, ui, membership } = props;
-  const rooms = useRooms(sources.room);
-  const side = useStore(shellPrefs).sidebar;
-  useSidebarKey();
-  const [inspector, setInspector] = useState(readInspector);
-  const toggleInspector = () => setInspector((on) => { keepInspector(!on); return !on; });
-  // "]" shows or hides it, as it does the call's panel (not while typing, and not while this room is kept hidden).
-  const shown = useShownRef();
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (!shown.current || e.key !== ']' || e.metaKey || e.ctrlKey || e.altKey || (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable))) return;
-      e.preventDefault();
-      toggleInspector();
-    };
-    addEventListener('keydown', key);
-    return () => removeEventListener('keydown', key);
-  }, []);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const summary = rooms.find((r) => r.id === roomId);
-  const others = summary?.inCall.filter((p) => p.tone !== 'me') ?? [];
-  const access = ui.access;
-  const joinSheet = membership && props.voice ? (
-    <PreJoinSheet talking={others.map((p) => p.name)} canTalk={can(summary?.role, 'talk')} micDenied={micRefused}
-      onJoin={(o) => { setSheetOpen(false); onJoin(o); }} onCancel={() => setSheetOpen(false)} onOpenSystemSettings={() => { void window.journey.calls.openMicrophoneSettings(); }} />
-  ) : undefined;
-  // Joining asks how first (muted or talking) where there's a sheet for it; otherwise it's immediate.
-  const join = joinSheet ? () => setSheetOpen(!sheetOpen) : () => onJoin();
-  const call = summary ? <CallButton room={summary} session={session} onJoin={join} sheet={sheetOpen ? joinSheet : undefined} /> : null;
-  return (
-    <div class={`win ${light ? 'light ' : ''}${side ? 'side-open' : ''} outside`}>
-      <Lights />
-      {props.overlay}
-      {ui.toasts}
-      <Chrome side={side} sideName="sidebar" toggleSide={toggleSidebar} actions={<>{call}{ui.share}</>}
-        desk={summary ? inspector : null} deskName="inspector" toggleDesk={toggleInspector} />
-      <RoomSidebar rooms={rooms} current={roomId} side={side} onOpenRoom={onOpenRoom} onNewRoom={onNewRoom} />
-      <main class="room">
-        <div class="room-identity">
-          <h1>{summary?.name ?? 'Room'}</h1>
-          {summary?.repo && <span class="meta">{summary.repo}</span>}
-        </div>
-        {summary ? (
-          <RoomPreview sources={sources} roomId={roomId} session={session} attachError={props.attachError} onJoin={join} inspector={inspector}
-            people={membership && access ? <PeopleSection source={membership} access={access} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} /> : undefined} />
-        ) : (
-          <section class="lobby"><div class="lobby-main"><div class="lobby-col"><p class="wnote">This room isn’t in your workspace any more. <button class="linkish" type="button" onClick={onHome}>Back to your rooms</button></p></div></div></section>
-        )}
-      </main>
-    </div>
-  );
-}
-
-/** The room's call: the Vowe room (its canvas, Desk and record) under the call bar, in a real room or the demo. */
-function CallRoom(props: InnerProps) {
-  const { sources, roomId, session, onOpenRoom, onNewRoom, onLeave, onJoin, light, ui, membership, voice, example } = props;
+function Room(props: InnerProps) {
+  const { sources, roomId, session, onOpenRoom, onNewRoom, onLeave, onJoin, light, ui, membership, voice, inCall } = props;
   const snap = useVoice(voice);
   const now = useNow();
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -213,11 +150,13 @@ function CallRoom(props: InnerProps) {
   const cs = useStore(session.store);
   const summary = rooms.find((r) => r.id === roomId);
   const me = sources.room.me();
+  const work = useLoaded(() => sources.work.context(roomId), (fn) => sources.room.subscribe(fn), roomId);
+  const sessions = useMemo(() => sessionMentions(work.value), [work.value]);
   const [muted, setMuted] = useState(true);
   const [cc, setCc] = useState(false);
   // What this room calls its agent (renamed by an owner), for the call cluster on other screens.
   const [agentName, setAgentName] = useState('Vowe');
-  useEffect(() => { if (window.journey && !example) agentNameOf(roomId).then(setAgentName, () => { /* keeps Vowe */ }); }, [roomId]);
+  useEffect(() => { agentNameOf(roomId).then(setAgentName, () => { /* keeps Vowe */ }); }, [roomId]);
   const [partOpen, setPartOpen] = useState(false);
   const [chime, setChime] = useState<Chime>('pauses');
   // Read by your Vowe as you finish each thing you say: whether it chimes in, or waits to be asked.
@@ -228,10 +167,7 @@ function CallRoom(props: InnerProps) {
   const board = useMemo(() => new CanvasClient(roomId, props.canvas), [roomId, props.canvas]);
   useEffect(() => () => board.dispose(), [board]);
   // Asking Vowe by text, on this person's own model sign-in; what it changes on the canvas is shared.
-  // The demo's rooms are example data: Vowe isn't asked about them.
-  const asker = useMemo(() => window.journey && !example
-    ? new AskVowe(roomId, board, () => ({ userId: selfCloudId(), name: account.state.user?.name ?? null }))
-    : null, [board]);
+  const asker = useMemo(() => new AskVowe(roomId, board, () => ({ userId: selfCloudId(), name: account.state.user?.name ?? null })), [board]);
   useEffect(() => () => asker?.close(), [asker]);
 
   useEffect(() => { if (snap?.error === MICROPHONE_DENIED) micRefused = true; else if (snap?.micEnabled) micRefused = false; }, [snap?.error, snap?.micEnabled]);
@@ -246,17 +182,25 @@ function CallRoom(props: InnerProps) {
   const act = (p: Promise<void>) => p.then(() => setFailure(null), (err: Error) => { setFailure(err.message); throw err; });
 
   const others = summary?.inCall.filter((p) => p.tone !== 'me') ?? [];
-  // A real room's call is people talking on LiveKit; the demo's call has no audio, and its mic only
-  // pretends. Without a voice connection in a real room, the mic is off and says so.
-  const live = !!(voice && snap);
-  const talks = example || can(summary?.role, 'talk');
+  // Outside the call: who else has the room open, beside you.
+  const looking = summary?.here?.filter((p) => p.tone !== 'me' && !summary.inCall.some((c) => c.initials === p.initials)) ?? [];
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const joinSheet = membership && voice ? (
+    <PreJoinSheet talking={others.map((p) => p.name)} canTalk={can(summary?.role, 'talk')} micDenied={micRefused}
+      onJoin={(o) => { setSheetOpen(false); onJoin(o); }} onCancel={() => setSheetOpen(false)} onOpenSystemSettings={() => { void window.journey.calls.openMicrophoneSettings(); }} />
+  ) : undefined;
+  // Joining asks how first (muted or talking) where there's a sheet for it; otherwise it's immediate.
+  const join = joinSheet ? () => setSheetOpen(!sheetOpen) : () => onJoin();
+  // A room's call is people talking on LiveKit. Without a voice connection, the mic is off and says so.
+  const live = inCall && !!(voice && snap);
+  const talks = can(summary?.role, 'talk');
   const micMuted = live ? !snap!.micEnabled : muted;
-  const voiceOff = !example && !voice ? 'Voice isn’t connected in this build' : undefined;
+  const voiceOff = !voice ? 'Voice isn’t connected in this build' : undefined;
   // Your Vowe in this call: it hears your microphone while it's on, answers on your model sign-in, and
   // speaks into the call as "Vowe (for you)". Its turns show in the Ask Vowe panel, like typed asks.
   const callVoice = useMemo(() => {
     const userId = selfCloudId();
-    if (!live || !asker || !voice || !window.journey?.voice || !userId) return null;
+    if (!live || !asker || !voice || !window.journey.voice || !userId) return null;
     return new CallVoice({
       api: window.journey,
       roomId,
@@ -273,7 +217,7 @@ function CallRoom(props: InnerProps) {
   const [vowe, setVowe] = useState<VoiceStatus | null>(null);
   const [voweError, setVoweError] = useState<string | null>(null);
   useEffect(() => {
-    const api = window.journey?.voice;
+    const api = window.journey.voice;
     if (!api || !asker) return;
     void api.status().then(setVowe, () => {});
     const offStatus = api.onStatus((s) => { setVowe(s); if (s.status === 'failed' && s.error) setVoweError(s.error); });
@@ -285,8 +229,8 @@ function CallRoom(props: InnerProps) {
   // Captions: your speech while your Vowe hears you, and what it says back.
   const captions = useMemo(() => new Captions(), [roomId]);
   useEffect(() => {
-    const api = window.journey?.voice;
-    if (!api || example) return;
+    const api = window.journey.voice;
+    if (!api) return;
     const offSpeech = api.onSpeech(({ roomId: r, speech }) => { if (r === roomId) captions.heard(speech); });
     const offSaid = api.onSaid(({ roomId: r, turnId, text }) => { if (r === roomId) captions.said(turnId, text); });
     return () => { offSpeech(); offSaid(); };
@@ -300,7 +244,7 @@ function CallRoom(props: InnerProps) {
     if (voweOn) void callVoice.stop().catch((err: Error) => setVoweError(err.message));
     else callVoice.start().catch((err: Error) => setVoweError(err.message)); // from the click: speech needs a gesture
   };
-  const agentOff = example ? 'The demo’s Vowe is example data' : live && !callVoice ? 'Vowe’s voice isn’t connected in this build' : undefined;
+  const agentOff = live && !callVoice ? 'Vowe’s voice isn’t connected in this build' : undefined;
   const micOff = !live ? undefined
     : !talks ? 'Viewers listen. Ask an owner to make you a member to talk.'
     : snap!.status !== 'connected' ? 'Connecting to the call…' : undefined;
@@ -335,7 +279,7 @@ function CallRoom(props: InnerProps) {
     }
   }
   // The call, for every other screen while you look elsewhere: published from here, the room that owns it.
-  const link = cs.roomId === roomId ? callLink(cs.status, live ? snap!.status : null) : null;
+  const link = inCall && cs.roomId === roomId ? callLink(cs.status, live ? snap!.status : null) : null;
   const cantTalk = voiceOff ?? (live && !talks ? 'Viewers listen. Ask an owner to make you a member to talk.' : undefined);
   const presence: CallPresence | null = link ? {
     roomId, roomName: summary?.name ?? 'Room', link,
@@ -402,16 +346,28 @@ function CallRoom(props: InnerProps) {
         </div>
       ) : null}
       <Dropped session={session} onJoin={() => onJoin()} onLeave={onLeave} />
+      {!inCall && cs.roomId === roomId && cs.status === 'failed' ? (
+        <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>Couldn’t join the call: {cs.error}</span></div>
+      ) : null}
     </>
   );
+  const leave = call.leave;
+  const space = summary?.spaceId ? sources.room.spaces?.().find((s) => s.id === summary.spaceId)?.name ?? null : null;
+  const rename = summary && sources.room.update && (summary.role ?? 'owner') === 'owner'
+    ? (name: string) => sources.room.update!(roomId, { name }) : undefined;
+  const callAction = inCall
+    ? <LeaveButton leaving={cs.status === 'leaving'} onLeave={leave} />
+    : summary ? <CallButton room={summary} session={session} onJoin={join} sheet={sheetOpen ? joinSheet : undefined} /> : null;
 
   const speaking = Object.keys(ring)[0] ?? null;
   return (
     <RealRoom roomId={roomId} room={summary ?? { id: roomId, name: 'Room', repo: null }} rooms={rooms} services={props.vowe} client={board} asker={asker}
       agentReply={(threadId, body) => act(props.agentReply(roomId, threadId, body))}
       access={ui.access} role={summary?.role ?? ui.access?.members.find((m) => m.userId === ui.access?.viewerId)?.role ?? null} me={props.self()}
-      call={call} people={[me, ...others]} speaking={speaking} inCall={summary?.inCall.length ?? 1} overlays={notices}
-      share={ui.share} openShare={ui.openShare} light={light} windowOverlay={<>{props.overlay}{ui.toasts}</>}
+      call={inCall ? call : null} callAction={callAction} onRename={rename} space={space ?? (summary?.repo ? repoName(summary.repo) : null)} people={inCall ? [me, ...others] : [me, ...looking]} sessions={sessions} speaking={speaking} inCall={summary?.inCall.length ?? 0} overlays={notices}
+      deskTop={summary ? <RoomCards room={sources.room} work={sources.work} roomId={roomId} attachError={props.attachError} onJoin={join}
+        people={membership && ui.access ? <PeopleSection source={membership} access={ui.access} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} /> : undefined} /> : null}
+      share={ui.share} openShare={ui.openShare} light={light} windowOverlay={ui.toasts}
       peoplePanel={ui.people && membership && ui.access ? (
         <div class="vm-desk-people">
           <MembersPanel access={ui.access} source={membership} now={now} onBack={() => ui.setPeople(false)} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} />
@@ -426,12 +382,15 @@ export function RoomScreen(props: RoomScreenProps) {
   // Having the room open puts you in it for its other members (never in its call).
   useEffect(() => {
     const room = sources.room;
-    void room.enter?.(roomId).catch(() => { /* the preview says why it couldn't open */ });
+    void room.enter?.(roomId).catch(() => { /* the Desk says why it couldn't read the room */ });
     return () => { void room.exit?.(roomId).catch(() => {}); };
   }, [sources, roomId]);
   const access = useAccess(membership, roomId);
   const [toasts, note] = useToasts();
   const [shareOpen, setShareOpen] = useState(false);
+  // A room just made with New Room opens with Share showing: asking someone in is what comes next.
+  const fresh = useStore(freshRoom).id;
+  useEffect(() => { if (fresh === roomId) { setShareOpen(true); freshRoom.setState({ id: null }); } }, [fresh, roomId]);
   const [people, setPeople] = useState(false);
   const lost = membership?.lost(roomId) ?? null;
   useEffect(() => { if (lost && session.state.roomId === roomId) void session.leave(); }, [lost]);
@@ -451,7 +410,7 @@ export function RoomScreen(props: RoomScreenProps) {
     access, note, toasts: <Toasts toasts={toasts} />,
     share: membership && access ? (
       <ShareControl source={membership} access={access} open={shareOpen} setOpen={setShareOpen} onNote={note} label={inCall && props.vowe ? 'Invite' : undefined}
-        onManage={() => { if (inCall) setPeople(true); else document.querySelector('.vm-lobby-people')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} />
+        onManage={() => setPeople(true)} />
     ) : null,
     openShare: () => setShareOpen(true),
     people, setPeople,
@@ -461,7 +420,7 @@ export function RoomScreen(props: RoomScreenProps) {
   return (
     <RoomShown.Provider value={!hidden}>
       <div class="room-screen" hidden={hidden} inert={hidden} aria-hidden={hidden || undefined}>
-        {!inCall ? <PreviewRoom {...inner} /> : <CallRoom {...inner} />}
+        <Room {...inner} />
       </div>
     </RoomShown.Provider>
   );

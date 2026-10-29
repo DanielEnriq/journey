@@ -1,10 +1,10 @@
-import { BrowserWindow, session, shell } from 'electron';
+import { BrowserWindow, session, shell, systemPreferences } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const RENDERER_DIR = join(import.meta.dirname, '..', 'renderer');
-/** vowe.html is the app; index.html is the earlier setup screen, reachable from its developer menu. */
-const RENDERER_URLS = new Set(['vowe.html', 'index.html'].map((page) => pathToFileURL(join(RENDERER_DIR, page)).href));
+/** vowe.html is the app, and its only page. */
+const RENDERER_URLS = new Set([pathToFileURL(join(RENDERER_DIR, 'vowe.html')).href]);
 
 /** True only for our own bundled pages; IPC handlers use this to reject other senders. */
 export function isAppPage(url: string): boolean {
@@ -12,9 +12,10 @@ export function isAppPage(url: string): boolean {
 }
 
 /**
- * Electron grants every permission by default. Allow only what calls need, the microphone, and
- * only to our own page; camera, screen capture, notifications, etc. are refused. The OS has its
- * own microphone prompt on top of this (calls:requestMicrophone).
+ * Electron grants every permission by default. Allow only what the app needs, and only to our own
+ * page: the microphone for calls, and writing to the clipboard for its Copy buttons. Camera, screen
+ * capture, reading the clipboard, notifications, etc. are refused. The OS has its own microphone
+ * prompt on top of this (calls:requestMicrophone).
  */
 export function restrictPermissions() {
   const { defaultSession } = session;
@@ -24,7 +25,8 @@ export function restrictPermissions() {
       'mediaTypes' in details &&
       details.mediaTypes?.length &&
       details.mediaTypes.every((type) => type === 'audio');
-    callback(Boolean(audioOnly) && isAppPage(details.requestingUrl));
+    const copy = permission === 'clipboard-sanitized-write';
+    callback((Boolean(audioOnly) || copy) && isAppPage(details.requestingUrl));
   });
   // Synchronous checks (e.g. enumerateDevices labels, permissions.query) follow the same rule.
   defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) => {
@@ -32,15 +34,7 @@ export function restrictPermissions() {
   });
 }
 
-export interface WindowOptions {
-  /**
-   * The development preview: no preload, so the page has no bridge to the main process, auth or any
-   * service, and runs on its mock data alone.
-   */
-  preview?: boolean;
-}
-
-export function createMainWindow({ preview = false }: WindowOptions = {}): BrowserWindow {
+export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -52,7 +46,7 @@ export function createMainWindow({ preview = false }: WindowOptions = {}): Brows
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 18, y: 14 }, vibrancy: 'sidebar' as const, backgroundColor: '#00000000' } : {}),
     webPreferences: {
       // CommonJS: sandboxed preloads can't be ES modules.
-      ...(preview ? {} : { preload: join(import.meta.dirname, '..', 'preload', 'index.cjs') }),
+      preload: join(import.meta.dirname, '..', 'preload', 'index.cjs'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -73,6 +67,15 @@ export function createMainWindow({ preview = false }: WindowOptions = {}): Brows
   win.on('enter-full-screen', fullScreen);
   win.on('leave-full-screen', fullScreen);
   win.webContents.on('did-finish-load', fullScreen);
+
+  // Selection and focus take the accent colour from System Settings, as native controls do; a later
+  // sheet wins, so a change just adds another.
+  if (process.platform === 'darwin') {
+    const accent = () => void win.webContents.insertCSS(`:root { --v-accent: #${systemPreferences.getAccentColor().slice(0, 6)}; }`);
+    win.webContents.on('did-finish-load', accent);
+    const changed = systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', accent);
+    win.on('closed', () => systemPreferences.unsubscribeNotification(changed));
+  }
 
   win.loadFile(join(RENDERER_DIR, 'vowe.html'));
   return win;

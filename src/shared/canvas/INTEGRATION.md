@@ -27,7 +27,7 @@ dev harness ──memory store────────────────�
 | `tools.ts` | `CANVAS_TOOLS`: JSON Schema tool definitions for the agent-allowed commands. |
 | `src/integrations/supabase/canvas.ts` | `createCanvasStore`, `createCanvasHub`, `canvasContext`. Electron-free. |
 | `src/main/canvas.ts` | The app's hub singleton (`canvas`), `loadRoomCanvas`, `executeAsPerson`, `sharePresence`. |
-| `src/renderer/features/canvas/` | `client.ts` (`CanvasClient`, `ipcTransport`, `memoryTransport`); `CanvasSurface.tsx`, the one canvas engine (camera, tools, gestures, keys, presence, undo, proposals, receipts, instruments, anatomy) with `geometry.ts`, `story.ts`, `faces-model.ts` (pure, tested) and `faces.tsx` (the semantic faces); `semantics.ts` (the optional `CanvasSemantics` contract); `LiveSurface.tsx` (the engine with local UI state, for Journey's rooms and the harness); `SceneGlimpse.tsx`, `Harness.tsx`. The Pass 3 room's `vowe-room/canvas/Surface.tsx` is the same engine with the room's UI store, marks and semantics. |
+| `src/renderer/features/canvas/` | `client.ts` (`CanvasClient`, `ipcTransport`); `CanvasSurface.tsx`, the one canvas engine (camera, tools, gestures, keys, presence, undo, proposals, receipts, instruments, anatomy) with `geometry.ts`, `story.ts`, `faces-model.ts` (pure, tested) and `faces.tsx` (the semantic faces); `semantics.ts` (the optional `CanvasSemantics` contract); `LiveSurface.tsx` (the engine with local UI state, for Journey's rooms); `SceneGlimpse.tsx`. The Pass 3 room's `vowe-room/canvas/Surface.tsx` is the same engine with the room's UI store, marks and semantics. |
 | `supabase/migrations/20261028000000_room_canvas.sql` | Tables and the only write path, `commit_canvas()`. |
 
 ## Command API
@@ -90,7 +90,7 @@ identity would need its own role.
 ## Renderer
 
 ```ts
-const client = new CanvasClient(roomId, ipcTransport(() => me));   // or memoryTransport(actor) in dev
+const client = new CanvasClient(roomId, ipcTransport(() => me));
 await client.run('show_view', { view: 'concurrency', focus: 'payment-worker' });
 client.share({ view, cursor: { x, y }, selection: [{ component: 'payment-worker', instance: 2 }], tool: 'select' });
 <LiveSurface client={client} onComment={(x, y) => …}>{overlays}</LiveSurface>

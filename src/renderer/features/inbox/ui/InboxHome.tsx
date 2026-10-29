@@ -30,8 +30,7 @@ export interface InboxHomeProps {
   idle?(st: InboxState): ComponentChildren;
   /** Something Home itself couldn't do (adding a repository, say), shown under the greeting. */
   notice?: string | null;
-  /** Opens an invite from a pasted link (email invitations arrive as items). Absent in the demo, where the field
-      is still there but says links open in your own workspace: the demo never reads a real invite. */
+  /** Opens an invite from a pasted link (email invitations arrive as items). */
   onOpenInvite?(key: InviteKey): void;
 }
 
@@ -145,7 +144,7 @@ export function InboxHome(p: InboxHomeProps) {
         ) : null}
         {foot === 'link' ? (
           <section class="vi-sec" aria-label="Open an invite link">
-            <div class="vi-link"><JoinByLink onOpen={p.onOpenInvite ?? (() => setToast({ text: 'Invite links open in your own workspace, not in the demo.' }))} autoFocus /></div>
+            <div class="vi-link">{p.onOpenInvite ? <JoinByLink onOpen={p.onOpenInvite} autoFocus /> : null}</div>
           </section>
         ) : foot ? (
           <section class="vi-sec" aria-label={FOOT_TITLE[foot]}>
@@ -263,7 +262,7 @@ function Row({ it, st, selected, note, onSelect, onMenu, onOpen }: { it: InboxIt
       aria-label={[verb, it.headline, what, it.room.name, when].filter(Boolean).join(', ')}
       class={'vi-row' + (needs ? ' is-needs' : '') + (unread ? ' is-unread' : '')}
       onClick={onSelect} onDblClick={() => canOpen(it) && onOpen()} onContextMenu={onMenu} onFocus={() => !selected && onSelect()}>
-      <span class="vi-face"><Face id={it.actor} people={st.people} size={24} /></span>
+      <span class="vi-face"><Face id={it.actor} people={st.people} size={32} /></span>
       <span class="vi-hl">{it.headline}</span>
       <span class="vi-r">
         {it.raised ? <span class="vi-raised" title={it.raised}><Icon name="raise" size={14} /></span> : null}

@@ -40,6 +40,7 @@ const api: JourneyApi = {
     detect: () => invoke('repos:detect'),
     addDetected: (path) => invoke('repos:addDetected', path),
     open: (id) => invoke('repos:open', id),
+    identities: () => invoke('repos:identities'),
   },
   git: {
     status: (repositoryId) => invoke('git:status', repositoryId),
@@ -66,6 +67,10 @@ const api: JourneyApi = {
   workspaces: {
     list: () => invoke('workspaces:list'),
     create: (name) => invoke('workspaces:create', name),
+    repositories: (workspaceId) => invoke('spaces:repositories', workspaceId),
+    link: (workspaceId, repositoryId) => invoke('spaces:link', workspaceId, repositoryId),
+    unlink: (workspaceId, repository) => invoke('spaces:unlink', workspaceId, repository),
+    rename: (workspaceId, name) => invoke('spaces:rename', workspaceId, name),
   },
   rooms: {
     list: (workspaceId) => invoke('rooms:list', workspaceId),
@@ -79,6 +84,14 @@ const api: JourneyApi = {
     removeMember: (roomId, userId) => invoke('rooms:removeMember', roomId, userId),
     attachRepository: (roomId, repositoryId) => invoke('rooms:attachRepository', roomId, repositoryId),
     checkout: (roomId) => invoke('rooms:checkout', roomId),
+    checkouts: (roomId) => invoke('rooms:checkouts', roomId),
+    keep: (roomId, keep) => invoke('rooms:keep', roomId, keep),
+    pin: (roomId, order) => invoke('rooms:pin', roomId, order),
+    archive: (roomId, archive) => invoke('rooms:archive', roomId, archive),
+    sessions: (roomId) => invoke('rooms:sessions', roomId),
+    attachSession: (roomId, session) => invoke('rooms:attachSession', roomId, session),
+    detachSession: (roomId, sessionId) => invoke('rooms:detachSession', roomId, sessionId),
+    reportSession: (roomId, sessionId, report) => invoke('rooms:reportSession', roomId, sessionId, report),
     join: (roomId) => invoke('rooms:join', roomId),
     leave: (roomId) => invoke('rooms:leave', roomId),
     send: (roomId, type, payload) => invoke('rooms:send', roomId, type, payload) as Promise<never>,

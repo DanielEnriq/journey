@@ -222,7 +222,7 @@ export type PersonTone = 1 | 2 | 3 | 4 | 5;
 export interface AvatarProps {
   initials: string;
   tone?: PersonTone;
-  size?: 16 | 20 | 24 | 28 | 36 | 56;
+  size?: 16 | 20 | 24 | 28 | 32 | 36 | 56;
   /** here = in the room with you; speaking animates the ring. */
   state?: 'idle' | 'here' | 'speaking' | 'away' | 'pending';
   name?: string;

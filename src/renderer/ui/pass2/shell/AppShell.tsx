@@ -33,7 +33,7 @@ export interface AppShellProps {
   activeRoomId?: string;
   onOpenRoom: (id: string) => void;
   /** New room, in the repository whose + was pressed (null: none chosen). */
-  onNewRoom: (repo: string | null) => void;
+  onNewRoom: (space: string | null) => void;
   onAccount: () => void;
   accountOpen?: boolean;
   /** The account popover and any sheet, rendered over the shell. */

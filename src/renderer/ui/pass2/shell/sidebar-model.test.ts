@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { RoomSummary } from '../../../features/room/types.js';
-import { countByRoom, groupRooms, openByDefault, repoName, since, sidebarRooms } from './sidebar-model.js';
+import { countByRoom, groupRooms, groupSpaces, NO_FILTER, openByDefault, pinnedRooms, pinPlace, repoName, since, sidebarRooms, suggestSpaceName } from './sidebar-model.js';
+import type { SpaceSummary } from '../../../features/room/types.js';
 
 const NOW = '2026-10-26T12:00:00.000Z';
 const room = (id: string, repo: string | null, activityAt: string | null, o: Partial<RoomSummary> = {}): RoomSummary =>
@@ -53,5 +54,70 @@ describe('sidebar model', () => {
   });
   it('counts per room', () => {
     assert.deepEqual(countByRoom([{ room: { id: 'a' } }, { room: { id: 'a' } }, { room: { id: 'b' } }]), { a: 2, b: 1 });
+  });
+  it('groups rooms by Space in the Spaces’ own order, quiet quick rooms under Earlier', () => {
+    const spaces: SpaceSummary[] = [
+      { id: 's1', name: 'Payments', repos: ['github.com/acme/payments', 'github.com/acme/ledger'], role: 'owner' },
+      { id: 's2', name: 'Storefront', repos: ['github.com/acme/web'], role: 'member' },
+      { id: 's3', name: 'Empty', repos: [], role: 'owner' },
+    ];
+    const rooms = sidebarRooms([
+      room('kept', 'acme/payments', '2026-10-20T00:00:00.000Z', { spaceId: 's1', keptAt: '2026-10-01T00:00:00.000Z' }),
+      room('quick', 'acme/payments', '2026-10-26T11:00:00.000Z', { spaceId: 's1', keptAt: null }),
+      room('old', 'acme/ledger', '2026-10-24T00:00:00.000Z', { spaceId: 's1', keptAt: null }),
+      room('web', 'acme/web', '2026-10-26T11:30:00.000Z', { spaceId: 's2', needs: 'Sign it' }),
+      room('lost', null, NOW, { spaceId: 'unknown' }),
+    ], { now: NOW, callRoomId: null });
+    const g = groupSpaces(spaces, rooms);
+    assert.deepEqual(g.map((s) => s.name), ['Payments', 'Storefront', 'Empty', 'Rooms']);
+    assert.deepEqual(g[0].rooms.map((r) => r.id), ['quick', 'kept']);
+    assert.deepEqual(g[0].earlier.map((r) => r.id), ['old']);
+    assert.equal(g[0].rooms[0].quick, true);
+    assert.equal(g[0].rooms[1].quick, false);
+    assert.deepEqual(groupSpaces(spaces, rooms, { ...NO_FILTER, earlier: true })[0].rooms.map((r) => r.id), ['quick', 'old', 'kept']);
+    // Filters leave out what doesn't match, and Spaces with nothing left.
+    assert.deepEqual(groupSpaces(spaces, rooms, { ...NO_FILTER, needs: true }).map((s) => s.name), ['Storefront']);
+    assert.deepEqual(groupSpaces(spaces, rooms, { ...NO_FILTER, repo: 'github.com/acme/ledger' }).map((s) => s.name), ['Payments']);
+  });
+  it('puts you first among the faces in a call, and carries the agents’ mark', () => {
+    const [r] = sidebarRooms([room('a', null, NOW, { inCall: [{ name: 'Priya', initials: 'P', tone: 'peer' }, { name: 'You', initials: 'DE', tone: 'me' }], work: 'waiting' })], { now: NOW, callRoomId: 'a' });
+    assert.deepEqual(r.faces.map((f) => f.initials), ['DE', 'P']);
+    assert.equal(r.work, 'waiting');
+  });
+  it('pins rooms above every Space in your order, out of their Spaces, and hides archived rooms unless asked', () => {
+    const spaces: SpaceSummary[] = [
+      { id: 's1', name: 'Payments', repos: ['github.com/acme/payments'], role: 'owner' },
+      { id: 's2', name: 'Storefront', repos: ['github.com/acme/web'], role: 'member' },
+    ];
+    const old = '2026-10-20T00:00:00.000Z';
+    const rooms = sidebarRooms([
+      room('a', 'acme/payments', NOW, { spaceId: 's1', keptAt: old, pinOrder: 2 }),
+      room('b', 'acme/web', NOW, { spaceId: 's2', keptAt: old, pinOrder: 1, needs: 'Sign it' }),
+      room('c', 'acme/web', NOW, { spaceId: 's2', keptAt: old }),
+      room('gone', 'acme/web', NOW, { spaceId: 's2', keptAt: old, archivedAt: NOW, pinOrder: 3 }),
+      room('quiet', 'acme/payments', old, { spaceId: 's1', keptAt: null, pinOrder: 4 }),
+    ], { now: NOW, callRoomId: null });
+    assert.deepEqual(pinnedRooms(rooms).map((r) => r.id), ['b', 'a', 'quiet'], 'archived rooms are never pinned');
+    assert.equal(rooms.find((r) => r.id === 'quiet')!.earlier, false, 'a pinned quick room doesn’t fold into Earlier');
+    const g = groupSpaces(spaces, rooms);
+    assert.deepEqual(g.map((s) => s.rooms.map((r) => r.id)), [[], ['c']]);
+    assert.deepEqual(groupSpaces(spaces, rooms, { ...NO_FILTER, archived: true })[1].rooms.map((r) => r.id), ['c', 'gone']);
+    // The filter applies to pins as to the rest.
+    assert.deepEqual(pinnedRooms(rooms, { ...NO_FILTER, needs: true }).map((r) => r.id), ['b']);
+    assert.deepEqual(pinnedRooms(rooms, { ...NO_FILTER, repo: 'github.com/acme/payments' }, spaces).map((r) => r.id), ['a', 'quiet']);
+  });
+  it('places a dropped pin between its new neighbours without moving the others', () => {
+    const pins = [{ pin: 1 }, { pin: 2 }, { pin: 4 }];
+    assert.equal(pinPlace(pins, 0), 0);
+    assert.equal(pinPlace(pins, 1), 1.5);
+    assert.equal(pinPlace(pins, 2), 3);
+    assert.equal(pinPlace(pins, 3), 5);
+    assert.equal(pinPlace([], 0), 1);
+  });
+  it('suggests a Space’s name from its repositories', () => {
+    assert.equal(suggestSpaceName([]), 'New Space');
+    assert.equal(suggestSpaceName([{ label: 'payments', identity: 'github.com/acme/payments' }]), 'payments');
+    assert.equal(suggestSpaceName([{ label: 'web', identity: 'github.com/Acme/web' }, { label: 'api', identity: 'github.com/acme/api' }]), 'Acme');
+    assert.equal(suggestSpaceName([{ label: 'web', identity: 'github.com/acme/web' }, { label: 'notes', identity: null }]), 'web + 1');
   });
 });

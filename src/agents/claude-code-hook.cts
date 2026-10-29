@@ -101,6 +101,16 @@ function normalize(input: Json) {
       summary = [what, why].filter(Boolean).join(': ') || null;
       break;
     }
+    case 'Notification': {
+      // Only the notifications that mean the session is stopped until its user acts. Idle reminders
+      // after a finished reply aren't kept: Stop already says the turn is over.
+      const kind = str(input.notification_type);
+      const message = str(input.message);
+      const waits = kind ? ['permission_prompt', 'elicitation_dialog'].includes(kind) : /permission/i.test(message ?? '');
+      if (!waits) return null;
+      summary = message ?? (kind === 'permission_prompt' ? 'Needs your permission' : 'Asked you a question');
+      break;
+    }
     case 'Stop':
       summary = str(input.last_assistant_message);
       break;

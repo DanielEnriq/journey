@@ -44,6 +44,8 @@ import type {
   MicrophoneAccess,
   RoomAgentTurn,
   RoomCheckout,
+  RoomDetails,
+  RoomRepositoryCheckout,
   RoomResult,
 } from '../shared/api.js';
 import { createVoiceHost } from '../voice/index.js';
@@ -177,21 +179,43 @@ async function originIdentity(repositoryId: unknown): Promise<string> {
 }
 
 /**
- * Where a room's repository is checked out here: the most recently opened added repository whose
- * origin has the room's identity. Computed on this machine and never sent to the cloud.
+ * The repositories a room can use: every one linked to its Space, its own first (rooms made before Spaces
+ * named one each). Read from the cloud as you; nothing local.
  */
-async function roomCheckout(roomId: string): Promise<RoomCheckout | null> {
+async function roomRepositories(roomId: string): Promise<{ room: RoomDetails; repositories: string[] }> {
   const room = await rooms.getRoom(roomId);
-  if (!room.repository) return null;
-  const want = room.repository.toLowerCase();
-  const repos = listRepositories().sort((a, b) => (b.lastOpenedAt ?? '').localeCompare(a.lastOpenedAt ?? ''));
-  for (const repo of repos) {
+  // A database without Spaces yet (the space_repositories migration) still has the room's own repository.
+  const linked = (await rooms.listSpaceRepositories(room.workspaceId).catch(() => [])).map((r) => r.repository);
+  const own = room.repository && !linked.some((r) => r.toLowerCase() === room.repository!.toLowerCase()) ? [room.repository] : [];
+  const first = room.repository?.toLowerCase();
+  const repositories = [...own, ...linked].sort((a, b) => Number(b.toLowerCase() === first) - Number(a.toLowerCase() === first));
+  return { room, repositories };
+}
+
+/**
+ * Where each of a room's repositories is checked out here: the most recently opened added repository whose
+ * origin has its identity, or nulls when it isn't cloned on this machine. Computed here, never sent to the cloud.
+ */
+async function roomCheckouts(roomId: string): Promise<RoomRepositoryCheckout[]> {
+  const { repositories } = await roomRepositories(roomId);
+  if (!repositories.length) return [];
+  const local = new Map<string, { id: string; path: string }>();
+  const repos = listRepositories().sort((a, b) => (a.lastOpenedAt ?? '').localeCompare(b.lastOpenedAt ?? ''));
+  for (const repo of repos) { // oldest first, so the most recently opened clone wins
     const remote = await getRemoteUrl(repo.path).catch(() => null);
-    if (remote && repositoryIdentity(remote)?.toLowerCase() === want) {
-      return { roomId: room.id, repository: room.repository, repositoryId: repo.id, path: repo.path };
-    }
+    const identity = remote && repositoryIdentity(remote);
+    if (identity) local.set(identity.toLowerCase(), { id: repo.id, path: repo.path });
   }
-  return null;
+  return repositories.map((repository) => {
+    const here = local.get(repository.toLowerCase());
+    return { repository, repositoryId: here?.id ?? null, path: here?.path ?? null };
+  });
+}
+
+/** The room's first repository that's checked out here, for what reads one repository at a time. */
+async function roomCheckout(roomId: string): Promise<RoomCheckout | null> {
+  const here = (await roomCheckouts(roomId)).find((c) => c.repositoryId && c.path);
+  return here ? { roomId, repository: here.repository, repositoryId: here.repositoryId!, path: here.path! } : null;
 }
 
 /**
@@ -212,9 +236,9 @@ const agentsSeen = new Map<string, { at: number; agents: VoweRecord['agents'] }>
 async function findAgents(roomId: string): Promise<VoweRecord['agents']> {
   const checkout = await roomCheckout(roomId).catch(() => null);
   if (!checkout) {
-    const room = await rooms.getRoom(roomId).catch(() => null);
-    if (!room?.repository) return [];
-    return [{ name: claudeCode.name, status: 'not-connected', note: 'This room’s repository isn’t checked out on this machine' }];
+    const linked = await roomRepositories(roomId).catch(() => null);
+    if (!linked?.repositories.length) return [];
+    return [{ name: claudeCode.name, status: 'not-connected', note: 'None of this room’s repositories are checked out on this machine' }];
   }
   const sessions = await workContext.listSessions(checkout.repositoryId).catch(() => []);
   return [{
@@ -267,6 +291,12 @@ export function registerIpc() {
   });
 
   handle('repos:list', () => listRepositories());
+  // Only the identity is returned for sharing; paths stay with repos:list on this machine.
+  handle('repos:identities', () =>
+    Promise.all(listRepositories().map(async (r) => {
+      const remote = await getRemoteUrl(r.path).catch(() => null);
+      return { id: r.id, identity: (remote && repositoryIdentity(remote)) || null };
+    })));
   handle('repos:add', async () => {
     const parent = BrowserWindow.getFocusedWindow();
     const options = { title: 'Add repository', properties: ['openDirectory' as const] };
@@ -385,10 +415,31 @@ export function registerIpc() {
       if (userId) void syncCallParticipant(roomId, userId); // without one you left: your client leaves the call itself
     }),
   );
+  // Also links it to the room's Space, so every room there can use it.
   handle('rooms:attachRepository', (roomId, repositoryId) =>
-    roomResult(async () => rooms.updateRoom(roomId, { repository: await originIdentity(repositoryId) })),
+    roomResult(async () => {
+      const repository = await originIdentity(repositoryId);
+      const room = await rooms.getRoom(roomId);
+      const attached = await rooms.updateRoom(roomId, { repository });
+      await rooms.linkRepository(room.workspaceId, repository).catch((err) => console.warn('[rooms] linking to the Space', err));
+      return attached;
+    }),
   );
   handle('rooms:checkout', (roomId) => roomResult(() => roomCheckout(roomId)));
+  handle('rooms:checkouts', (roomId) => roomResult(() => roomCheckouts(roomId)));
+  handle('rooms:keep', (roomId, keep) => roomResult(() => rooms.keepRoom(roomId, keep === true)));
+  handle('rooms:pin', (roomId, order) => roomResult(() => rooms.pinRoom(roomId, order ?? null)));
+  handle('rooms:archive', (roomId, archive) => roomResult(() => rooms.archiveRoom(roomId, archive === true)));
+  handle('rooms:sessions', (roomId) => roomResult(() => rooms.listSessions(roomId)));
+  handle('rooms:attachSession', (roomId, session) => roomResult(() => rooms.attachSession(roomId, session)));
+  handle('rooms:detachSession', (roomId, sessionId) => roomResult(() => rooms.detachSession(roomId, sessionId)));
+  handle('rooms:reportSession', (roomId, sessionId, report) => roomResult(() => rooms.reportSession(roomId, sessionId, report)));
+  // A Space's repositories. Linking takes a local repository and sends only its origin's identity.
+  handle('spaces:repositories', (workspaceId) => roomResult(() => rooms.listSpaceRepositories(workspaceId)));
+  handle('spaces:link', (workspaceId, repositoryId) =>
+    roomResult(async () => rooms.linkRepository(workspaceId, await originIdentity(repositoryId))));
+  handle('spaces:unlink', (workspaceId, repository) => roomResult(() => rooms.unlinkRepository(workspaceId, repository)));
+  handle('spaces:rename', (workspaceId, name) => roomResult(() => rooms.renameSpace(workspaceId, name)));
   handle('record:get', (roomId) => roomResult(() => roomRecord.getRecord(roomId)));
   handle('record:addThread', (roomId, thread) => roomResult(() => roomRecord.addThread(roomId, thread)));
   handle('record:reply', (roomId, threadId, body, authorKind) => roomResult(() => roomRecord.reply(roomId, threadId, body, authorKind === 'agent' ? 'agent' : 'human')));

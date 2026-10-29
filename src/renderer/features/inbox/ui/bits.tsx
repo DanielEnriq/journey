@@ -20,10 +20,10 @@ export const nameIn = (people: People, me: PersonId | null) => (id: PersonId | n
   !id ? 'Vowe' : id === me ? 'You' : people[id]?.name ?? (id === AGENT ? 'Vowe' : 'Someone');
 
 /** A face: the agent's mark for the agent, a quiet glyph for the system, initials for people. */
-export function Face({ id, people, size = 24 }: { id: PersonId | null; people: People; size?: 16 | 20 | 24 | 28 }) {
+export function Face({ id, people, size = 24 }: { id: PersonId | null; people: People; size?: 16 | 20 | 24 | 28 | 32 }) {
   if (id === AGENT) return <AgentMark size={size} />;
   const p = id ? people[id] : undefined;
-  if (!p) return <span class="vi-sysav" style={`width:${size}px;height:${size}px`} aria-hidden="true"><Icon name="canvas" size={14} /></span>;
+  if (!p) return <span class="vi-sysav" style={`width:${size}px;height:${size}px`} aria-hidden="true"><Icon name="canvas" size={size >= 32 ? 16 : 14} /></span>;
   return <Avatar initials={p.initials} tone={TONE[p.tone]} size={size} name={p.name} />;
 }
 

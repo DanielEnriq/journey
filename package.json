@@ -7,7 +7,6 @@
   "scripts": {
     "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p . && node scripts/copy-renderer-assets.mjs",
     "start": "pnpm build && node scripts/name-dev-app.mjs && electron .",
-    "preview:ui": "pnpm build && electron dist/main/preview.js",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "typecheck": "tsc -p . --noEmit",

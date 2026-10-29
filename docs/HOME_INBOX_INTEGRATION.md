@@ -34,8 +34,8 @@ a model's summary.
 
 ## Call lifetime
 
-Navigation never ends a call. Only the hang-up, Leave call in the popover, signing out, or crossing between
-the demo and real rooms end it. The call's room stays mounted (hidden, `inert`) while you look elsewhere,
+Navigation never ends a call. Only the hang-up, Leave call in the popover, or signing out
+end it. The call's room stays mounted (hidden, `inert`) while you look elsewhere,
 so its voice, canvas client and Desk state survive and coming back restores the same view. Joining another
 room's call asks first.
 

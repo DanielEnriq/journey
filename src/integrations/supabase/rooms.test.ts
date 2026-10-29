@@ -373,4 +373,151 @@ describe('persistent rooms (local Supabase)', integration, () => {
     const signedOut = createClient<Database>(url!, publishableKey!, { auth: { persistSession: false } });
     await rejectsWith(createRoomService(async () => signedOut).listRooms(), 'signed-out');
   });
+
+  it('links repositories to the Space, for its members only', async () => {
+    const { alice, bob, carol, dave } = people;
+    // An earlier test removed Carol from the workspace; she's a plain member again from here.
+    const { error: back } = await alice.cloud.from('workspace_members').insert({ workspace_id: workspaceId, user_id: carol.id });
+    assert.equal(back, null);
+    const linked = await alice.rooms.linkRepository(workspaceId, 'git@github.com:Acme/Payments.git');
+    assert.equal(linked.repository, 'github.com/Acme/Payments');
+    assert.equal(linked.addedBy, alice.id);
+    // The same repository again, spelled differently, is still one row.
+    const again = await bob.rooms.linkRepository(workspaceId, 'https://GitHub.com/Acme/Payments');
+    assert.equal(again.addedBy, alice.id);
+    await bob.rooms.linkRepository(workspaceId, 'github.com/Acme/Ledger');
+    assert.deepEqual((await carol.rooms.listSpaceRepositories(workspaceId)).map((r) => r.repository), ['github.com/Acme/Payments', 'github.com/Acme/Ledger']);
+
+    // Outside the Space there's nothing to read or link; local paths never become Space data.
+    assert.deepEqual(await dave.rooms.listSpaceRepositories(workspaceId), []);
+    await rejectsWith(dave.rooms.linkRepository(workspaceId, 'github.com/Acme/Sneaky'), 'not-found');
+    await rejectsWith(alice.rooms.linkRepository(workspaceId, '/Users/alice/payments'), 'invalid');
+
+    // Whoever linked one, or a Space owner, unlinks it.
+    await rejectsWith(carol.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Payments'), 'permission-denied');
+    await rejectsWith(bob.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Payments'), 'permission-denied');
+    await bob.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Ledger');
+    await rejectsWith(bob.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Ledger'), 'not-found');
+    await alice.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Payments');
+    assert.deepEqual(await alice.rooms.listSpaceRepositories(workspaceId), []);
+  });
+
+  it('starts rooms quick, and keeps them when asked or once they hold a decision', async () => {
+    const { alice, bob, carol, dave } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Quick look' });
+    assert.equal(room.keptAt, null);
+    await alice.rooms.addMember(room.id, bob.id);
+    await alice.rooms.addMember(room.id, carol.id, 'viewer');
+
+    const kept = await bob.rooms.keepRoom(room.id, true);
+    assert.ok(kept.keptAt);
+    assert.equal((await bob.rooms.keepRoom(room.id, true)).keptAt, kept.keptAt, 'keeping twice keeps the first time');
+    await rejectsWith(carol.rooms.keepRoom(room.id, false), 'permission-denied');
+    await rejectsWith(dave.rooms.keepRoom(room.id, false), 'not-found');
+    // Not by writing the column directly either: only owners update rooms, and only through keep_room for members.
+    const direct = await bob.cloud.from('rooms').update({ kept_at: null }).eq('id', room.id).select();
+    assert.ok(direct.error || !direct.data?.length, 'a member can’t write kept_at directly');
+    assert.equal((await bob.rooms.getRoom(room.id)).keptAt, kept.keptAt);
+    assert.equal((await alice.rooms.keepRoom(room.id, false)).keptAt, null);
+
+    const { error } = await bob.cloud.from('room_decisions').insert({ room_id: room.id, title: 'Retry with backoff', verify: 'No duplicate charges' });
+    assert.equal(error, null);
+    assert.ok((await alice.rooms.getRoom(room.id)).keptAt, 'a decision keeps the room');
+  });
+
+  it('pins and archives rooms for one person only, and pinning keeps a quick room', async () => {
+    const { alice, bob, carol, dave } = people;
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Pin me' });
+    await alice.rooms.addMember(room.id, bob.id);
+    await alice.rooms.addMember(room.id, carol.id, 'viewer');
+
+    const pinned = await bob.rooms.pinRoom(room.id, 2.5);
+    assert.equal(pinned.pinOrder, 2.5);
+    assert.ok(pinned.keptAt, 'pinning keeps a quick room');
+    assert.equal((await alice.rooms.getRoom(room.id)).pinOrder, null, 'nobody else’s sidebar changes');
+    assert.equal((await bob.rooms.listRooms()).find((r) => r.id === room.id)?.pinOrder, 2.5);
+
+    // A viewer pins too, but can't keep the room by it.
+    await alice.rooms.keepRoom(room.id, false);
+    assert.equal((await carol.rooms.pinRoom(room.id, 1)).keptAt, null);
+    await rejectsWith(dave.rooms.pinRoom(room.id, 1), 'not-found');
+    await rejectsWith(bob.rooms.pinRoom(room.id, Number.NaN), 'invalid');
+
+    // Archiving unpins; unarchiving brings it back unpinned. Pinning an archived room brings it back.
+    const archived = await bob.rooms.archiveRoom(room.id, true);
+    assert.ok(archived.archivedAt);
+    assert.equal(archived.pinOrder, null);
+    assert.equal((await alice.rooms.getRoom(room.id)).archivedAt, null);
+    assert.equal((await bob.rooms.archiveRoom(room.id, false)).archivedAt, null);
+    await bob.rooms.archiveRoom(room.id, true);
+    const back = await bob.rooms.pinRoom(room.id, 1);
+    assert.equal(back.archivedAt, null);
+    assert.equal((await bob.rooms.pinRoom(room.id, null)).pinOrder, null);
+    await rejectsWith(dave.rooms.archiveRoom(room.id, true), 'not-found');
+
+    // Not by writing your membership directly: members change it only through these.
+    const direct = await bob.cloud.from('room_members').update({ pin_order: 9 }).eq('room_id', room.id).eq('user_id', bob.id).select();
+    assert.ok(direct.error || !direct.data?.length, 'a member can’t write their membership directly');
+  });
+
+  it('attaches coding sessions to a room: members see them, only their machine publishes what they do', async () => {
+    const { alice, bob, carol, dave } = people;
+    await alice.rooms.linkRepository(workspaceId, 'github.com/Acme/Web');
+    const room = await alice.rooms.createRoom({ workspaceId, name: 'Sessions' });
+    await alice.rooms.addMember(room.id, bob.id);
+    await alice.rooms.addMember(room.id, carol.id, 'viewer');
+    const one = '0a1b2c3d-0000-4000-8000-000000000001', two = '0a1b2c3d-0000-4000-8000-000000000002';
+
+    const attached = await bob.rooms.attachSession(room.id, {
+      sessionId: one, repository: 'git@github.com:Acme/Web.git', title: 'Fix the join sheet', branch: 'fix/join', status: 'active', activity: 'Edited sheet.tsx', changedFiles: 3,
+    });
+    assert.equal(attached.repository, 'github.com/Acme/Web');
+    assert.equal(attached.attachedBy, bob.id);
+    assert.equal(attached.status, 'active');
+    // Attaching it again leaves it as it was.
+    assert.equal((await bob.rooms.attachSession(room.id, { sessionId: one, repository: 'github.com/Acme/Web', title: 'Renamed', branch: null })).title, 'Fix the join sheet');
+    const seen = await carol.rooms.listSessions(room.id);
+    assert.deepEqual(seen.map((s) => [s.sessionId, s.title, s.changedFiles]), [[one, 'Fix the join sheet', 3]], 'viewers see the room’s sessions');
+
+    // Viewers don't attach; nor does anyone outside the room, or from outside the Space's repositories.
+    await rejectsWith(carol.rooms.attachSession(room.id, { sessionId: two, repository: 'github.com/Acme/Web', title: 'Mine', branch: null }), 'permission-denied');
+    await rejectsWith(bob.rooms.attachSession(room.id, { sessionId: two, repository: 'github.com/Acme/Elsewhere', title: 'Mine', branch: null }), 'invalid');
+    await rejectsWith(dave.rooms.attachSession(room.id, { sessionId: two, repository: 'github.com/Acme/Web', title: 'Mine', branch: null }), 'not-found');
+    await rejectsWith(dave.rooms.listSessions(room.id), 'not-found');
+    await rejectsWith(bob.rooms.attachSession(room.id, { sessionId: 'not-a-session', repository: 'github.com/Acme/Web', title: 'x', branch: null }), 'invalid');
+
+    // Only whoever attached it publishes what it's doing, and nothing else about it changes.
+    await rejectsWith(alice.rooms.reportSession(room.id, one, { status: 'attention', activity: null, changedFiles: null }), 'permission-denied');
+    await bob.rooms.reportSession(room.id, one, { status: 'attention', activity: 'Allow pnpm test?', changedFiles: 4 });
+    const [now] = await alice.rooms.listSessions(room.id);
+    assert.deepEqual([now!.status, now!.activity, now!.changedFiles], ['attention', 'Allow pnpm test?', 4]);
+    assert.ok(now!.statusAt);
+    const moved = await bob.cloud.from('room_sessions').update({ repository: 'github.com/Acme/Other' }).eq('session_id', one).select();
+    assert.ok(moved.error || !moved.data?.length, 'a session’s repository is fixed once attached');
+    assert.equal(now!.agent, 'claude-code', 'sessions are Claude Code’s unless attached as another agent');
+    const recast = await bob.cloud.from('room_sessions').update({ agent: 'codex' }).eq('session_id', one).select();
+    assert.ok(recast.error || !recast.data?.length, 'a session’s agent is fixed once attached');
+
+    // A waiting session says what it waits for, and only a waiting one does; its machine says when it last saw it.
+    const seenAt = '2026-10-28T12:00:00.000Z';
+    await bob.rooms.reportSession(room.id, one, { status: 'waiting', waitingOn: 'permission', lastSeenAt: seenAt, activity: 'Asked: Claude needs your permission to use Bash', changedFiles: 4 });
+    const [waiting] = await carol.rooms.listSessions(room.id);
+    assert.deepEqual([waiting!.status, waiting!.waitingOn, Date.parse(waiting!.lastSeenAt!)], ['waiting', 'permission', Date.parse(seenAt)]);
+    await rejectsWith(bob.rooms.reportSession(room.id, one, { status: 'waiting', activity: null, changedFiles: null }), 'invalid');
+    await rejectsWith(bob.rooms.reportSession(room.id, one, { status: 'active', waitingOn: 'input', activity: null, changedFiles: null }), 'invalid');
+    const unpaired = await bob.cloud.from('room_sessions').update({ status: 'waiting', waiting_on: null }).eq('session_id', one).select();
+    assert.ok(unpaired.error, 'the database refuses a waiting session that doesn’t say what for');
+    await bob.rooms.reportSession(room.id, one, { status: 'active', activity: 'Used Bash: pnpm test', changedFiles: 4 });
+    const [moving] = await alice.rooms.listSessions(room.id);
+    assert.deepEqual([moving!.status, moving!.waitingOn], ['active', null], 'it waits on nothing once it moves on');
+
+    // Whoever attached it, or an owner, detaches it.
+    const second = await bob.rooms.attachSession(room.id, { sessionId: two, agent: 'codex', repository: 'github.com/Acme/Web', title: 'Second', branch: 'b' });
+    assert.equal(second.agent, 'codex');
+    await rejectsWith(carol.rooms.detachSession(room.id, one), 'permission-denied');
+    await alice.rooms.detachSession(room.id, one);
+    await bob.rooms.detachSession(room.id, two);
+    assert.deepEqual(await bob.rooms.listSessions(room.id), []);
+    await alice.rooms.unlinkRepository(workspaceId, 'github.com/Acme/Web');
+  });
 });

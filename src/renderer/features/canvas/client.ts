@@ -1,5 +1,5 @@
 import {
-  applyCommand, buildScenes, CanvasError, command, emptyDocument, execute, failure, memoryStore, parseDocument,
+  applyCommand, buildScenes, CanvasError, command, emptyDocument, failure, parseDocument,
   type Actor, type CanvasCommand, type CanvasDocument, type CanvasPresence, type CommandArgs, type CommandName, type CommandResult,
   type Scene, type StoredCanvas,
 } from '../../../shared/canvas/index.js';
@@ -7,8 +7,7 @@ import { Store } from '../../shared/store.js';
 
 // A room's canvas in the renderer: the saved document, the commands of yours still on their way, and
 // the other people on it. Every change is a Canvas Command run by the one engine (src/shared/canvas):
-// in a real room, main runs it as the signed-in person and saves it (IPC `canvas:execute`); in the dev
-// harness, an in-memory store does, through the same `execute`. Nothing here decides what a command
+// main runs it as the signed-in person and saves it (IPC `canvas:execute`). Nothing here decides what a command
 // does; it shows your own commands straight away by applying them to the last saved document, and
 // drops that guess as soon as the saved answer arrives.
 
@@ -189,62 +188,6 @@ export function ipcTransport(me: () => Actor): CanvasTransport {
         [...names.keys()].forEach((uid) => { if (!here.has(uid)) { names.delete(uid); fn(uid, '', null); } });
       });
       return () => { offEvent(); offPresence(); };
-    },
-  };
-}
-
-/* ---------- In the dev harness: the same engine over a store in this browser. ---------- */
-
-const DEV_KEY = 'vowe.canvas.dev';
-
-/**
- * A canvas kept in this window's local storage, shared with other windows of the same app through a
- * BroadcastChannel, so two windows on the harness are two people in one room. `actor` says who each
- * command is from; the harness switches it to Vowe for Vowe's steps. `key` keeps the demo's canvases apart
- * from the harness's. Development and the demo only.
- */
-export function memoryTransport(actor: () => Actor, key = DEV_KEY): CanvasTransport & { forget(roomId: string): void } {
-  const read = (): Record<string, StoredCanvas> => {
-    try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; }
-  };
-  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(key) : null;
-  const changed = new Set<(roomId: string, c: StoredCanvas) => void>();
-  const presence = new Set<(roomId: string, id: string, name: string, p: CanvasPresence | null) => void>();
-  const store = memoryStore({}, (roomId, c) => {
-    try { localStorage.setItem(key, JSON.stringify({ ...read(), [roomId]: c })); } catch { /* storage may be full or off */ }
-    changed.forEach((fn) => fn(roomId, c));
-    channel?.postMessage({ t: 'changed', roomId });
-  });
-  // Always start from what is stored, so another window's save (or a reload) is seen.
-  const fresh = (roomId: string) => { const c = read()[roomId]; if (c) store.rooms[roomId] = c; else delete store.rooms[roomId]; };
-  if (channel) channel.onmessage = (e: MessageEvent) => {
-    const m = e.data as { t: string; roomId: string; id?: string; name?: string; p?: CanvasPresence | null };
-    if (m.t === 'changed') { fresh(m.roomId); const c = store.rooms[m.roomId]; if (c) changed.forEach((fn) => fn(m.roomId, c)); }
-    if (m.t === 'presence') presence.forEach((fn) => fn(m.roomId, m.id!, m.name!, m.p ?? null));
-  };
-  const self = { id: 'w' + Math.random().toString(36).slice(2, 8) };
-  addEventListener('pagehide', () => channel?.postMessage({ t: 'presence', roomId: '*', id: self.id, name: '', p: null }));
-  return {
-    me: actor,
-    async load(roomId) { fresh(roomId); return store.load(roomId); },
-    async execute(roomId, cmd) { fresh(roomId); return execute(store, roomId, cmd, actor()); },
-    onChanged(roomId, fn) {
-      const h = (id: string, c: StoredCanvas) => { if (id === roomId) fn(c); };
-      changed.add(h);
-      return () => changed.delete(h);
-    },
-    sendPresence(roomId, p) { channel?.postMessage({ t: 'presence', roomId, id: self.id, name: actor().name, p }); },
-    onPresence(roomId, fn) {
-      const h = (id: string, peerId: string, name: string, p: CanvasPresence | null) => { if (id === roomId || id === '*') fn(peerId, name, p); };
-      presence.add(h);
-      return () => presence.delete(h);
-    },
-    forget(roomId) {
-      const all = read();
-      delete all[roomId];
-      try { localStorage.setItem(key, JSON.stringify(all)); } catch { /* storage may be off */ }
-      delete store.rooms[roomId];
-      channel?.postMessage({ t: 'changed', roomId });
     },
   };
 }

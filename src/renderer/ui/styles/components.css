@@ -24,10 +24,10 @@
 .v-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ------------------------------------------------------------ type styles */
-.v-display { font-family: var(--v-font-serif); font-weight: 400; font-size: 56px; line-height: 1.0; letter-spacing: -0.02em; color: var(--v-fg); }
+.v-display { font-family: var(--v-font-display); font-weight: 600; font-size:40px; line-height: 1.0; letter-spacing: -.022em; color: var(--v-fg); }
 .v-display em, .v-title em { font-style: italic; color: var(--v-fg-3); }
-.v-title { font-family: var(--v-font-serif); font-weight: 400; font-size: 30px; line-height: 1.1; letter-spacing: -0.012em; color: var(--v-fg); }
-.v-title-sm { font-family: var(--v-font-serif); font-size: 21px; line-height: 1.2; color: var(--v-fg); }
+.v-title { font-family: var(--v-font-display); font-weight: 600; font-size:25px; line-height: 1.1; letter-spacing: -.022em; color: var(--v-fg); }
+.v-title-sm { font-family: var(--v-font-display); font-weight: 600; letter-spacing: -.016em; font-size:19px; line-height: 1.2; color: var(--v-fg); }
 .v-h1 { font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.014em; color: var(--v-fg); }
 .v-h2 { font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -0.006em; color: var(--v-fg); }
 .v-body { font-size: 13.5px; line-height: 1.5; color: var(--v-fg-2); }
@@ -135,7 +135,7 @@
 /* ------------------------------------------------------- avatars, presence */
 .v-p1 { --tone: var(--v-person-1); } .v-p2 { --tone: var(--v-person-2); } .v-p3 { --tone: var(--v-person-3); } .v-p4 { --tone: var(--v-person-4); } .v-p5 { --tone: var(--v-person-5); }
 .v-av { --s: 24px; width: var(--s); height: var(--s); flex: 0 0 var(--s); display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--tone, var(--v-fg-3)); color: var(--v-bg); font-size: calc(var(--s) * 0.38); font-weight: 600; letter-spacing: 0.01em; line-height: 1; }
-.v-av-16 { --s: 16px; } .v-av-20 { --s: 20px; } .v-av-28 { --s: 28px; } .v-av-36 { --s: 36px; } .v-av-56 { --s: 56px; }
+.v-av-16 { --s: 16px; } .v-av-20 { --s: 20px; } .v-av-28 { --s: 28px; } .v-av-32 { --s: 32px; } .v-av-36 { --s: 36px; } .v-av-56 { --s: 56px; }
 .v-av.is-here { box-shadow: 0 0 0 1.5px var(--v-bg), 0 0 0 3px var(--tone); }
 .v-av.is-speaking { animation: v-breathe 1.6s ease-in-out infinite; }
 .v-av.is-away { opacity: 0.45; }

@@ -85,7 +85,7 @@ Every room has an audio call between its members: one LiveKit room per Journey r
 
 LiveKit identities are cloud user ids, so joining from a second window or device replaces the first connection. A call is separate from the Realtime presence above: you can be in a room's channel without being in its call.
 
-The renderer has no bundler, so `pnpm build` copies livekit-client's self-contained ESM bundle to `dist/renderer/vendor/livekit-client.js`; `src/renderer/vendor/livekit-client.d.ts` supplies its types. A page's CSP must admit the LiveKit host in `connect-src`: `index.html` allows `*.livekit.cloud`.
+The renderer has no bundler, so `pnpm build` copies livekit-client's self-contained ESM bundle to `dist/renderer/vendor/livekit-client.js`; `src/renderer/vendor/livekit-client.d.ts` supplies its types. A page's CSP must admit the LiveKit host in `connect-src`: `vowe.html` allows `*.livekit.cloud`.
 
 Tests: `pnpm test` covers the service's lifecycle against a fake room, and `pnpm --filter vowe-api test` covers token issuance (sessions, membership, grants). `pnpm test:calls` is end to end. It starts a throwaway LiveKit server in Docker, and two Electron clients join one call through `CallService` with Chromium's fake microphone. It checks that audio actually decodes on the other side, and that mute, unmute, reconnect and leave behave. It needs Docker running; `LIVEKIT_E2E_URL` with `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` points it at another server.
 

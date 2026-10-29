@@ -1,10 +1,13 @@
-import { h, Fragment, useEffect, useState, useStore, Lights, Chrome, Who, CallBar, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary, type Store } from '../journey.js';
+import { h, Fragment, useEffect, useMemo, useState, useStore, Lights, Chrome, Who, CallBar, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary, type Store } from '../journey.js';
 import { AccountFoot } from '../../../shared/components/Account.js';
 import { shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui/pass2/shell/prefs.js';
 import { ShellSidebar } from '../../../ui/pass2/shell/Sidebar.js';
+import { RoomTitle } from '../../room/shell.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
 import { focusCrumbs } from '../desk/Focus.js';
+import { MentionSources } from '../desk/Mention.js';
+import type { MentionItem } from '../state/mentions.js';
 import type { Scenario, CanvasSemantics } from '../contracts/semantics.js';
 import { NO_SEMANTICS } from '../contracts/semantics.js';
 import type { RoomRole, VoweRecord } from '../contracts/model.js';
@@ -27,7 +30,7 @@ export interface VoweRoomProps {
   rooms: RoomSummary[];
   onOpenRoom(id: string): void;
   /** New room, in the repository whose + was pressed in the sidebar (null: none chosen). */
-  onNewRoom(repo?: string | null): void;
+  onNewRoom(space?: string | null): void;
   /** Journey's canvas client for this room (features/canvas/client.ts over ipcTransport). */
   client: CanvasClient;
   /** The room's record, kept current by the host from VoweServices.record (load + subscribe). */
@@ -56,9 +59,19 @@ export interface VoweRoomProps {
   onMarks(component: string): void;
   /** Journey's call controls; null when there's no call (the normal state). */
   call: CallControls | null;
+  /** Start Call, Join or Leave, first among the band's actions. */
+  callAction?: ComponentChildren;
+  /** The room itself, above the Desk in its column: Journey's Room and Sessions cards. */
+  deskTop?: ComponentChildren;
+  /** Renames the room from its title (owners); absent, the name is plain. */
+  onRename?(name: string): Promise<void>;
+  /** The Space the room is in, grey beside its name; the repository when there's no Space. */
+  space?: string | null;
   /** Who's here, as Journey's presence shows them. `speaking` rings one of them. */
   people: PersonRef[];
   speaking?: string | null;
+  /** The coding sessions attached to the room, for the Desk's @ menu. */
+  sessions?: MentionItem[];
   /** Under the room's name: "2 here · 2 on the call". */
   hereLine: string;
   /** History of what you've opened (room/navigation.ts useDeskHistory). */
@@ -139,6 +152,17 @@ export function VoweRoom(p: VoweRoomProps) {
     flash: u.flash, noticesOpen: u.noticesOpen, sinceOpen: u.sinceOpen, act: p.act, role: p.role, caps, narrow: !wide || insW < 660, everywhere: u.everywhere,
     room: { name: p.room.name, repo: p.room.repo }, scene: focusMode ? s.scenes[s.doc.activeView] ?? null : null,
   };
+  // The @ menu's other sources: the room's sessions, and the parts on the canvas as it shows now.
+  const scene = s.scenes[s.doc.activeView];
+  const mention = useMemo(() => {
+    const seen = new Set<string>(), parts: MentionItem[] = [];
+    for (const n of scene?.nodes ?? []) {
+      if (seen.has(n.component)) continue;
+      seen.add(n.component);
+      parts.push({ kind: 'part', id: n.component, label: n.name, also: `${n.short} ${n.tech}` });
+    }
+    return { sessions: p.sessions ?? [], parts };
+  }, [scene, p.sessions]);
   const crumbs = focusMode && (!p.deskStatus || p.deskStatus.state === 'ready') && !p.deskOverride ? focusCrumbs(deskProps) : null;
   const top = attention(rec, n).find(actionable);
   const rooms = p.rooms.map((r) => (r.id === p.room.id ? { ...r, needs: top ? top.text : null } : r));
@@ -161,19 +185,19 @@ export function VoweRoom(p: VoweRoomProps) {
   const cls = `win ${p.light ? 'light ' : ''}${side ? 'side-open ' : ''}${u.deskOpen ? 'desk-open ' : ''}${wide ? 'nx-wide-desk ' : ''}${wide && sheet ? 'nx-sheet ' : ''}${focusMode ? 'nx-fws ' : ''}${rec.vowe ? '' : 'nx-novowe '}${W < 1300 ? 'nx-small ' : ''}in-call nx-win`;
   return (
     <DirectoryContext.Provider value={dir}>
+      <MentionSources.Provider value={mention}>
       <SemanticsContext.Provider value={p.semantics ?? NO_SEMANTICS}>
         <div style={style} class={cls}>
           <Lights />
           {p.windowOverlay}
           <Chrome side={side} sideName="sidebar" desk={u.deskOpen} deskUnseen={!u.deskOpen && !!top} toggleSide={toggleSidebar} toggleDesk={() => p.ui.setState(u.deskOpen ? { deskOpen: false } : { deskOpen: true, depth: 'compact' })}
-            nav={p.nav} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
+            nav={p.nav} call={{ looking: p.room.id, canvasShown: !focusMode && !(wide && sheet) }} actions={<>{p.callAction}{p.share ?? <div class="vm-share-anchor"><button type="button" data-share-anchor class="vm-sharebtn" onClick={() => p.act.invite()}>Invite</button></div>}{u.deskOpen ? <ExpandButton on={focusMode} toggle={() => p.act.depth(focusMode ? exitDepth(u) : 'focus')} /> : null}</>} />
           <aside class="sidebar vh-sb-host" aria-hidden={!side} inert={!side}>
-            <ShellSidebar place={null} rooms={rooms} current={p.room.id} onRoom={p.onOpenRoom} onNew={(repo) => p.onNewRoom(repo)} foot={<AccountFoot />} />
+            <ShellSidebar place={null} rooms={rooms} current={p.room.id} onRoom={p.onOpenRoom} onNew={(space) => p.onNewRoom(space)} foot={<AccountFoot />} />
           </aside>
           <main class="room">
             <div class="room-identity">
-              <h1>{p.room.name}</h1>
-              {p.room.repo ? <span class="meta">{p.room.repo}</span> : null}
+              <RoomTitle name={p.room.name} space={p.space ?? p.room.repo} onRename={p.onRename} />
               <div class="presence"><Who people={p.people} vowe={!!p.call && rec.vowe && u.vowe !== 'off'} ring={p.speaking ? { [p.speaking]: 'speaking' } : {}} /></div>
             </div>
             <Surface client={p.client} ui={p.ui} marks={p.marks} lit={p.lit} onAsk={rec.vowe ? p.onAsk : undefined} onScenario={p.onScenario} onCopies={p.onCopies}
@@ -193,12 +217,14 @@ export function VoweRoom(p: VoweRoomProps) {
           <aside class="desk" aria-label="Where the room is" aria-hidden={!u.deskOpen}>
             {u.deskOpen && !sheet && !focusMode ? <div class="nx-split" role="separator" aria-orientation="vertical" aria-label="Resize the Desk" title="Drag to widen or narrow · double-click to switch" onPointerDown={startDrag} onDblClick={() => p.act.depth(depth === 'expanded' ? 'compact' : 'expanded')}><i></i></div> : null}
             <div class="desk-panel">
+              {p.deskTop && !p.deskOverride && !focusMode ? p.deskTop : null}
               {p.deskOverride ? p.deskOverride : !p.deskStatus || p.deskStatus.state === 'ready' ? <Desk {...deskProps} /> : <DeskPending status={p.deskStatus} />}
             </div>
           </aside>
           {u.toast ? <div class="nx-toast" role="status"><span>{u.toast.text}</span>{u.toast.undo ? <button type="button" onClick={() => { u.toast!.undo!(); p.ui.setState({ toast: null }); }}>Undo</button> : null}</div> : null}
         </div>
       </SemanticsContext.Provider>
+      </MentionSources.Provider>
     </DirectoryContext.Provider>
   );
 }

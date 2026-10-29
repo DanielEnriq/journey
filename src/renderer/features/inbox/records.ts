@@ -13,7 +13,7 @@ import type { InboxPerson, InboxSource, InboxState, ItemContext } from './source
 // The Inbox over a workspace's rooms: reads every room's record through the same services the room uses
 // (cached; re-read on record:changed, when your rooms change and when the window gets focus; a few at a
 // time), plus your invitations, derives the view and publishes it. Every act goes through those services,
-// so the Inbox can't do anything the Desk couldn't. No window globals here: real.ts and demo.ts bind it.
+// so the Inbox can't do anything the Desk couldn't. No window globals here: real.ts binds it.
 
 export interface InboxDeps {
   services: Pick<VoweServices, 'record' | 'threads' | 'decisions' | 'work' | 'attention'>;

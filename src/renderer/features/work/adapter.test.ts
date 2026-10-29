@@ -41,6 +41,16 @@ describe('toRoomWorkstream', () => {
     assert.equal(detached.title, 'acme-retry');
     assert.equal(detached.lastActivityAt, null);
   });
+
+  test('a session that asked for permission or an answer waits on its user, however long ago it asked, until it moves on', () => {
+    const asked = event('s1', minutesAgo(120), { type: 'Notification', source: 'hook', toolName: null, summary: 'Claude needs your permission to use Bash' });
+    const r = toRoomWorkstream(workstream({ lastActivity: asked }), { sessions: [], activity: [] }, NOW);
+    assert.deepEqual([r.status, r.waitingOn, r.lastActivity], ['attention', 'permission', 'Asked: Claude needs your permission to use Bash']);
+    const question = event('s1', minutesAgo(1), { type: 'Notification', source: 'hook', toolName: null, summary: 'Which database should I use?' });
+    assert.equal(toRoomWorkstream(workstream({ lastActivity: question }), { sessions: [], activity: [] }, NOW).waitingOn, 'input');
+    const moved = toRoomWorkstream(workstream({ lastActivity: event('s1', minutesAgo(1)) }), { sessions: [], activity: [] }, NOW);
+    assert.deepEqual([moved.status, moved.waitingOn], ['active', undefined]);
+  });
 });
 
 test('toRoomWorkContext carries the repository name and generation time', () => {

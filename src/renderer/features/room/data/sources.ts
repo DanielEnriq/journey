@@ -1,19 +1,33 @@
+import type { RoomSessionWaitingOn } from '../../../../shared/api.js';
 import type { Scene } from '../../../../shared/canvas/index.js';
-import type { ChangedFile, PersonRef, RoomSummary } from '../types.js';
+import type { ChangedFile, PersonRef, RoomSummary, SpaceSummary } from '../types.js';
 import type { RoomPanelProps } from '../panel/types.js';
 
-// The seams between the app and the services behind it. Two workspaces implement them: the real one
+// The seams between the app and the services behind it, implemented by the workspace
 // (features/workspace/real: Supabase rooms and their record, Realtime presence, WorkContextService and
-// Claude Code transcripts over IPC) and the demo (features/workspace/mock: the same shapes, kept in this
-// window). The components only ever see these shapes.
+// Claude Code transcripts over IPC). The components only ever see these shapes.
 
 /* ---------- Rooms: persistent, listed by the workspace, previewed outside the call. ---------- */
 
-/** A repository the room picker offers: one added on this machine, or a demo example. */
+/** A repository the room picker offers: one added on this machine. */
 export interface RepoChoice { id: string; label: string }
 
-/** `repo` is a RepoChoice id. */
-export interface NewRoom { name: string; goal: string; repo: string | null }
+/** `repo` is a RepoChoice id. `spaceId`: the Space to make it in; your first Space when left out. */
+export interface NewRoom { name: string; goal: string; repo: string | null; spaceId?: string }
+
+/** What a room is called until someone names it, or says what it's for (then it's named from that). */
+export const UNTITLED = 'Untitled';
+
+/** A name for an untitled room from what it's for: its first line, cut at a word to fit a sidebar row. */
+export function nameFromGoal(goal: string, max = 48): string {
+  const line = goal.trim().split('\n')[0].replace(/[.?!:;,\s]+$/, '');
+  if (line.length <= max) return line;
+  const cut = line.slice(0, max + 1).replace(/\s+\S*$/, '');
+  return (cut.length >= max / 2 ? cut : line.slice(0, max)).replace(/[.?!:;,\s]+$/, '') + '…';
+}
+
+/** A repository added on this machine, with the identity it's shared as; null where it has no shareable remote. */
+export interface LocalRepo { id: string; label: string; identity: string | null }
 
 /** What kind of thing happened, so a list can draw it with its icon. */
 export type EventKind = 'call' | 'thread' | 'reply' | 'decision' | 'signed' | 'work' | 'resolved' | 'question' | 'repo' | 'people' | 'room';
@@ -63,11 +77,31 @@ export interface RoomDataSource {
   enter?(roomId: string): Promise<void>;
   /** You closed the room. */
   exit?(roomId: string): Promise<void>;
-  /** Repositories a room can be connected to; absent where rooms can't be (the demo). */
+  /** Repositories a room can be connected to; absent where rooms can't be. */
   repos?(): Promise<RepoChoice[]>;
   /** Adds a repository on this machine with a folder picker; null if cancelled. */
   addRepo?(): Promise<RepoChoice | null>;
   attach?(roomId: string, repoId: string): Promise<void>;
+  /** Names the room or says what it's working toward; owners only. */
+  update?(roomId: string, patch: { name?: string; goal?: string }): Promise<void>;
+  /** Keeps a room, or lets it be quick again. */
+  keep?(roomId: string, keep: boolean): Promise<void>;
+  /** Pins a room at a place among yours (smallest first), moves it, or unpins it (null). Yours alone. */
+  pin?(roomId: string, order: number | null): Promise<void>;
+  /** Archives a room out of your sidebar (unpinning it), or brings it back. Yours alone. */
+  archive?(roomId: string, archive: boolean): Promise<void>;
+  /** Your Spaces, the ones you made first; read with list() and changed with the same subscribe(). */
+  spaces?(): SpaceSummary[];
+  /** Repositories on this machine that a Space can link, with their shared identities. */
+  localRepos?(): Promise<LocalRepo[]>;
+  /** Makes a Space and links the given repositories (LocalRepo ids) to it. */
+  createSpace?(space: { name: string; repos: string[] }): Promise<SpaceSummary>;
+  /** Owners only. */
+  renameSpace?(spaceId: string, name: string): Promise<void>;
+  /** Links a repository added on this machine (a LocalRepo id) to a Space. */
+  linkRepo?(spaceId: string, repoId: string): Promise<void>;
+  /** Unlinks one of a Space's repositories: whoever linked it, or a Space owner. */
+  unlinkRepo?(spaceId: string, repository: string): Promise<void>;
 }
 
 /** What a part draws inside itself in a given view. */
@@ -102,6 +136,10 @@ export interface CallDataSource {
  */
 export type WorkStatus = 'active' | 'completed' | 'attention' | 'unknown';
 
+/** A room's agents in one mark for the sidebar: any waiting on you, else any running, else none. */
+export const workMark = (statuses: WorkStatus[]): 'running' | 'waiting' | null =>
+  statuses.includes('attention') ? 'waiting' : statuses.includes('active') ? 'running' : null;
+
 export interface WorkCheck { text: string; result: 'pass' | 'fail' | 'running' | 'not-run' }
 
 /**
@@ -121,23 +159,39 @@ export interface RoomWorkstream {
   lastActivity: string | null;
   changedFiles: number | null;
   sessions: number;
-  /** `room`: shared with the room's members; `local`: seen on your machine only. */
+  /** `room`: attached to the room, so its members see it; `local`: on your machine, not attached. */
   visibility: 'room' | 'local';
+  /** Who attached it to the room: it runs on their machine. Only for attached work. */
+  by?: PersonRef;
+  /** False for attached work running on someone else's machine: only what it publishes is known here. */
+  here?: boolean;
+  /** Whether you can detach it: you attached it, or you own the room. */
+  detachable?: boolean;
   fromDecision?: string;
   question?: string;
+  /** The agent asked whoever runs it (`by`, or you) for this, and has done nothing since. Status is `attention`. */
+  waitingOn?: RoomSessionWaitingOn;
   checks?: WorkCheck[];
   /** Observed events, newest first. */
   observed: { at: string; text: string }[];
   files?: ChangedFile[];
+  /** Which of the room's repositories it's in, where the room has several. */
+  repo?: string;
 }
 
 export interface RoomWorkContext {
-  /** Null when the room has no repository attached. */
+  /** The room's first repository; null when its Space has none. */
   repo: string | null;
+  /** All of the room's repositories, and whether each is cloned on this machine. */
+  repos?: { repo: string; here: boolean }[];
   generatedAt: string;
   workstreams: RoomWorkstream[];
   /** Why there is nothing to show even though the room has a repository, e.g. it isn't cloned here. */
   unavailable?: string;
+  /** Whether you can attach work on this machine to the room: owners and members. */
+  canAttach?: boolean;
+  /** The room's attached sessions couldn't be read (e.g. attaching isn't on this database yet): all work here shows. */
+  unattached?: boolean;
 }
 
 /** One message of a Claude Code session, reduced to what a person reads. */
@@ -154,8 +208,10 @@ export interface Transcript {
 export interface WorkstreamDataSource {
   /** The room's repositories, worktrees and sessions. Rejects when the context can't be read right now. */
   context(roomId: string): Promise<RoomWorkContext>;
-  /** Shares a workstream seen only on your machine with the room's members; absent where that isn't built. */
-  share?(roomId: string, streamId: string): Promise<void>;
+  /** Attaches a workstream on your machine to the room, so its members see it; absent where that isn't built. */
+  attach?(roomId: string, streamId: string): Promise<void>;
+  /** Detaches attached work from the room. Nothing on anyone's machine changes. */
+  detach?(roomId: string, streamId: string): Promise<void>;
   /** The latest of a workstream's most recent Claude Code session; absent where there are no transcripts. */
   transcript?(roomId: string, streamId: string): Promise<Transcript>;
 }

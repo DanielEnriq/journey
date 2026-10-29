@@ -5,6 +5,7 @@ import type { RoomRole, VoweRecord } from '../contracts/model.js';
 import { capabilitiesOf, type VoweServices } from '../contracts/services.js';
 import { names } from '../state/directory.js';
 import { directoryOf, EMPTY_RECORD, mentionsAgent } from './people.js';
+import { plainMentions, type MentionItem } from '../state/mentions.js';
 
 export { directoryOf, EMPTY_RECORD, mentionsAgent };
 import { makeUi } from '../state/ui.js';
@@ -35,9 +36,20 @@ export interface RealRoomProps {
   role: RoomRole | null;
   /** You, as the record names you (your cloud user id). */
   me: string;
-  call: CallControls;
+  /** The call's controls while you're in it; null outside it. */
+  call: CallControls | null;
+  /** Start Call, Join or Leave, in the band. */
+  callAction?: ComponentChildren;
+  /** The room itself (what it's for, its repositories, people, sessions), above the Desk. */
+  deskTop?: ComponentChildren;
+  /** Renames the room from its title (owners only). */
+  onRename?(name: string): Promise<void>;
+  /** The Space the room is in, beside its name. */
+  space?: string | null;
   /** Who's here and in the call, as the band draws them, and who's talking now (initials). */
   people: PersonRef[];
+  /** The coding sessions attached to the room, for the Desk's @ menu. */
+  sessions?: MentionItem[];
   speaking: string | null;
   inCall: number;
   /** Journey's call overlays: captions, Ask Vowe, notices, the call bar is drawn by the room. */
@@ -51,7 +63,7 @@ export interface RealRoomProps {
   windowOverlay?: ComponentChildren;
   light: boolean;
   onOpenRoom(id: string): void;
-  onNewRoom(repo?: string | null): void;
+  onNewRoom(space?: string | null): void;
   onHome(): void;
 }
 
@@ -67,7 +79,7 @@ function withMentions(s: VoweServices, roomId: string, rec: () => VoweRecord, ag
     if (asker.busy) { notice(`${agentName()} is answering something else. Mention it again in a moment.`); return; }
     const t = rec().threads.find((x) => x.id === threadId);
     const on = t && t.about.kind === 'part' && t.about.id !== 'canvas' ? { component: t.about.id, name: t.about.name } : null;
-    asker.feedback(threadId, body, on, (said) => agentReply(threadId, said));
+    asker.feedback(threadId, plainMentions(body), on, (said) => agentReply(threadId, said));
   };
   return {
     ...s,
@@ -192,7 +204,7 @@ export function RealRoom(p: RealRoomProps) {
   const n = names(directory);
   const speaker = p.speaking;
   const here = p.access ? p.access.members.filter((m) => m.presence !== 'away').length : p.people.length;
-  const hereLine = `${here} here · ${p.inCall} on the call`;
+  const hereLine = p.inCall ? `${here} here · ${p.inCall} on the call` : `${here} here`;
   const deskStatus: DeskStatus = status.state === 'ready' ? { state: 'ready' } : status.state === 'loading' ? { state: 'loading' } : { state: 'failed', error: status.error, retry };
   const role: RoomRole = p.role ?? 'viewer';
   const one = (comp: string) => ui.setState({ sel: [{ component: comp }], deskOpen: true, focusOn: true, tab: 'discuss', fsec: 'discuss', inspect: null });
@@ -200,7 +212,7 @@ export function RealRoom(p: RealRoomProps) {
   return (
     <VoweRoom room={p.room} rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={p.onNewRoom}
       client={p.client} record={record} directory={directory} role={role} capabilities={capabilitiesOf(services)}
-      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} people={p.people} speaking={speaker} hereLine={hereLine} nav={nav}
+      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} callAction={p.callAction} deskTop={p.deskTop} onRename={p.onRename} space={p.space} people={p.people} speaking={speaker} sessions={p.sessions} hereLine={hereLine} nav={nav}
       light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay} deskOverride={p.peoplePanel}
       overlays={<>{p.overlays}{ask.reviewing ? <div class="receipt" role="status"><span class="dot"></span><span>{n.agentName()} is replying in the thread…</span></div> : null}
       {askFailed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>{askFailed}</span><button class="mini ghost" type="button" onClick={() => setAskFailed(null)}>Dismiss</button></div> : null}

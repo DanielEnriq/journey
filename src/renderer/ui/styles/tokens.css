@@ -1,5 +1,6 @@
 /*
- * Vowe · Ink, Paper & Signal — design tokens (Pass 1)
+ * Vowe — design tokens. Surfaces are near-neutral (a trace of warmth, nothing like paper), so the app sits
+ * beside the other Mac apps it's used with; colour is kept for state.
  *
  * Three materials, each with one job:
  *   Graphite ink   — what people wrote and decided. Text, structure, borders.
@@ -58,13 +59,16 @@
   --oxide-300: #ee8790; /* text on graphite (7.1:1) */
 
   /* -------------------------------------------------------------- type */
-  /* Two families: the system's own face for everything, Instrument Serif for what people wrote (a greeting, a goal,
-     a decision), and mono only for code. */
+  /* The system's own faces only. SF Pro for everything, its Display cut, semibold and tracked tight, for titles
+     (a greeting, a goal, a decision); hierarchy comes from weight and the four inks, never a second family.
+     SF Mono only for code. */
   --v-font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  --v-font-serif: 'Instrument Serif', 'New York', 'Iowan Old Style', Georgia, serif;
+  --v-font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   /* The app's chrome (sidebar, account, buttons, menus, tips): the same face, named for where it's used. */
   --v-font-ui: var(--v-font-sans);
-  --v-font-mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+  --v-font-mono: 'SF Mono', ui-monospace, Menlo, monospace;
+  /* Selection and focus: macOS's accent colour, which main sets here from System Settings. */
+  --v-accent: #0a84ff;
 
   /* ------------------------------------------------------ shape & motion */
   --v-radius-xs: 4px;  /* chips, badges, keys */
@@ -79,49 +83,53 @@
   --v-dur-3: 320ms;  /* panels, page */
 }
 
-/* =========================================================== LIGHT (paper) */
+/* =========================================================== LIGHT */
 :root,
 [data-theme='light'],
 .th-light {
   color-scheme: light;
   /* surfaces, back to front */
-  --v-bg: var(--paper-50);          /* the window */
-  --v-bg-sunken: var(--paper-100);  /* sidebars, wells */
-  --v-canvas: #f4f1ea;              /* the drawing surface */
-  --v-surface: var(--paper-0);      /* cards, sheets */
+  --v-bg: #fbfbfa;                  /* the window */
+  --v-bg-sunken: #f2f2f0;           /* sidebars, wells */
+  --v-canvas: #f7f7f6;              /* the drawing surface */
+  --v-surface: #ffffff;             /* cards, sheets */
   --v-surface-raised: #ffffff;      /* popovers, menus, dialogs */
-  --v-surface-hover: rgba(23, 25, 27, 0.04);
-  --v-surface-press: rgba(23, 25, 27, 0.07);
-  --v-surface-selected: rgba(23, 25, 27, 0.06);
+  --v-surface-hover: rgba(0, 0, 0, 0.04);
+  --v-surface-press: rgba(0, 0, 0, 0.07);
+  --v-surface-selected: rgba(0, 0, 0, 0.06);
   /* ink */
-  --v-fg: var(--graphite-900);      /* 15.1:1 */
-  --v-fg-2: #3a3d41;                /* 9.4:1 secondary */
-  --v-fg-3: #5c5f63;                /* 5.5:1 metadata */
-  --v-fg-4: #7e8084;                /* 3.4:1 placeholder, disabled, large only */
-  --v-fg-inverse: var(--paper-50);
+  --v-fg: #1d1d1f;                  /* 16.1:1 */
+  --v-fg-2: #424245;                /* 9.8:1 secondary */
+  --v-fg-3: #6e6e73;                /* 5.0:1 metadata */
+  --v-fg-4: #8e8e93;                /* 3.2:1 placeholder, disabled, large only */
+  --v-fg-inverse: #fbfbfa;
   /* lines */
-  --v-line: rgba(23, 25, 27, 0.09);
-  --v-line-2: rgba(23, 25, 27, 0.15);
-  --v-line-strong: rgba(23, 25, 27, 0.32);
-  --v-grid: rgba(23, 25, 27, 0.07);
+  --v-line: rgba(0, 0, 0, 0.08);
+  --v-line-2: rgba(0, 0, 0, 0.13);
+  --v-line-strong: rgba(0, 0, 0, 0.28);
+  --v-grid: rgba(0, 0, 0, 0.07);
   /* signal: action and attention */
-  --v-signal: var(--vermilion-500);
-  --v-signal-hover: #d0623f;
-  --v-signal-fg: var(--vermilion-600);
-  --v-on-signal: var(--graphite-900);   /* 5.4:1 on vermilion */
-  --v-signal-wash: rgba(219, 113, 79, 0.11);
-  --v-signal-line: rgba(178, 74, 43, 0.35);
-  /* slate: system, Vowe, collaboration, information */
-  --v-info: var(--slate-500);
-  --v-info-fg: var(--slate-600);
-  --v-info-wash: rgba(113, 150, 171, 0.14);
-  --v-info-line: rgba(65, 105, 127, 0.38);
+  --v-signal: #e0673f;
+  --v-signal-hover: #d35a33;
+  --v-signal-fg: #b8461f;               /* 5.0:1 */
+  --v-on-signal: #1d1d1f;               /* 5.6:1 on signal */
+  --v-signal-wash: rgba(224, 103, 63, 0.10);
+  --v-signal-line: rgba(184, 70, 31, 0.35);
+  /* slate: system, Vowe, collaboration, information, running */
+  --v-info: #5f87a6;
+  --v-info-fg: #3d6585;                 /* 6.0:1 */
+  --v-info-wash: rgba(95, 135, 166, 0.12);
+  --v-info-line: rgba(61, 101, 133, 0.36);
   /* Vowe's face (AgentMark) for marks drawn by class: eyes and a smile in the surface colour, as background
      layers over var(--v-info). Gradients, since the CSP keeps data: images out. Declared per theme so it follows. */
   --v-agent-face: radial-gradient(5.8% 9.6% at 36.7% 43.8%, var(--v-surface) 90%, transparent 100%) center / 100% 100% no-repeat, radial-gradient(5.8% 9.6% at 63.3% 43.8%, var(--v-surface) 90%, transparent 100%) center / 100% 100% no-repeat, radial-gradient(23.7% 66% at 50% -39.5%, transparent 68%, var(--v-surface) 71%, var(--v-surface) 97%, transparent 100%) bottom / 100% 35.8% no-repeat;
   /* states */
-  --v-success: var(--sage-600);
-  --v-success-wash: rgba(63, 107, 76, 0.1);
+  --v-success: #2f8a52;
+  --v-success-wash: rgba(47, 138, 82, 0.1);
+  /* drift: the code no longer says what a signed line says. Not failure, not "needs you". */
+  --v-drift: #c88a1a;
+  --v-drift-fg: #8f600b;
+  --v-drift-wash: rgba(200, 138, 26, 0.12);
   /* fault: failures, errors, destructive actions (never "needs you") */
   --v-fault: var(--oxide-600);
   --v-fault-fg: var(--oxide-700);
@@ -130,81 +138,84 @@
   --v-danger: var(--v-fault-fg);       /* alias, kept for compatibility */
   --v-danger-wash: var(--v-fault-wash);
   /* not confirmed yet: proposals, assumptions, unverified states (any author) */
-  --v-proposed-line: rgba(23, 25, 27, 0.4);
-  --v-proposed-wash: rgba(23, 25, 27, 0.025);
+  --v-proposed-line: rgba(0, 0, 0, 0.38);
+  --v-proposed-wash: rgba(0, 0, 0, 0.025);
   --v-proposed-fg: var(--v-fg-2);
-  /* selection & focus */
-  --v-selection: rgba(113, 150, 171, 0.24);
-  --v-focus: var(--slate-600);
-  --v-focus-ring: 0 0 0 2px var(--v-bg), 0 0 0 4px var(--slate-500);
+  /* selection & focus follow the system accent */
+  --v-selection: color-mix(in srgb, var(--v-accent) 18%, transparent);
+  --v-focus: var(--v-accent);
+  --v-focus-ring: 0 0 0 2px var(--v-bg), 0 0 0 4px color-mix(in srgb, var(--v-accent) 70%, transparent);
   /* people */
   --v-person-1: #2f7c78; /* teal   */
   --v-person-2: #7e5c93; /* plum   */
   --v-person-3: #9a7431; /* ochre  */
   --v-person-4: #67733a; /* olive  */
   --v-person-5: #4f6b9c; /* indigo, used last */
-  /* depth: paper edges, not glows */
-  --v-shadow-1: 0 1px 0 rgba(23, 25, 27, 0.05), 0 1px 2px rgba(23, 25, 27, 0.04);
-  --v-shadow-2: 0 1px 0 rgba(23, 25, 27, 0.05), 0 6px 16px rgba(23, 25, 27, 0.07);
-  --v-shadow-3: 0 0 0 1px rgba(23, 25, 27, 0.06), 0 18px 44px rgba(23, 25, 27, 0.14);
-  --v-scrim: rgba(23, 25, 27, 0.22);
-  --v-grain-opacity: 0.35;
+  /* depth: a hairline and a soft lift, like the system's own sheets */
+  --v-shadow-1: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --v-shadow-2: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --v-shadow-3: 0 0 0 0.5px rgba(0, 0, 0, 0.10), 0 18px 44px rgba(0, 0, 0, 0.14);
+  --v-scrim: rgba(0, 0, 0, 0.22);
+  --v-grain-opacity: 0;
 }
 
-/* ======================================================== DARK (graphite) */
+/* ============================================================== DARK */
 [data-theme='dark'],
 .th-dark {
   color-scheme: dark;
-  --v-bg: var(--graphite-900);
-  --v-bg-sunken: #131516;
-  --v-canvas: #191b1e;
-  --v-surface: #1f2225;
-  --v-surface-raised: #262a2e;
-  --v-surface-hover: rgba(241, 237, 229, 0.045);
-  --v-surface-press: rgba(241, 237, 229, 0.08);
-  --v-surface-selected: rgba(241, 237, 229, 0.07);
-  --v-fg: var(--paper-50);          /* 15.1:1 */
-  --v-fg-2: var(--paper-200);       /* 11.7:1 */
-  --v-fg-3: #a8a59e;                /* 7.2:1 */
-  --v-fg-4: #7e7c77;                /* 4.2:1 */
-  --v-fg-inverse: var(--graphite-900);
-  --v-line: rgba(241, 237, 229, 0.075);
-  --v-line-2: rgba(241, 237, 229, 0.12);
-  --v-line-strong: rgba(241, 237, 229, 0.28);
-  --v-grid: rgba(241, 237, 229, 0.05);
-  --v-signal: var(--vermilion-400);
-  --v-signal-hover: #ea9271;
-  --v-signal-fg: var(--vermilion-300);
-  --v-on-signal: var(--graphite-900);
-  --v-signal-wash: rgba(227, 130, 95, 0.12);
-  --v-signal-line: rgba(236, 150, 119, 0.32);
-  --v-info: var(--slate-400);
-  --v-info-fg: var(--slate-300);
-  --v-info-wash: rgba(141, 176, 196, 0.12);
-  --v-info-line: rgba(141, 176, 196, 0.34);
+  --v-bg: #1e1e20;
+  --v-bg-sunken: #171719;
+  --v-canvas: #1a1a1c;
+  --v-surface: #2a2a2c;
+  --v-surface-raised: #323234;
+  --v-surface-hover: rgba(255, 255, 255, 0.05);
+  --v-surface-press: rgba(255, 255, 255, 0.08);
+  --v-surface-selected: rgba(255, 255, 255, 0.07);
+  --v-fg: #f5f5f7;                  /* 15.6:1 */
+  --v-fg-2: #d1d1d6;                /* 11.6:1 */
+  --v-fg-3: #98989d;                /* 6.0:1 */
+  --v-fg-4: #6e6e73;                /* 3.2:1 */
+  --v-fg-inverse: #1d1d1f;
+  --v-line: rgba(255, 255, 255, 0.08);
+  --v-line-2: rgba(255, 255, 255, 0.13);
+  --v-line-strong: rgba(255, 255, 255, 0.26);
+  --v-grid: rgba(255, 255, 255, 0.05);
+  --v-signal: #f0855e;
+  --v-signal-hover: #f49573;
+  --v-signal-fg: #f59a78;
+  --v-on-signal: #1d1d1f;
+  --v-signal-wash: rgba(240, 133, 94, 0.14);
+  --v-signal-line: rgba(245, 154, 120, 0.34);
+  --v-info: #7fa6c4;
+  --v-info-fg: #9cc0dc;
+  --v-info-wash: rgba(127, 166, 196, 0.16);
+  --v-info-line: rgba(156, 192, 220, 0.34);
   --v-agent-face: radial-gradient(5.8% 9.6% at 36.7% 43.8%, var(--v-surface) 90%, transparent 100%) center / 100% 100% no-repeat, radial-gradient(5.8% 9.6% at 63.3% 43.8%, var(--v-surface) 90%, transparent 100%) center / 100% 100% no-repeat, radial-gradient(23.7% 66% at 50% -39.5%, transparent 68%, var(--v-surface) 71%, var(--v-surface) 97%, transparent 100%) bottom / 100% 35.8% no-repeat;
-  --v-success: var(--sage-400);
-  --v-success-wash: rgba(143, 191, 152, 0.1);
+  --v-success: #4fbf7a;
+  --v-success-wash: rgba(79, 191, 122, 0.12);
+  --v-drift: #e0a83a;
+  --v-drift-fg: #f0c060;
+  --v-drift-wash: rgba(224, 168, 58, 0.14);
   --v-fault: var(--oxide-400);
   --v-fault-fg: var(--oxide-300);
   --v-fault-wash: rgba(226, 96, 106, 0.11);
   --v-fault-line: rgba(238, 135, 144, 0.34);
   --v-danger: var(--v-fault-fg);
   --v-danger-wash: var(--v-fault-wash);
-  --v-proposed-line: rgba(241, 237, 229, 0.36);
-  --v-proposed-wash: rgba(241, 237, 229, 0.02);
+  --v-proposed-line: rgba(255, 255, 255, 0.34);
+  --v-proposed-wash: rgba(255, 255, 255, 0.02);
   --v-proposed-fg: var(--v-fg-2);
-  --v-selection: rgba(141, 176, 196, 0.22);
-  --v-focus: var(--slate-400);
-  --v-focus-ring: 0 0 0 2px var(--v-bg), 0 0 0 4px var(--slate-400);
+  --v-selection: color-mix(in srgb, var(--v-accent) 30%, transparent);
+  --v-focus: var(--v-accent);
+  --v-focus-ring: 0 0 0 2px var(--v-bg), 0 0 0 4px color-mix(in srgb, var(--v-accent) 80%, transparent);
   --v-person-1: #6fc1ba;
   --v-person-2: #b89ad0;
   --v-person-3: #d2ae6a;
   --v-person-4: #a9b573;
   --v-person-5: #94aee0;
-  --v-shadow-1: 0 1px 0 rgba(0, 0, 0, 0.35);
-  --v-shadow-2: 0 1px 0 rgba(0, 0, 0, 0.35), 0 8px 22px rgba(0, 0, 0, 0.32);
-  --v-shadow-3: 0 0 0 1px rgba(241, 237, 229, 0.06), 0 24px 56px rgba(0, 0, 0, 0.5);
-  --v-scrim: rgba(8, 9, 10, 0.55);
-  --v-grain-opacity: 0.5;
+  --v-shadow-1: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --v-shadow-2: 0 0 0 0.5px rgba(255, 255, 255, 0.10), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --v-shadow-3: 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 24px 56px rgba(0, 0, 0, 0.5);
+  --v-scrim: rgba(0, 0, 0, 0.55);
+  --v-grain-opacity: 0;
 }
