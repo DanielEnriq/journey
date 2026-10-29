@@ -18,15 +18,17 @@ import { MembersPanel } from '../membership/MembersPanel.js';
 import { can, type MembershipSource, type RoomAccess } from '../membership/model.js';
 import { PreJoinSheet } from '../membership/PreJoinSheet.js';
 import { Toasts, useToasts } from '../membership/primitives.js';
-import { useRooms } from '../workspace/hooks.js';
+import { useLoaded, useRooms } from '../workspace/hooks.js';
 import { selfCloudId } from '../workspace/real/workspace.js';
 import { agentNameOf } from '../workspace/real/vowe-services.js';
 import type { CallControls } from './call/CallBar.js';
 import { Captions, captionText, type CaptionLine } from './captions.js';
-import type { CallDataSource, RoomDataSource, WorkstreamDataSource } from './data/sources.js';
+import type { CallDataSource, RoomDataSource, RoomWorkContext, WorkstreamDataSource } from './data/sources.js';
 import { freshRoom } from './fresh.js';
 import { CallButton, LeaveButton } from './call/CallButton.js';
 import { RoomCards } from './panel/RoomCards.js';
+import { waitsOnYou } from './panel/WorkContext.js';
+import type { MentionItem } from '../vowe-room/state/mentions.js';
 import { Lights } from './shell.js';
 import { repoName } from '../../ui/pass2/shell/sidebar-model.js';
 import type { VoweServices } from '../vowe-room/contracts/services.js';
@@ -129,6 +131,15 @@ function Dropped({ session, onJoin, onLeave }: { session: CallSession; onJoin():
   );
 }
 
+/** The coding sessions attached to the room, as the Desk's @ menu lists them: what needs you first. */
+function sessionMentions(ctx: RoomWorkContext | null | undefined): MentionItem[] {
+  const state = (w: RoomWorkContext['workstreams'][number]) => w.status === 'attention' ? (waitsOnYou(w) ? 'attention' : 'waiting') : w.status === 'unknown' ? undefined : w.status;
+  const order = ['attention', 'active', 'waiting', 'completed', undefined];
+  return (ctx?.workstreams ?? []).filter((w) => w.visibility === 'room')
+    .map((w): MentionItem => ({ kind: 'session', id: w.id, label: w.title, key: w.branch ?? undefined, also: `${w.agent} ${w.repo ?? ''}`, state: state(w) }))
+    .sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state));
+}
+
 function Room(props: InnerProps) {
   const { sources, roomId, session, onOpenRoom, onNewRoom, onLeave, onJoin, light, ui, membership, voice, inCall } = props;
   const snap = useVoice(voice);
@@ -139,6 +150,8 @@ function Room(props: InnerProps) {
   const cs = useStore(session.store);
   const summary = rooms.find((r) => r.id === roomId);
   const me = sources.room.me();
+  const work = useLoaded(() => sources.work.context(roomId), (fn) => sources.room.subscribe(fn), roomId);
+  const sessions = useMemo(() => sessionMentions(work.value), [work.value]);
   const [muted, setMuted] = useState(true);
   const [cc, setCc] = useState(false);
   // What this room calls its agent (renamed by an owner), for the call cluster on other screens.
@@ -351,7 +364,7 @@ function Room(props: InnerProps) {
     <RealRoom roomId={roomId} room={summary ?? { id: roomId, name: 'Room', repo: null }} rooms={rooms} services={props.vowe} client={board} asker={asker}
       agentReply={(threadId, body) => act(props.agentReply(roomId, threadId, body))}
       access={ui.access} role={summary?.role ?? ui.access?.members.find((m) => m.userId === ui.access?.viewerId)?.role ?? null} me={props.self()}
-      call={inCall ? call : null} callAction={callAction} onRename={rename} space={space ?? (summary?.repo ? repoName(summary.repo) : null)} people={inCall ? [me, ...others] : [me, ...looking]} speaking={speaking} inCall={summary?.inCall.length ?? 0} overlays={notices}
+      call={inCall ? call : null} callAction={callAction} onRename={rename} space={space ?? (summary?.repo ? repoName(summary.repo) : null)} people={inCall ? [me, ...others] : [me, ...looking]} sessions={sessions} speaking={speaking} inCall={summary?.inCall.length ?? 0} overlays={notices}
       deskTop={summary ? <RoomCards room={sources.room} work={sources.work} roomId={roomId} attachError={props.attachError} onJoin={join}
         people={membership && ui.access ? <PeopleSection source={membership} access={ui.access} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} /> : undefined} /> : null}
       share={ui.share} openShare={ui.openShare} light={light} windowOverlay={ui.toasts}

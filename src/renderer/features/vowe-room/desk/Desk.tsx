@@ -10,6 +10,7 @@ import type { Step as PStep } from '../contracts/model.js';
 import { ObjectiveCard, WorkView, objectiveState } from './Work.js';
 import { DecisionDoc } from './DecisionDoc.js';
 import { Focus } from './Focus.js';
+import { MentionField, withTokens } from './Mention.js';
 import type { Scene } from '../../../../shared/canvas/index.js';
 
 import type { Depth } from '../state/ui.js';
@@ -146,18 +147,21 @@ export function Evidence({ ids }: { ids?: string[] }) {
   if (!ids?.length) return null;
   return <span class="nx-evrow">{ids.map((id) => { const e = ev(id); return e ? <span key={id} class="nx-evchip" title={`${e.label} · ${e.ref}`}><BasisGlyph b={e.basis} />{id}</span> : null; })}</span>;
 }
-export function Words({ text, light }: { text: string; light(p: string[] | null): void }) {
-  const out: (string | h.JSX.Element)[] = [];
-  const re = /\[([^|\]]+)\|([^\]]+)\]/g;
-  let last = 0, m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    out.push(text.slice(last, m.index));
-    const id = m[2];
-    out.push(<span key={m.index} class="nx-ref" onPointerEnter={() => light([id])} onPointerLeave={() => light(null)}>{m[1]}</span>);
-    last = m.index + m[0].length;
-  }
-  out.push(text.slice(last));
-  return <>{out}</>;
+export function Words({ text, light, act }: { text: string; light(p: string[] | null): void; act?: DeskAct }) {
+  const refs = (t: string, k0: number) => {
+    const out: (string | h.JSX.Element)[] = [];
+    const re = /\[([^|\]]+)\|([^\]]+)\]/g;
+    let last = 0, m: RegExpExecArray | null;
+    while ((m = re.exec(t))) {
+      out.push(t.slice(last, m.index));
+      const id = m[2];
+      out.push(<span key={`${k0}:${m.index}`} class="nx-ref" onPointerEnter={() => light([id])} onPointerLeave={() => light(null)}>{m[1]}</span>);
+      last = m.index + m[0].length;
+    }
+    out.push(t.slice(last));
+    return out;
+  };
+  return <>{withTokens(text, refs, act)}</>;
 }
 
 export const DEC_STATE: Record<Decision['state'], string> = { suggested: 'Suggested', draft: 'Draft', review: 'In review', agreed: 'Agreed', superseded: 'Superseded', dismissed: 'Dismissed' };
@@ -365,8 +369,8 @@ function DiscussTab(p: DeskProps) {
       <NeedsYou p={p} tab="discuss" />
       <label class="rp-cm-reply nx-compose">
         <Who id={me} /><span class="rp-sr">New thread</span>
-        <input type="text" placeholder={focus ? `Start a thread on ${focus.name}…` : 'Start a thread about the system…'} value={draft}
-          onInput={(e) => setDraft(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) { act.newThread(draft.trim()); setDraft(''); } }} />
+        <MentionField p={p} placeholder={focus ? `Start a thread on ${focus.name}…` : 'Start a thread about the system…'} value={draft}
+          onInput={setDraft} onSubmit={(t) => { act.newThread(t); setDraft(''); }} />
       </label>
       <div class="nx-dfilter"><button type="button" class={!p.everywhere ? 'on' : ''} onClick={() => act.everywhere(false)}>About the system</button><button type="button" class={p.everywhere ? 'on' : ''} onClick={() => act.everywhere(true)}>Everywhere<em>{all.length}</em></button>{!p.everywhere && elsewhere ? <span>{elsewhere} on decisions, plans and PRs live there</span> : null}</div>
       <span class="nx-hint2">{focus ? `It will be pinned to ${focus.name}.` : 'Select a part first to pin the thread to it.'}{rec.vowe ? ` ${agentName()} only joins if you @mention it.` : ''}</span>
@@ -481,7 +485,7 @@ function ThreadRow({ t, p, selected, onSelect, onMenu }: { t: Thread; p: DeskPro
           {t.title ? <span class="nx-dl-title">{t.title}</span> : null}
           <span class="rp-cm-time">{root.ago}</span>
         </span>
-        <span class="rp-cm-body"><Words text={root.body} light={act.light} /></span>
+        <span class="rp-cm-body"><Words text={root.body} light={act.light} act={act} /></span>
         {root.evidence ? <Evidence ids={root.evidence} /> : null}
         <span class="nx-dl-meta">
           {t.replies.length > 1 ? <span class="rp-cm-replies"><span class="rp-avstack">{[...new Set(t.replies.slice(1).map((r) => r.by))].map((id) => <Who key={id} id={id} size={16} />)}</span>{repliesLine(t)}</span> : <span class="rp-cm-replies rp-quiet">No replies</span>}
@@ -563,7 +567,7 @@ export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim
         <div class={'rp-cm' + (expanded ? ' rp-expanded' : '') + (offer && !expanded ? ' nx-has-offer' : '')}>
           <button class="rp-cm-main" type="button" aria-expanded={expanded} onClick={() => !inline && act.thread(expanded ? null : t.id)}>
             <span class="rp-cm-head"><Who id={root.by} /><b>{root.by === me ? 'You' : nameOf(root.by)}</b><span class="rp-cm-time">{root.ago}</span>{root.spoken ? <span class="nx-spoken">said in the call</span> : null}{t.title ? <span class="rp-cm-kind">{t.title}</span> : null}</span>
-            <span class="rp-cm-body"><Words text={root.body} light={act.light} /></span>
+            <span class="rp-cm-body"><Words text={root.body} light={act.light} act={act} /></span>
             {root.evidence ? <Evidence ids={root.evidence} /> : null}
           </button>
           <div class="rp-cm-foot">
@@ -589,8 +593,8 @@ function ThreadReplies({ t, p }: { t: Thread; p: DeskProps }) {
       {t.presence?.mode === 'typing' ? <div class="rp-cm-typing"><Who id={t.presence.personId} /><span class="rp-bubble"><span class="rp-dots"><i /><i /><i /></span></span></div> : null}
       <label class="rp-cm-reply">
         <Who id={me} /><span class="rp-sr">Reply</span>
-        <input type="text" placeholder={rec.vowe ? `Reply, @${agentName()} to ask it, or just say it on the call` : 'Reply, or @ someone in the room'} value={text} onInput={(e) => setText(e.currentTarget.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) { act.reply(t.id, text.trim()); setText(''); } }} />
+        <MentionField p={p} placeholder={rec.vowe ? `Reply, @${agentName()} to ask it, or just say it on the call` : 'Reply, or @ someone in the room'} value={text}
+          onInput={setText} onSubmit={(b) => { act.reply(t.id, b); setText(''); }} />
       </label>
       <span class="nx-thread-foot">
         {parts.length ? <button class="rp-link" type="button" onClick={() => act.light(parts)}>Show on canvas</button> : null}
@@ -606,7 +610,7 @@ function ReplyRow({ r, t, p }: { r: Reply; t: Thread; p: DeskProps }) {
   return (
     <div class={`rp-cm-r${r.fresh ? ' rp-fresh' : ''}${r.by === AGENT ? ' nx-vowe-r' : ''}`}>
       <span class="rp-cm-head"><Who id={r.by} /><b>{r.by === me ? 'You' : nameOf(r.by)}</b><span class="rp-cm-time">{r.ago}</span>{r.spoken ? <span class="nx-spoken">said in the call</span> : null}</span>
-      <span class="rp-cm-body" onPointerEnter={() => r.points && act.light(r.points)} onPointerLeave={() => r.points && act.light(null)}><Words text={r.body} light={act.light} /></span>
+      <span class="rp-cm-body" onPointerEnter={() => r.points && act.light(r.points)} onPointerLeave={() => r.points && act.light(null)}><Words text={r.body} light={act.light} act={act} /></span>
       {r.evidence ? <Evidence ids={r.evidence} /> : null}
       {r.offer ? (
         <div class={'nx-offer2 ' + r.offer.state}>

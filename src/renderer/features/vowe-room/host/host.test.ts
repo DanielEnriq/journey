@@ -83,6 +83,8 @@ describe('mentions', () => {
     assert.ok(!mentionsAgent('mail ops@vowe.dev about it', 'Vowe'));
     assert.ok(!mentionsAgent('Vowe could help', 'Vowe'));
     assert.ok(mentionsAgent('@C++ helper?', 'C++'));
+    assert.ok(mentionsAgent('can @[Kit|agent:vowe] check this?', 'Kit'));
+    assert.ok(!mentionsAgent('ask @[Dana Lee|person:u2]', 'Vowe'));
   });
 });
 

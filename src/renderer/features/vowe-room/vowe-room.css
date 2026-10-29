@@ -552,11 +552,37 @@ mark.nx-hl .v-avatar,mark.nx-hl>span:last-child{display:inline-flex;vertical-ali
 .nx-authd b{color:var(--v-success);font-weight:500}
 .nx-authd svg{color:var(--v-success)}
 
-.nx-mention{display:flex;flex-direction:column;margin-top:4px;padding:4px;border-radius:8px;background:var(--v-surface-raised);box-shadow:var(--v-shadow-1),inset 0 0 0 1px var(--v-line)}
-.nx-mopt{display:flex;align-items:center;gap:7px;padding:5px 6px;border-radius:5px;font-size:12px}
-.nx-mopt small{margin-left:auto;color:var(--v-fg-3);font-size:10.5px}
-.nx-mopt.none{flex-wrap:wrap;color:var(--v-fg-3)}
-.nx-mopt .orb{width:12px;height:12px}
+/* The @ menu: the room's people, sessions, decisions and parts, under the field; one row lit, arrows move it. */
+.nx-mmenu{position:fixed;z-index:1000;display:flex;flex-direction:column;padding:4px;overflow-y:auto;overscroll-behavior:contain;border-radius:10px;background:var(--v-surface-raised);box-shadow:var(--v-shadow-1),0 8px 24px rgba(0,0,0,.18),inset 0 0 0 1px var(--v-line);scrollbar-width:none;animation:nx-min .12s var(--v-ease)}
+.nx-mmenu::-webkit-scrollbar{display:none}
+@keyframes nx-min{from{opacity:0}to{opacity:1}}
+.nx-mgroup{display:flex;flex-direction:column}
+.nx-mgroup + .nx-mgroup{margin-top:4px;padding-top:4px;border-top:1px solid var(--v-line)}
+.nx-mhead{padding:6px 8px 4px;font-size:11.5px;color:var(--v-fg-3)}
+.nx-mrow{display:flex;align-items:center;gap:9px;min-height:30px;padding:0 8px;border-radius:6px;font-size:13px;color:var(--v-fg);cursor:default;white-space:nowrap}
+.nx-mrow.on{background:var(--v-surface-hover)}
+.nx-mrow > svg{flex:none;color:var(--v-fg-3)}
+.nx-mkey{flex:none;max-width:132px;overflow:hidden;text-overflow:ellipsis;color:var(--v-fg-3);font-variant-numeric:tabular-nums}
+.nx-mlabel{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nx-mtag{flex:none;height:18px;padding:0 6px;display:inline-flex;align-items:center;border-radius:5px;font-size:11px;color:var(--v-fg-2);box-shadow:inset 0 0 0 1px var(--v-line-strong)}
+.nx-mrow .nx-agentmark{width:16px;height:16px;margin:0 1px}
+.nx-mglyph{flex:none;color:var(--v-fg-3);margin:0 2px}
+.nx-mface{position:relative;display:inline-flex;flex:none}
+.nx-mface.here::after{content:"";position:absolute;right:-2px;bottom:-2px;width:7px;height:7px;border-radius:50%;background:var(--v-success);box-shadow:0 0 0 2px var(--v-surface-raised)}
+/* State marks, one shape language: an outline is not started, half is under way, full is done. */
+.nx-mstate{flex:none;box-sizing:border-box;width:14px;height:14px;margin:0 2px;border-radius:50%;border:1.5px solid currentColor;color:var(--v-fg-4)}
+.nx-mstate.session-active,.nx-mstate.session-attention,.nx-mstate.decision-review{padding:2px;background:conic-gradient(currentColor 0 50%,transparent 0) content-box}
+.nx-mstate.session-active{color:var(--v-info-fg)}
+.nx-mstate.session-attention{color:var(--v-signal-fg)}
+.nx-mstate.decision-review{color:var(--v-proposed-fg)}
+.nx-mstate.session-waiting,.nx-mstate.decision-suggested{color:var(--v-fg-3);border-style:dashed}
+.nx-mstate.session-completed,.nx-mstate.decision-agreed{color:var(--v-success);background:currentColor}
+.nx-mstate.decision-draft{color:var(--v-fg-3)}
+/* A mention in a message. */
+.nx-mtok{display:inline;padding:0 2px;margin:0 -1px;border:0;border-radius:4px;font:inherit;font-weight:550;color:var(--v-info-fg);background:var(--v-info-wash)}
+button.nx-mtok{cursor:pointer}
+button.nx-mtok:hover,span.nx-mtok:hover{background:var(--v-info-line)}
+.nx-mtok.agent{color:var(--v-fg)}
 .nx-runhead{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:13px;color:var(--v-fg-2);margin-bottom:4px}
 .nx-runhead b{color:var(--v-fg);font-weight:600}
 .nx-runacts{display:flex;gap:6px;margin:8px 0 4px}

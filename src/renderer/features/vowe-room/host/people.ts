@@ -2,14 +2,16 @@ import type { Person } from '../../room/panel/types.js';
 import type { RoomAccess } from '../../membership/model.js';
 import { AGENT, type VoweRecord } from '../contracts/model.js';
 import { DEFAULT_AGENT_NAME, type Directory } from '../state/directory.js';
+import { mentionsIn } from '../state/mentions.js';
 
 // Pure pieces of the real room's host: the empty record, who the record can name, and when a message asks
 // the assistant in. No Journey globals, so they're testable on their own.
 
 export const EMPTY_RECORD: VoweRecord = { threads: [], decisions: [], work: [], notices: [], call: false, members: [], done: [], vowe: true, agents: [] };
 
-/** "@Vowe" (or the assistant's current name) anywhere in a message. */
+/** "@Vowe" (or the assistant's current name) anywhere in a message, typed or picked from the @ menu. */
 export function mentionsAgent(body: string, agentName: string): boolean {
+  if (mentionsIn(body).some((m) => m.kind === 'agent')) return true;
   const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(^|[\\s(])@(${esc(agentName)}|vowe)(?![\\w])`, "i").test(body);
 }
@@ -33,6 +35,8 @@ export function directoryOf(me: string, access: RoomAccess | null, agentName: st
   }
   const agent = agentName?.trim() || DEFAULT_AGENT_NAME;
   people[AGENT] = { id: AGENT, name: agent, initials: agent.slice(0, 1).toUpperCase(), kind: 'agent' };
-  return { me, people, agentName: agent };
+  const presence: Record<string, 'call' | 'room'> = {};
+  for (const m of access?.members ?? []) if (m.presence !== 'away') presence[m.userId] = m.presence;
+  return { me, people, agentName: agent, presence };
 }
 

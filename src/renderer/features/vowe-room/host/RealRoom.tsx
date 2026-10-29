@@ -5,6 +5,7 @@ import type { RoomRole, VoweRecord } from '../contracts/model.js';
 import { capabilitiesOf, type VoweServices } from '../contracts/services.js';
 import { names } from '../state/directory.js';
 import { directoryOf, EMPTY_RECORD, mentionsAgent } from './people.js';
+import { plainMentions, type MentionItem } from '../state/mentions.js';
 
 export { directoryOf, EMPTY_RECORD, mentionsAgent };
 import { makeUi } from '../state/ui.js';
@@ -47,6 +48,8 @@ export interface RealRoomProps {
   space?: string | null;
   /** Who's here and in the call, as the band draws them, and who's talking now (initials). */
   people: PersonRef[];
+  /** The coding sessions attached to the room, for the Desk's @ menu. */
+  sessions?: MentionItem[];
   speaking: string | null;
   inCall: number;
   /** Journey's call overlays: captions, Ask Vowe, notices, the call bar is drawn by the room. */
@@ -76,7 +79,7 @@ function withMentions(s: VoweServices, roomId: string, rec: () => VoweRecord, ag
     if (asker.busy) { notice(`${agentName()} is answering something else. Mention it again in a moment.`); return; }
     const t = rec().threads.find((x) => x.id === threadId);
     const on = t && t.about.kind === 'part' && t.about.id !== 'canvas' ? { component: t.about.id, name: t.about.name } : null;
-    asker.feedback(threadId, body, on, (said) => agentReply(threadId, said));
+    asker.feedback(threadId, plainMentions(body), on, (said) => agentReply(threadId, said));
   };
   return {
     ...s,
@@ -209,7 +212,7 @@ export function RealRoom(p: RealRoomProps) {
   return (
     <VoweRoom room={p.room} rooms={p.rooms} onOpenRoom={p.onOpenRoom} onNewRoom={p.onNewRoom}
       client={p.client} record={record} directory={directory} role={role} capabilities={capabilitiesOf(services)}
-      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} callAction={p.callAction} deskTop={p.deskTop} onRename={p.onRename} space={p.space} people={p.people} speaking={speaker} hereLine={hereLine} nav={nav}
+      ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} callAction={p.callAction} deskTop={p.deskTop} onRename={p.onRename} space={p.space} people={p.people} speaking={speaker} sessions={p.sessions} hereLine={hereLine} nav={nav}
       light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay} deskOverride={p.peoplePanel}
       overlays={<>{p.overlays}{ask.reviewing ? <div class="receipt" role="status"><span class="dot"></span><span>{n.agentName()} is replying in the thread…</span></div> : null}
       {askFailed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>{askFailed}</span><button class="mini ghost" type="button" onClick={() => setAskFailed(null)}>Dismiss</button></div> : null}

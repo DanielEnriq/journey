@@ -2,7 +2,7 @@ import { h, Fragment, useEffect, useRef, useState, type ComponentChildren } from
 import { AGENT, type By } from '../contracts/model.js';
 import { Who, type DeskProps } from './Desk.js';
 import { useNames } from '../state/directory.js';
-import { mayWrite } from '../state/permissions.js';
+import { withTokens } from './Mention.js';
 
 // Document primitives shared by the plan and the decision: prose that renders code, paths and canvas
 // references inline; quiet attribution; calm proposed edits; and the layout that is the same artifact at
@@ -10,10 +10,9 @@ import { mayWrite } from '../state/permissions.js';
 
 const PATH = /(`[^`]+`|\[[^|\]]+\|[^\]]+\]|\b(?:[\w-]+\/)+[\w.*-]+(?::\d+(?:[–-]\d+)?)?)/g;
 
-/** Prose with `code`, file paths and [label|part] canvas references rendered inline. */
-export function Rich({ text, light }: { text: string; light?(parts: string[] | null): void }) {
+function richPart(text: string, k0: number, light?: (parts: string[] | null) => void) {
   const out: (string | h.JSX.Element)[] = [];
-  let last = 0, m: RegExpExecArray | null, k = 0;
+  let last = 0, m: RegExpExecArray | null, k = k0 * 1000;
   PATH.lastIndex = 0;
   while ((m = PATH.exec(text))) {
     out.push(text.slice(last, m.index));
@@ -24,7 +23,12 @@ export function Rich({ text, light }: { text: string; light?(parts: string[] | n
     last = m.index + t.length;
   }
   out.push(text.slice(last));
-  return <>{out}</>;
+  return out;
+}
+
+/** Prose with `code`, file paths, [label|part] canvas references and @mentions rendered inline. */
+export function Rich({ text, light }: { text: string; light?(parts: string[] | null): void }) {
+  return <>{withTokens(text, (t, k) => richPart(t, k, light))}</>;
 }
 
 /** Who wrote something: a person's name, or the agent marked as such. Quiet, in the margin. */
@@ -109,21 +113,6 @@ export function Prose({ text, can, onSave, placeholder, cls, light, onKey, editi
       onInput={(e) => { setV(e.currentTarget.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'; }}
       onBlur={() => { setEd(false); if (v.trim() !== text) onSave(v.trim()); }}
       onKeyDown={(e) => { if (onKey?.(e)) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.currentTarget as HTMLTextAreaElement).blur(); } if (e.key === 'Escape') { e.stopPropagation(); (e.currentTarget as HTMLTextAreaElement).blur(); } }} />
-  );
-}
-
-export function MentionHint({ text, p }: { text: string; p: DeskProps }) {
-  const { nameOf, agentName } = useNames();
-  const m = /@(\w*)$/.exec(text);
-  if (!m) return null;
-  const q = m[1].toLowerCase();
-  const people = p.rec.members.filter((x) => x.who !== p.me && nameOf(x.who).toLowerCase().startsWith(q));
-  return (
-    <div class="nx-mention" role="listbox">
-      {p.rec.vowe && agentName().toLowerCase().startsWith(q) ? <span class="nx-mopt"><i class="nx-agentmark"></i>{agentName()}<small>AI agent · checks it and replies</small></span> : null}
-      {people.map((x) => <span key={x.who} class="nx-mopt"><Who id={x.who} size={16} />{nameOf(x.who)}<small>{!mayWrite(x.role) ? 'viewer: can read and comment' : x.role}</small></span>)}
-      {!people.length ? <span class="nx-mopt none">Nobody in this room is called “{m[1]}”.<button type="button" class="rp-link" onClick={() => p.act.invite()}>Invite to the room</button></span> : null}
-    </div>
   );
 }
 

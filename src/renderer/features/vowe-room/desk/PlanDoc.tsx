@@ -3,7 +3,8 @@ import { BasisGlyph } from '../canvas/faces.js';
 import { type Change, type PlanBody, type Step, type Thread, type Work } from '../contracts/model.js';
 import { approvedOf, blockedWhy, isDraft, openChanges, widens, wordDiff } from '../state/plan.js';
 import { ThreadCard, Who, type DeskProps } from './Desk.js';
-import { By_, Diff, DocLayout, Ext, Lock, MentionHint, Prose, Proposed, Rich, Sec } from './Doc.js';
+import { By_, Diff, DocLayout, Ext, Lock, Prose, Proposed, Rich, Sec } from './Doc.js';
+import { MentionField } from './Mention.js';
 import { objectiveState } from './Work.js';
 import { useNames } from '../state/directory.js';
 import { useEvidence } from '../state/semantics.js';
@@ -399,10 +400,9 @@ function PlanRail({ w, p, passages, activeT }: { w: Work; p: DeskProps; passages
           <span class="nx-rk2">New comment<button type="button" class="nx-textbtn" onClick={() => act.passage(w.id, '', '', null, true)}>Cancel</button></span>
           {draft.quote ? <blockquote class="nx-quote2">{draft.quote}</blockquote> : null}
           <label class="rp-cm-reply"><Who id={p.me} /><span class="rp-sr">Comment</span>
-            <input type="text" ref={(el) => { if (el && !el.dataset.f) { el.dataset.f = '1'; el.focus(); } }} placeholder={`Comment${peer ? ` · @${nameOf(peer)} to ask them` : ''}${rec.vowe ? ` · @${agentName()} to check it` : ''}`} value={body} onInput={(e) => setBody(e.currentTarget.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && body.trim()) { act.comment(w.id, draft.step, draft.quote, body.trim()); setBody(''); } if (e.key === 'Escape') { e.stopPropagation(); act.passage(w.id, '', '', null, true); } }} />
+            <MentionField p={p} autoFocus placeholder={`Comment${peer ? ` · @${nameOf(peer)} to ask them` : ''}${rec.vowe ? ` · @${agentName()} to check it` : ''}`} value={body} onInput={setBody}
+              onSubmit={(t) => { act.comment(w.id, draft.step, draft.quote, t); setBody(''); }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); act.passage(w.id, '', '', null, true); } }} />
           </label>
-          <MentionHint text={body} p={p} />
         </div>
       ) : t ? (
         <div class="nx-rsec">

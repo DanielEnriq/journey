@@ -4,6 +4,7 @@ import { AGENT, type Decision, type Line } from '../contracts/model.js';
 import { wordDiff } from '../state/plan.js';
 import { DEC_STATE, ThreadCard, Who, type DeskProps } from './Desk.js';
 import { By_, Diff, DocLayout, Lock, Prose, Proposed, Rich, Sec } from './Doc.js';
+import { MentionField } from './Mention.js';
 import { objectiveState } from './Work.js';
 import { useNames } from '../state/directory.js';
 import { useEvidence } from '../state/semantics.js';
@@ -193,8 +194,8 @@ function Review({ d, p, mine }: { d: Decision; p: DeskProps; mine?: Decision['ap
       </ul>
       {rc !== null ? (
         <label class="rp-cm-reply nx-rcin"><Who id={me} /><span class="rp-sr">What should change</span>
-          <input type="text" ref={(el) => { if (el && !el.dataset.f) { el.dataset.f = '1'; el.focus(); } }} placeholder="What should change before you sign? (Enter to send)" value={rc} onInput={(e) => setRc(e.currentTarget.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && rc.trim()) { act.requestChanges(d.id, rc.trim()); setRc(null); } if (e.key === 'Escape') { e.stopPropagation(); setRc(null); } }} />
+          <MentionField p={p} autoFocus placeholder="What should change before you sign? (Enter to send)" value={rc} onInput={setRc}
+            onSubmit={(t) => { act.requestChanges(d.id, t); setRc(null); }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setRc(null); } }} />
         </label>
       ) : null}
       {pick ? (
@@ -231,8 +232,8 @@ function DecisionRail({ d, p, lineId, from }: { d: Decision; p: DeskProps; lineI
           <blockquote class="nx-quote2">{line.text}</blockquote>
           {lt ? <ThreadCard t={lt} p={p} inline /> : (
             <label class="rp-cm-reply"><Who id={p.me} /><span class="rp-sr">Comment</span>
-              <input type="text" ref={(el) => { if (el && !el.dataset.f) { el.dataset.f = '1'; el.focus(); } }} placeholder={rec.vowe ? `Comment on this line · @${agentName()} to check it` : 'Comment on this line'} value={body} onInput={(e) => setBody(e.currentTarget.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && body.trim()) { act.reply(`line:${d.id}:${line.id}`, body.trim()); setBody(''); } }} />
+              <MentionField p={p} autoFocus placeholder={rec.vowe ? `Comment on this line · @${agentName()} to check it` : 'Comment on this line'} value={body} onInput={setBody}
+                onSubmit={(t) => { act.reply(`line:${d.id}:${line.id}`, t); setBody(''); }} />
             </label>
           )}
         </div>

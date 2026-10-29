@@ -13,6 +13,8 @@ export interface Directory {
   people: Readonly<Record<PersonId, Person>>;
   /** The agent's displayed name in this organization; its identity (glyph, attribution) never changes. */
   agentName: string;
+  /** Who is in the room now, and who is on its call; absent: away. */
+  presence?: Readonly<Record<PersonId, 'call' | 'room'>>;
 }
 
 export interface Names {
@@ -39,4 +41,9 @@ export const DirectoryContext = createContext<Directory>({ me: '', people: {}, a
 
 export function useNames(): Names {
   return names(useContext(DirectoryContext));
+}
+
+const NOBODY: Readonly<Record<PersonId, 'call' | 'room'>> = {};
+export function usePresence(): Readonly<Record<PersonId, 'call' | 'room'>> {
+  return useContext(DirectoryContext).presence ?? NOBODY;
 }

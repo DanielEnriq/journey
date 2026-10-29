@@ -7,6 +7,7 @@ import { mayWrite } from '../state/permissions.js';
 import type { Tab } from '../state/ui.js';
 import { AgentName, DEC_STATE, DecideEmpty, FsThread, NewDecision, NewWork, Who, needsMe, partsOf, type DeskProps } from './Desk.js';
 import { DecisionDoc } from './DecisionDoc.js';
+import { MentionField } from './Mention.js';
 import { WorkView, objectiveState } from './Work.js';
 import { SECTION, focusTarget, liveDecisions, owesAnswer, owesSignature, threadTitle } from './focus-pick.js';
 
@@ -58,8 +59,8 @@ export function Focus(p: DeskProps) {
           {tab === 'discuss' ? (
             <>
               <label class="rp-cm-reply nx-compose nx-fo-compose"><Who id={me} /><span class="rp-sr">New thread</span>
-                <input type="text" placeholder="Start a thread about the system…" value={draft} disabled={!writer} onInput={(e) => setDraft(e.currentTarget.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) { act.newThread(draft.trim()); setDraft(''); } }} />
+                <MentionField p={sp} placeholder="Start a thread about the system…" value={draft} disabled={!writer}
+                  onInput={setDraft} onSubmit={(t) => { act.newThread(t); setDraft(''); }} />
               </label>
               {threads.map((t) => {
                 const last = t.replies[t.replies.length - 1];

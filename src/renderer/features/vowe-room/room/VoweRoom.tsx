@@ -1,4 +1,4 @@
-import { h, Fragment, useEffect, useState, useStore, Lights, Chrome, Who, CallBar, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary, type Store } from '../journey.js';
+import { h, Fragment, useEffect, useMemo, useState, useStore, Lights, Chrome, Who, CallBar, type CallControls, type CanvasClient, type ComponentChildren, type PersonRef, type RoomSummary, type Store } from '../journey.js';
 import { AccountFoot } from '../../../shared/components/Account.js';
 import { shellPrefs, toggleSidebar, useSidebarKey } from '../../../ui/pass2/shell/prefs.js';
 import { ShellSidebar } from '../../../ui/pass2/shell/Sidebar.js';
@@ -6,6 +6,8 @@ import { RoomTitle } from '../../room/shell.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
 import { focusCrumbs } from '../desk/Focus.js';
+import { MentionSources } from '../desk/Mention.js';
+import type { MentionItem } from '../state/mentions.js';
 import type { Scenario, CanvasSemantics } from '../contracts/semantics.js';
 import { NO_SEMANTICS } from '../contracts/semantics.js';
 import type { RoomRole, VoweRecord } from '../contracts/model.js';
@@ -68,6 +70,8 @@ export interface VoweRoomProps {
   /** Who's here, as Journey's presence shows them. `speaking` rings one of them. */
   people: PersonRef[];
   speaking?: string | null;
+  /** The coding sessions attached to the room, for the Desk's @ menu. */
+  sessions?: MentionItem[];
   /** Under the room's name: "2 here · 2 on the call". */
   hereLine: string;
   /** History of what you've opened (room/navigation.ts useDeskHistory). */
@@ -148,6 +152,17 @@ export function VoweRoom(p: VoweRoomProps) {
     flash: u.flash, noticesOpen: u.noticesOpen, sinceOpen: u.sinceOpen, act: p.act, role: p.role, caps, narrow: !wide || insW < 660, everywhere: u.everywhere,
     room: { name: p.room.name, repo: p.room.repo }, scene: focusMode ? s.scenes[s.doc.activeView] ?? null : null,
   };
+  // The @ menu's other sources: the room's sessions, and the parts on the canvas as it shows now.
+  const scene = s.scenes[s.doc.activeView];
+  const mention = useMemo(() => {
+    const seen = new Set<string>(), parts: MentionItem[] = [];
+    for (const n of scene?.nodes ?? []) {
+      if (seen.has(n.component)) continue;
+      seen.add(n.component);
+      parts.push({ kind: 'part', id: n.component, label: n.name, also: `${n.short} ${n.tech}` });
+    }
+    return { sessions: p.sessions ?? [], parts };
+  }, [scene, p.sessions]);
   const crumbs = focusMode && (!p.deskStatus || p.deskStatus.state === 'ready') && !p.deskOverride ? focusCrumbs(deskProps) : null;
   const top = attention(rec, n).find(actionable);
   const rooms = p.rooms.map((r) => (r.id === p.room.id ? { ...r, needs: top ? top.text : null } : r));
@@ -170,6 +185,7 @@ export function VoweRoom(p: VoweRoomProps) {
   const cls = `win ${p.light ? 'light ' : ''}${side ? 'side-open ' : ''}${u.deskOpen ? 'desk-open ' : ''}${wide ? 'nx-wide-desk ' : ''}${wide && sheet ? 'nx-sheet ' : ''}${focusMode ? 'nx-fws ' : ''}${rec.vowe ? '' : 'nx-novowe '}${W < 1300 ? 'nx-small ' : ''}in-call nx-win`;
   return (
     <DirectoryContext.Provider value={dir}>
+      <MentionSources.Provider value={mention}>
       <SemanticsContext.Provider value={p.semantics ?? NO_SEMANTICS}>
         <div style={style} class={cls}>
           <Lights />
@@ -208,6 +224,7 @@ export function VoweRoom(p: VoweRoomProps) {
           {u.toast ? <div class="nx-toast" role="status"><span>{u.toast.text}</span>{u.toast.undo ? <button type="button" onClick={() => { u.toast!.undo!(); p.ui.setState({ toast: null }); }}>Undo</button> : null}</div> : null}
         </div>
       </SemanticsContext.Provider>
+      </MentionSources.Provider>
     </DirectoryContext.Provider>
   );
 }
