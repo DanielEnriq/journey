@@ -87,3 +87,21 @@ button.nx-fo-crumb:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); 
 .nx-fo-new > * { max-width: 640px; margin: 40px auto 0; padding: 0 48px; box-sizing: content-box; }
 .nx-fo-items > .nx-empty2.bare { margin: 16px 24px; }
 .room-screen .nx-fo-new > .tr-new { border-top: 0; }
+
+/* The agent's trail, after yours: what it's doing, and where when that's elsewhere (a button then, to go there). */
+.nx-fo-crumb.is-item { flex: 0 1 auto; }
+.nx-fo-agent { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 6px; min-width: 0; margin-left: 10px; padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; font: inherit; color: var(--v-fg-3); }
+.nx-fo-agent b { font-weight: 500; color: var(--v-fg-2); }
+.nx-fo-agent > span { overflow: hidden; text-overflow: ellipsis; }
+.nx-fo-agent-at { max-width: 160px; color: var(--v-fg-2); }
+.nx-fo-agent-on { min-width: 0; color: var(--v-fg); }
+.nx-fo-agent .nx-agentmark { animation: nx-agent-breathe 1.6s ease-in-out infinite; }
+button.nx-fo-agent { cursor: pointer; }
+button.nx-fo-agent:hover { background: var(--v-surface-hover); color: var(--v-fg); }
+button.nx-fo-agent:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); }
+@keyframes nx-agent-breathe { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .nx-fo-agent .nx-agentmark { animation: none; } }
+/* With the agent's trail the band runs to just short of the call and share buttons; the title gives way first. */
+.room-screen .nx-fo-crumbs:has(.nx-fo-agent) { right: 340px; }
+.nx-fo-agent { flex-shrink: 0; max-width: 55%; }
+.nx-fo-agent > span:not(.nx-fo-agent-on):not(.nx-fo-agent-at) { flex: none; }

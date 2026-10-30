@@ -6,6 +6,8 @@ import { RoomTitle } from '../../room/shell.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
 import { focusCrumbs } from '../desk/Focus.js';
+import { threadTitle } from '../desk/focus-pick.js';
+import { doingOf } from '../state/agent-doing.js';
 import { MentionSources } from '../desk/Mention.js';
 import type { MentionItem } from '../state/mentions.js';
 import type { Scenario, CanvasSemantics } from '../contracts/semantics.js';
@@ -91,7 +93,11 @@ export interface VoweRoomProps {
   deskOverride?: ComponentChildren;
   /** Whether the record has loaded. The canvas and the call never wait for it; the Desk says so. */
   deskStatus?: DeskStatus;
+  /** The agent while it works: the thread it's answering (null for the Ask panel) and the tool call it's in. */
+  agent?: AgentNow | null;
 }
+
+export interface AgentNow { thread: string | null; doing: { tool: string; input: unknown } | null }
 
 export type DeskStatus = { state: 'ready' } | { state: 'loading' } | { state: 'failed'; error: string; retry(): void };
 
@@ -148,7 +154,7 @@ export function VoweRoom(p: VoweRoomProps) {
   const maxW = Math.max(compact, W - left - 440);
   const insW = sheet ? Math.min(W - left - 56, 720) : Math.max(compact, Math.min(u.insW, maxW));
   const deskProps = {
-    fsec: u.fsec, rec, me: dir.me, tab: u.tab, inspect: u.inspect, depth, compare: u.compare, openThread: u.thread, focus, focusOn: u.focusOn, hereLine: p.hereLine,
+    fsec: u.fsec, fwrite: u.fwrite, rec, me: dir.me, tab: u.tab, inspect: u.inspect, depth, compare: u.compare, openThread: u.thread, focus, focusOn: u.focusOn, hereLine: p.hereLine,
     flash: u.flash, noticesOpen: u.noticesOpen, sinceOpen: u.sinceOpen, act: p.act, role: p.role, caps, narrow: !wide || insW < 660, everywhere: u.everywhere,
     room: { name: p.room.name, repo: p.room.repo }, scene: s.scenes[s.doc.activeView] ?? null,
   };
@@ -164,6 +170,10 @@ export function VoweRoom(p: VoweRoomProps) {
     return { sessions: p.sessions ?? [], parts };
   }, [scene, p.sessions]);
   const crumbs = focusMode && (!p.deskStatus || p.deskStatus.state === 'ready') && !p.deskOverride ? focusCrumbs(deskProps) : null;
+  // The agent's own trail after yours: what it's doing, and where, when that isn't what you're looking at.
+  const partName = (id: string) => scene?.nodes.find((x) => x.component === id)?.name ?? id;
+  const doing = p.agent ? (p.agent.doing ? doingOf(p.agent.doing.tool, p.agent.doing.input, partName) : { verb: 'Thinking' }) : null;
+  const away = p.agent?.thread && p.agent.thread !== crumbs?.thread ? rec.threads.find((t) => t.id === p.agent!.thread) ?? null : null;
   const top = attention(rec, n).find(actionable);
   const rooms = p.rooms.map((r) => (r.id === p.room.id ? { ...r, needs: top ? top.text : null } : r));
   // The divider is the only way between compact and wide: drag it and the Desk follows the pointer; let go
@@ -212,6 +222,14 @@ export function VoweRoom(p: VoweRoomProps) {
               <button type="button" class="nx-fo-crumb" data-tip="Back to the canvas · Esc" onClick={() => p.act.depth(exitDepth(u))}>{p.room.name}</button>
               <i aria-hidden="true">/</i><span class="nx-fo-crumb is-sec">{crumbs.section}</span>
               {crumbs.item ? <><i aria-hidden="true">/</i><span class="nx-fo-crumb is-item" aria-current="page">{crumbs.item}</span></> : null}
+              {doing ? h(away ? 'button' : 'span', {
+                class: 'nx-fo-agent', ...(away ? { type: 'button', onClick: () => p.act.thread(away.id) } : {}), 'data-tip': doing.tip,
+                onPointerEnter: doing.parts ? () => p.act.light(doing.parts!) : undefined, onPointerLeave: doing.parts ? () => p.act.light(null) : undefined,
+              }, <>
+                <i class="nx-agentmark" aria-hidden="true"></i><b>{n.agentName()}</b>
+                {away ? <><i aria-hidden="true">›</i><span class="nx-fo-agent-at">{threadTitle(away)}</span></> : null}
+                <i aria-hidden="true">›</i><span>{doing.verb}</span>{doing.what ? <span class="nx-fo-agent-on">{doing.what}</span> : null}
+              </>) : null}
             </nav>
           ) : null}
           <aside class="desk" aria-label="Where the room is" aria-hidden={!u.deskOpen}>

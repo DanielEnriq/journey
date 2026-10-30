@@ -9,6 +9,7 @@ import { plainMentions, type MentionItem } from '../state/mentions.js';
 
 export { directoryOf, EMPTY_RECORD, mentionsAgent };
 import { makeUi } from '../state/ui.js';
+import { doingOf } from '../state/agent-doing.js';
 import { marksOf } from '../room/marks.js';
 import { Pins } from '../room/Pins.js';
 import { anchorPatch, useDeskHistory, useDeskKeys, useToastTimeout } from '../room/navigation.js';
@@ -68,7 +69,7 @@ export interface RealRoomProps {
 }
 
 /** Stands in for Ask Vowe's state when the room has no model sign-in path. */
-const NO_ASK = new Store<Pick<AskState, 'reviewing' | 'error' | 'open'>>({ reviewing: null, error: null, open: false });
+const NO_ASK = new Store<Pick<AskState, 'reviewing' | 'error' | 'open' | 'status' | 'doing'>>({ reviewing: null, error: null, open: false, status: 'idle', doing: null });
 
 /** The services, with Vowe answering threads that @mention it. Its answer is a separate, attributed write. */
 function withMentions(s: VoweServices, roomId: string, rec: () => VoweRecord, agentName: () => string, asker: AskVowe | null, agentReply: (threadId: string, body: string, parentId: string | null) => Promise<void>, notice: (text: string) => void, answering: (threadId: string, under: string | null) => void): VoweServices {
@@ -139,7 +140,7 @@ export function RealRoom(p: RealRoomProps) {
   const [failed, setFailed] = useState<string | null>(null);
   // Vowe answering a thread runs out of sight (the Ask panel stays closed): say that it's replying, and
   // if it couldn't, why, instead of leaving the mention unanswered.
-  const ask = useStore<Pick<AskState, 'reviewing' | 'error' | 'open'>>(p.asker?.store ?? NO_ASK);
+  const ask = useStore<Pick<AskState, 'reviewing' | 'error' | 'open' | 'status' | 'doing'>>(p.asker?.store ?? NO_ASK);
   const [wasReviewing, setWasReviewing] = useState(false);
   const [askFailed, setAskFailed] = useState<string | null>(null);
   // While Vowe answers, the thread shows it writing beneath the message that asked. The re-read after it
@@ -222,6 +223,8 @@ export function RealRoom(p: RealRoomProps) {
   const n = names(directory);
   const speaker = p.speaking;
   const here = p.access ? p.access.members.filter((m) => m.presence !== 'away').length : p.people.length;
+  const partName = (id: string) => { const c = p.client.store.state; return c.scenes[c.doc.activeView]?.nodes.find((x) => x.component === id)?.name ?? id; };
+  const doingNow = ask.doing ? doingOf(ask.doing.tool, ask.doing.input, partName) : null;
   const hereLine = p.inCall ? `${here} here · ${p.inCall} on the call` : `${here} here`;
   const deskStatus: DeskStatus = status.state === 'ready' ? { state: 'ready' } : status.state === 'loading' ? { state: 'loading' } : { state: 'failed', error: status.error, retry };
   const role: RoomRole = p.role ?? 'viewer';
@@ -232,7 +235,8 @@ export function RealRoom(p: RealRoomProps) {
       client={p.client} record={record} directory={directory} role={role} capabilities={capabilitiesOf(services)}
       ui={ui} act={act} marks={marksOf(rec)} lit={lit} call={p.call} callAction={p.callAction} deskTop={p.deskTop} onRename={p.onRename} space={p.space} people={p.people} speaking={speaker} sessions={p.sessions} hereLine={hereLine} nav={nav}
       light={p.light} share={p.share} deskStatus={deskStatus} windowOverlay={p.windowOverlay} deskOverride={p.peoplePanel}
-      overlays={<>{p.overlays}{ask.reviewing ? <div class="receipt" role="status"><span class="dot"></span><span>{n.agentName()} is replying in the thread…</span></div> : null}
+      agent={ask.reviewing || ask.status === 'thinking' || ask.status === 'answering' ? { thread: ask.reviewing, doing: ask.doing } : null}
+      overlays={<>{p.overlays}{ask.reviewing ? <div class="receipt" role="status"><span class="dot"></span><span>{n.agentName()} {doingNow ? `· ${doingNow.verb}${doingNow.what ? ` ${doingNow.what}` : ''}` : 'is replying in the thread…'}</span></div> : null}
       {askFailed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>{askFailed}</span><button class="mini ghost" type="button" onClick={() => setAskFailed(null)}>Dismiss</button></div> : null}
       {failed ? <div class="receipt dropped" role="alert"><span class="dot needs"></span><span>Not saved: {failed}</span><button class="mini ghost" type="button" onClick={() => setFailed(null)}>Dismiss</button></div> : null}</>}
       pins={pins}

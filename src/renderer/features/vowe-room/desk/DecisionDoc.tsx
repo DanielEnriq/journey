@@ -198,7 +198,7 @@ function Review({ d, p, mine }: { d: Decision; p: DeskProps; mine?: Decision['ap
       </ul>
       {rc !== null ? (
         <label class="rp-cm-reply nx-rcin"><Who id={me} /><span class="rp-sr">What should change</span>
-          <MentionField p={p} autoFocus placeholder="What should change before you sign? (Enter to send)" value={rc} onInput={setRc}
+          <MentionField p={p} autoFocus placeholder="What should change before you sign?" value={rc} onInput={setRc}
             onSubmit={(t) => { act.requestChanges(d.id, t); setRc(null); }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setRc(null); } }} />
         </label>
       ) : null}

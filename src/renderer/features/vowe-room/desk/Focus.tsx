@@ -1,11 +1,11 @@
-import { h, Fragment, useState } from '../journey.js';
+import { h, Fragment } from '../journey.js';
 import type { Scene } from '../../../../shared/canvas/index.js';
 import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 import type { Thread } from '../contracts/model.js';
 import { useNames } from '../state/directory.js';
 import { mayWrite } from '../state/permissions.js';
 import type { Tab } from '../state/ui.js';
-import { AboutGlyph, AgentName, DEC_STATE, DecideEmpty, DiscussList, FsThread, NewButton, NewDecision, NewThread, NewWork, Who, needsMe, partsOf, type DeskProps } from './Desk.js';
+import { AboutGlyph, AgentName, DEC_STATE, DecideEmpty, DiscussList, FsThread, NEW_WORD, NewButton, NewDecision, NewThread, NewWork, Who, needsMe, partsOf, type DeskProps } from './Desk.js';
 import { DecisionDoc } from './DecisionDoc.js';
 import { Icon } from '../../../ui/icons.js';
 import { WorkView, objectiveState } from './Work.js';
@@ -24,7 +24,7 @@ import { SECTION, focusTarget, liveDecisions, owesAnswer, owesSignature, threadT
 export function Focus(p: DeskProps) {
   const names = useNames();
   const { rec, me, act } = p;
-  const [writing, setWriting] = useState<Tab | null>(null);
+  const writing = p.fwrite, setWriting = act.fwrite;
   const at = focusTarget(rec, me, { fsec: p.fsec, openThread: p.openThread, inspect: p.inspect });
   const { tab, thread, decision, work } = at;
   const decisions = liveDecisions(rec);
@@ -47,7 +47,7 @@ export function Focus(p: DeskProps) {
                 {SECTION[t]}{needs[t] ? <i class="nx-fo-dot" aria-label="something here needs you"></i> : null}
               </button>
             ))}
-            <NewButton tab={tab} p={p} on={writing === tab} make={() => { if (tab === 'discuss') act.thread(null); setWriting(tab); }} />
+            <NewButton tab={tab} p={p} on={writing === tab} make={() => setWriting(tab)} />
           </div>
         </div>
         <div class="nx-fo-items" role="listbox" aria-label={SECTION[tab]}>
@@ -117,7 +117,8 @@ function Empty({ kind, scene, act }: { kind: Tab; scene: Scene | null; act?: [st
 }
 
 /** Room / Section / Item, for the band while Focus is open. */
-export function focusCrumbs(p: Pick<DeskProps, 'rec' | 'me' | 'fsec' | 'openThread' | 'inspect'>): { section: string; item: string | null } {
+export function focusCrumbs(p: Pick<DeskProps, 'rec' | 'me' | 'fsec' | 'fwrite' | 'openThread' | 'inspect'>): { section: string; item: string | null; thread: string | null } {
+  if (p.fwrite) return { section: SECTION[p.fwrite], item: NEW_WORD[p.fwrite], thread: null };
   const at = focusTarget(p.rec, p.me, { fsec: p.fsec, openThread: p.openThread, inspect: p.inspect });
-  return { section: SECTION[at.tab], item: at.thread ? threadTitle(at.thread) : at.decision?.title ?? at.work?.title ?? null };
+  return { section: SECTION[at.tab], item: at.thread ? threadTitle(at.thread) : at.decision?.title ?? at.work?.title ?? null, thread: at.thread?.id ?? null };
 }

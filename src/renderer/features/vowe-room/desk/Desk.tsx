@@ -83,6 +83,8 @@ export interface DeskAct {
   draftFrom(thread: string): void;
   /** Full screen: which section Focus shows. */
   fsec(sec: Tab): void;
+  /** Full screen: open the composer for a section's new item, or put it down (null). */
+  fwrite(sec: Tab | null): void;
   markDone(ids: string[]): void;
   askFix(work: string, pr: string, check: string): void;
   stopRun(work: string): void;
@@ -117,6 +119,8 @@ export interface DeskProps {
   compare: number | null;
   /** Full screen: the section Focus shows, and whether we're inside the full-screen workspace. */
   fsec: Tab;
+  /** Full screen: the section whose composer is open, if one is. */
+  fwrite: Tab | null;
   shell?: boolean;
   /** The room, for Focus's list head. */
   room?: { name: string; repo: string | null };
@@ -241,7 +245,7 @@ export function Desk(p: DeskProps) {
   );
 }
 
-const NEW_WORD: Record<Tab, string> = { discuss: 'New thread', decide: 'New decision', work: 'New work' };
+export const NEW_WORD: Record<Tab, string> = { discuss: 'New thread', decide: 'New decision', work: 'New work' };
 
 /** The one way to start something from the Desk: the end of the tab row makes a thread, a decision or work,
  *  whichever tab you're on. The Desk and full screen both carry it. */
@@ -605,7 +609,7 @@ function ThreadMenu({ t, p, at, onClose }: { t: Thread; p: DeskProps; at: { x: n
   );
   const reply = () => {
     act.thread(t.id);
-    requestAnimationFrame(() => document.querySelector<HTMLElement>('.tr-open .nx-tree > .rp-cm-reply input, .tr-open .nx-tree > .rp-cm-reply [contenteditable]')?.focus());
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.tr-open .nx-tree > .rp-cm-reply textarea')?.focus());
   };
   return (
     <div ref={box} class="v-menu nx-dl-menu" role="menu" aria-label={t.about.name}
@@ -984,7 +988,7 @@ export function WorkCard({ w, p, dim, bare }: { w: Work; p: DeskProps; dim?: boo
           <span class="nx-q-h">{w.question.deferred ? 'Deferred' : `${w.doer?.name ?? 'The agent'} asks ${w.question.for === me ? 'you' : nameOf(w.question.for)}`} · about <button type="button" class="nx-inl" onClick={() => act.light([w.question!.about])}>{partLabel(w.question.about)}</button></span>
           <p>{w.question.text}</p>
           <span class="nx-qopts">{w.question.options.map((o) => <button key={o} type="button" class="rp-mini" onClick={() => act.answer(w.id, o)}>{o}</button>)}</span>
-          <label class="rp-cm-reply nx-q-in"><span class="rp-sr">Answer</span><input type="text" placeholder="Or answer in your own words…" value={ans} onInput={(e) => setAns(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ans.trim()) { act.answer(w.id, ans.trim()); setAns(''); } }} /></label>
+          <label class="rp-cm-reply nx-q-in"><span class="rp-sr">Answer</span><MentionField p={p} placeholder="Or answer in your own words…" value={ans} onInput={setAns} onSubmit={(t) => { act.answer(w.id, t); setAns(''); }} /></label>
           <span class="nx-q-more"><button type="button" class="rp-link" onClick={() => act.discussQuestion(w.id)}>Discuss in a thread</button>{!w.question.deferred ? <button type="button" class="rp-link" onClick={() => act.defer(w.id)}>Defer; it can keep going on other steps</button> : null}</span>
         </div>
       ) : w.question?.answer ? <span class="nx-q-a"><Who id={w.question.answer.by} size={16} />Answered: {w.question.answer.text}</span> : null}

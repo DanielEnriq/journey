@@ -10,7 +10,7 @@ import type { Anchor } from '../../inbox/model.js';
 // depth, history and keys. The same in production and in the prototype; none of it writes the record.
 
 export type UiActions = Pick<DeskAct,
-  'tab' | 'inspect' | 'depth' | 'wide' | 'light' | 'thread' | 'fsec' | 'everywhere' | 'compare' | 'passage' | 'lineThread' | 'focusAll' | 'sinceFold' | 'toast'>;
+  'tab' | 'inspect' | 'depth' | 'wide' | 'light' | 'thread' | 'fsec' | 'fwrite' | 'everywhere' | 'compare' | 'passage' | 'lineThread' | 'focusAll' | 'sinceFold' | 'toast'>;
 
 /** Where Escape and the expand button return to from full screen. */
 export const exitDepth = (st: UiState): Depth => (st.prevDepth && st.prevDepth !== 'focus' ? st.prevDepth : 'compact');
@@ -39,6 +39,8 @@ export function uiActions(ui: Ui, light: (parts: string[] | null) => void): UiAc
       const keep = cur && (sec === 'decide' || sec === 'work') && (cur.kind === 'decision') === (sec === 'decide');
       set({ fsec: sec, tab: sec, inspect: keep ? cur : null });
     },
+    // A new thread isn't about the one that was open, so the page and the crumbs let it go.
+    fwrite: (sec) => set({ fwrite: sec, ...(sec === 'discuss' ? { thread: null } : {}) }),
     everywhere: (on) => set({ everywhere: on }),
     compare: (v) => set({ compare: v }),
     passage: (w, step, quote, thread, close) => set({ inspect: close ? { kind: 'work', id: w, section: 'plan' } : thread ? { kind: 'work', id: w, section: 'plan', thread } : { kind: 'work', id: w, section: 'plan', step, quote } }),

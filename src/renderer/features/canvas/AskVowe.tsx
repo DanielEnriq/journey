@@ -26,12 +26,14 @@ export interface AskState {
   provider: string | null;
   /** The thread Vowe is writing feedback for, while it does. */
   reviewing: string | null;
+  /** The tool call it's in the middle of, as the model made it; null between calls. */
+  doing: { tool: string; input: unknown } | null;
 }
 
 const NOTHING = { selected: [], circled: [], names: [] };
 
 export class AskVowe {
-  readonly store = new Store<AskState>({ open: false, about: NOTHING, question: null, answer: '', status: 'idle', error: null, approval: null, canvas: [], provider: null, reviewing: null });
+  readonly store = new Store<AskState>({ open: false, about: NOTHING, question: null, answer: '', status: 'idle', error: null, approval: null, canvas: [], provider: null, reviewing: null, doing: null });
   private conversationId: string | null = null;
   private turn: VoiceTurnHandle | null = null;
   private recent: { speaker: string; text: string }[] = [];
@@ -59,7 +61,7 @@ export class AskVowe {
     if (!question || this.busy) return;
     if (!userId) { this.store.setState({ status: 'failed', error: { code: 'not-authorized', message: 'Sign in to Vowe to ask in a room.', retryable: false } }); return; }
     const { about } = this.store.state;
-    this.store.setState({ question, answer: '', status: 'thinking', error: null, approval: null, canvas: [] });
+    this.store.setState({ question, answer: '', status: 'thinking', error: null, approval: null, canvas: [], doing: null });
     this.turn = agentOverIpc(this.agent).ask({
       roomId: this.roomId,
       participant: { userId, name },
@@ -75,7 +77,7 @@ export class AskVowe {
 
   /** What you just said to your Vowe in the call: its turn (CallVoice runs it) shows here like a typed ask. */
   heard(question: string) {
-    this.store.setState({ open: true, question, answer: '', status: 'thinking', error: null, approval: null, canvas: [] });
+    this.store.setState({ open: true, question, answer: '', status: 'thinking', error: null, approval: null, canvas: [], doing: null });
   }
 
   /**
@@ -83,7 +85,7 @@ export class AskVowe {
    * stays shut, so the captions keep showing the conversation.
    */
   overheard(question: string) {
-    this.store.setState({ question, answer: '', status: 'thinking', error: null, approval: null, canvas: [] });
+    this.store.setState({ question, answer: '', status: 'thinking', error: null, approval: null, canvas: [], doing: null });
   }
 
   /**
@@ -106,7 +108,7 @@ export class AskVowe {
     if (!userId || this.busy) return;
     const where = on ? `on ${on.name}` : 'on the canvas';
     const question = `${name ?? 'Someone'} just pinned this comment ${where}: "${comment}". Reply in that comment's thread. If it asks you something, answer it; when it asks for code, show the lines in a fenced block. Otherwise give brief, specific feedback (one to three sentences): whether it holds up against the system on the canvas, and what to check or change. Point at the part if it helps. Don't restate the comment.`;
-    this.store.setState({ reviewing: threadId, error: null });
+    this.store.setState({ reviewing: threadId, error: null, doing: null });
     let text = '';
     this.turn = agentOverIpc(this.agent).ask({
       roomId: this.roomId,
@@ -121,12 +123,14 @@ export class AskVowe {
       switch (e.type) {
         case 'turn.started': this.conversationId = e.conversationId; return;
         case 'text.final': text = e.text; return;
+        case 'tool.started': return this.store.setState({ doing: { tool: e.call.name, input: e.call.input } });
+        case 'tool.finished': return this.store.setState({ doing: null });
         case 'approval.requested': return this.store.setState({ open: true, approval: e.request });
         case 'canvas.applied': if (!e.result.ok) this.store.setState({ canvas: s.canvas.concat([`The canvas didn’t take one of Vowe’s changes: ${e.result.error.message}`]) }); return;
         case 'turn.completed': case 'turn.cancelled': case 'turn.failed': {
           this.turn = null;
           const said = (e.reply.text || text).trim();
-          this.store.setState({ reviewing: null, approval: null, ...(e.type === 'turn.failed' ? { error: e.error } : {}) });
+          this.store.setState({ reviewing: null, approval: null, doing: null, ...(e.type === 'turn.failed' ? { error: e.error } : {}) });
           if (e.type === 'turn.completed' && said) {
             this.recent.push({ speaker: name ?? 'Me', text: `Comment ${where}: ${comment}` }, { speaker: 'Vowe', text: said });
             void post(said.slice(0, 4000)).catch(() => {});
@@ -153,6 +157,8 @@ export class AskVowe {
         return;
       case 'text.delta': return this.store.setState({ status: 'answering', answer: s.answer + e.delta });
       case 'text.final': return this.store.setState({ answer: e.text });
+      case 'tool.started': return this.store.setState({ doing: { tool: e.call.name, input: e.call.input } });
+      case 'tool.finished': return this.store.setState({ doing: null });
       case 'approval.requested': return this.store.setState({ approval: e.request });
       case 'canvas.applied': {
         const r = e.result;
@@ -171,7 +177,7 @@ export class AskVowe {
   private end(reply: RoomAgentReply, question: string, name: string | null, status: AskState['status']) {
     this.turn = null;
     if (status === 'done') this.recent.push({ speaker: name ?? 'Me', text: question }, { speaker: 'Vowe', text: reply.text });
-    this.store.setState({ status, approval: null, ...(reply.text ? { answer: reply.text } : {}) });
+    this.store.setState({ status, approval: null, doing: null, ...(reply.text ? { answer: reply.text } : {}) });
   }
 }
 
