@@ -79,3 +79,11 @@ button.nx-fo-crumb:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); 
 .nx-fo-empty > .nx-empty2 { margin-top: 72px; padding-top: 0; padding-bottom: 0; box-shadow: none; }
 .nx-fo-empty > .nx-empty3 { margin: 72px auto 0; padding: 0 48px; max-width: 560px; }
 .nx-fo-empty > .nx-fo-act { margin-top: 12px; }
+
+/* Writing something new opens as the page, at the reading measure, with the list left as it was. */
+.nx-fo-tabs { align-items: center; }
+.nx-fo-tabs > .nx-tabnew { margin-right: 4px; }
+.nx-fo-new { overflow-y: auto; }
+.nx-fo-new > * { max-width: 640px; margin: 40px auto 0; padding: 0 48px; box-sizing: content-box; }
+.nx-fo-items > .nx-empty2.bare { margin: 16px 24px; }
+.room-screen .nx-fo-new > .tr-new { border-top: 0; }

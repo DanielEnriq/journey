@@ -208,6 +208,7 @@ export const needsMe = (rec: VoweRecord, names: Names) => {
 export function Desk(p: DeskProps) {
   const { rec, tab, act } = p;
   const names = useNames();
+  const [making, setMaking] = useState<Tab | null>(null);
   const items = attention(rec, names);
   const waiting = (t: Tab) => items.filter((x) => x.tab === t && actionable(x)).length;
   if (p.depth === 'focus') return <Focus {...p} />;
@@ -220,11 +221,12 @@ export function Desk(p: DeskProps) {
       </div>
       <div class="nx-tabs2" role="tablist" aria-label="Desk">
         {(['discuss', 'decide', 'work'] as Tab[]).map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={tab === t} class={'nx-tab2' + (tab === t ? ' on' : '')} onClick={() => act.tab(t)}>
+          <button key={t} type="button" role="tab" aria-selected={tab === t} class={'nx-tab2' + (tab === t ? ' on' : '')} onClick={() => { setMaking(null); act.tab(t); }}>
             {{ discuss: 'Discuss', decide: 'Decide', work: 'Work' }[t]}
             {waiting(t) ? <span class="nx-tabn" aria-label={`${waiting(t)} need you`}>{waiting(t)}</span> : tabMark(items, t) === 'new' ? <i class="nx-tabdot" aria-label="something new to look at"></i> : null}
           </button>
         ))}
+        <NewButton tab={tab} p={p} on={making === tab} make={() => { act.thread(null); setMaking(tab); }} />
       </div>
 
       <SinceLine items={items} p={p} />
@@ -232,8 +234,21 @@ export function Desk(p: DeskProps) {
         <div class="nx-focus"><span class="nx-focus-dot"></span><span>Showing what’s about <b>{p.focus.name}</b></span><button type="button" onClick={act.focusAll}>Show all</button></div>
       ) : null}
 
-      {tab === 'discuss' ? <DiscussTab {...p} /> : tab === 'decide' ? <DecideTab {...p} /> : <WorkTab {...p} />}
+      {tab === 'discuss' ? <DiscussTab p={p} making={making === 'discuss'} done={() => setMaking(null)} make={() => setMaking('discuss')} />
+        : tab === 'decide' ? <DecideTab p={p} making={making === 'decide'} done={() => setMaking(null)} make={() => setMaking('decide')} />
+        : <WorkTab p={p} making={making === 'work'} done={() => setMaking(null)} make={() => setMaking('work')} />}
     </div>
+  );
+}
+
+const NEW_WORD: Record<Tab, string> = { discuss: 'New thread', decide: 'New decision', work: 'New work' };
+
+/** The one way to start something from the Desk: the end of the tab row makes a thread, a decision or work,
+ *  whichever tab you're on. The Desk and full screen both carry it. */
+export function NewButton({ tab, p, on, make }: { tab: Tab; p: DeskProps; on: boolean; make(): void }) {
+  return (
+    <button type="button" class={'nx-tabnew' + (on ? ' on' : '')} aria-label={NEW_WORD[tab]} data-tip={NEW_WORD[tab]} aria-pressed={on}
+      disabled={!mayWrite(p.role)} onClick={make}><Icon name="pen" size={14} /></button>
   );
 }
 
@@ -381,17 +396,45 @@ export function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
  * you, what's about the selected part or in the canvas's view, everything else, and the resolved ones folded at the
  * bottom. Opening one swaps the list for the thread.
  */
-function DiscussTab(p: DeskProps) {
+function DiscussTab({ p, making, done, make }: { p: DeskProps; making: boolean; done(): void; make(): void }) {
+  if (making) return <NewThread p={p} done={done} />;
   const open = p.rec.threads.find((t) => t.id === p.openThread);
   if (open) return <ThreadOpen key={open.id} t={open} p={p} />;
-  return <section class="rp-sec nx-tabbody"><DiscussList p={p} /></section>;
+  return <section class="rp-sec nx-tabbody"><DiscussList p={p} onNew={make} /></section>;
+}
+
+/**
+ * Starting a thread: it opens where a thread would, with its subject on top (the part selected on the canvas, else
+ * the whole canvas; pointing at it lights it) and the first message. Return or Post posts it, Esc goes back. In
+ * full screen it's the page; in the Desk it takes the list's place.
+ */
+export function NewThread({ p, done, page }: { p: DeskProps; done(): void; page?: boolean }) {
+  const { agentName } = useNames();
+  const { act, focus, rec } = p;
+  const [text, setText] = useState('');
+  const about: About = focus ? { kind: 'part', id: focus.id, name: focus.name } : { kind: 'part', id: 'canvas', name: 'Canvas' };
+  const post = (t: string) => { if (!t.trim()) return; act.newThread(t); done(); };
+  return (
+    <section class={'rp-sec nx-tabbody tr-open tr-new' + (page ? ' page' : '')} aria-label="New thread">
+      <div class="tr-ohead">
+        <button type="button" class="tr-back" onClick={done}><Icon name="chevron-l" size={14} />{page ? 'Cancel' : 'Discuss'}</button>
+        <button type="button" class="nx-btn primary tr-post" disabled={!text.trim()} onClick={() => post(text)}>Post</button>
+      </div>
+      <div class="tr-card">
+        <span class="tr-subs" onPointerEnter={() => focus && act.light([focus.id])} onPointerLeave={() => focus && act.light(null)}><Subject a={about} lit={!!focus} /></span>
+        <label class="tr-newf">
+          <MentionField p={p} autoFocus label="First message" value={text} onInput={setText} onSubmit={post}
+            placeholder={rec.vowe ? `Say what you’re thinking, or @${agentName()} to ask it` : 'Say what you’re thinking'}
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); done(); } }} />
+        </label>
+      </div>
+    </section>
+  );
 }
 
 /** The field and the sectioned threads, the same in the Desk and in full screen (where the open one stays marked). */
-export function DiscussList({ p }: { p: DeskProps }) {
-  const { agentName } = useNames();
-  const { rec, me, act, focus } = p;
-  const [draft, setDraft] = useState('');
+export function DiscussList({ p, onNew }: { p: DeskProps; onNew?(): void }) {
+  const { rec, me, focus } = p;
   const [showDone, setShowDone] = useState(() => rec.threads.some((t) => t.id === p.openThread && t.status === 'resolved'));
   const live = rec.threads.filter((t) => t.status === 'open');
   const done = rec.threads.filter((t) => t.status === 'resolved').reverse();
@@ -400,13 +443,12 @@ export function DiscussList({ p }: { p: DeskProps }) {
   const words: Record<SectionKey, string> = { needs: 'Needs you', here: focus ? `On ${focus.name}` : view ? 'In this view' : 'On the canvas', rest: 'Everything else' };
   return (
     <>
-      <label class="rp-cm-reply nx-compose">
-        <Who id={me} /><span class="rp-sr">New thread</span>
-        <Subject a={focus ? { kind: 'part', id: focus.id, name: focus.name } : { kind: 'part', id: 'canvas', name: 'Canvas' }} />
-        <MentionField p={p} placeholder={rec.vowe ? `Start a thread, or @${agentName()} to ask it` : 'Start a thread'} value={draft} disabled={!mayWrite(p.role)}
-          onInput={setDraft} onSubmit={(t) => { act.newThread(t); setDraft(''); }} />
-      </label>
-      {!live.length && !done.length ? <p class="nx-empty3"><AboutGlyph a="part" />No threads yet</p> : null}
+      {!live.length && !done.length ? (
+        <div class="nx-empty2 bare">
+          <p class="nx-empty3"><Icon name="comment" size={14} />No threads yet</p>
+          {onNew ? <button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={onNew}>New thread</button> : null}
+        </div>
+      ) : null}
       <ThreadList secs={secs.map((x) => ({ label: secs.length > 1 || x.key !== 'rest' ? words[x.key] : null, key: x.key, threads: x.threads }))} p={p} />
       {done.length ? (
         <>
@@ -770,11 +812,11 @@ function ReplyRow({ r, t, p, sel, arrived, onReply }: { r: Reply; t: Thread; p: 
 
 /* ---------------- Decide ---------------- */
 
-function DecideTab(p: DeskProps) {
+function DecideTab({ p, making, done, make }: { p: DeskProps; making: boolean; done(): void; make(): void }) {
   const { rec, focus, focusOn } = p;
   const live = rec.decisions.filter((d) => d.state !== 'dismissed' && d.state !== 'superseded' && d.state !== 'suggested');
   const old = rec.decisions.filter((d) => d.state === 'dismissed' || d.state === 'superseded');
-  const [composing, setComposing] = useState(false);
+  const composing = making, setComposing = (on: boolean) => (on ? make() : done());
   const [hist, setHist] = useState(false);
   const rel = (d: Decision) => !focus || !focusOn || d.parts.includes(focus.id);
   const order = [...live].sort((a, b) => Number(!rel(a)) - Number(!rel(b)) || ['review', 'draft', 'suggested', 'agreed'].indexOf(a.state) - ['review', 'draft', 'suggested', 'agreed'].indexOf(b.state));
@@ -785,7 +827,6 @@ function DecideTab(p: DeskProps) {
       {composing ? <NewDecision p={p} done={() => setComposing(false)} /> : null}
       {!live.length && !composing ? <DecideEmpty p={p} write={() => setComposing(true)} /> : null}
       {order.map((d) => <DecisionMini key={d.id} d={d} p={p} dim={!rel(d)} />)}
-      {live.length && !composing ? <button type="button" class="nx-textbtn add" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>+ Write a decision</button> : null}
       {old.length ? <button type="button" class="nx-textbtn" onClick={() => setHist(!hist)}>{hist ? 'Hide' : 'Show'} {old.length} earlier</button> : null}
       {hist ? old.map((d) => <DecisionMini key={d.id} d={d} p={p} dim />) : null}
     </section>
@@ -854,10 +895,10 @@ export function DecisionMini({ d, p, dim }: { d: Decision; p: DeskProps; dim?: b
 
 /* ---------------- Work ---------------- */
 
-function WorkTab(p: DeskProps) {
+function WorkTab({ p, making, done, make }: { p: DeskProps; making: boolean; done(): void; make(): void }) {
   const { agentName } = useNames();
   const { rec, focus, focusOn, act } = p;
-  const [composing, setComposing] = useState(false);
+  const composing = making, setComposing = (on: boolean) => (on ? make() : done());
   const rel = (w: Work) => !focus || !focusOn || w.parts.includes(focus.id);
   const rank = (w: Work) => ({ waiting: 0, review: 1, proposed: 2, running: 3, resolved: 5, closed: 6 } as Record<string, number>)[objectiveState(w, rec, p.me).k] ?? 4;
   const list = [...rec.work].sort((a, b) => Number(!rel(a)) - Number(!rel(b)) || rank(a) - rank(b));
@@ -876,7 +917,6 @@ function WorkTab(p: DeskProps) {
         </div>
       ) : null}
       {list.map((w) => <ObjectiveCard key={w.id} w={w} p={p} dim={!rel(w)} />)}
-      {list.length && !composing ? <button type="button" class="nx-textbtn add" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>+ New work</button> : null}
     </section>
   );
 }

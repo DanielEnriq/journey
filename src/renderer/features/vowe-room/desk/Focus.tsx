@@ -5,7 +5,7 @@ import type { Thread } from '../contracts/model.js';
 import { useNames } from '../state/directory.js';
 import { mayWrite } from '../state/permissions.js';
 import type { Tab } from '../state/ui.js';
-import { AboutGlyph, AgentName, DEC_STATE, DecideEmpty, DiscussList, FsThread, NewDecision, NewWork, Who, needsMe, partsOf, type DeskProps } from './Desk.js';
+import { AboutGlyph, AgentName, DEC_STATE, DecideEmpty, DiscussList, FsThread, NewButton, NewDecision, NewThread, NewWork, Who, needsMe, partsOf, type DeskProps } from './Desk.js';
 import { DecisionDoc } from './DecisionDoc.js';
 import { Icon } from '../../../ui/icons.js';
 import { WorkView, objectiveState } from './Work.js';
@@ -24,7 +24,7 @@ import { SECTION, focusTarget, liveDecisions, owesAnswer, owesSignature, threadT
 export function Focus(p: DeskProps) {
   const names = useNames();
   const { rec, me, act } = p;
-  const [writing, setWriting] = useState<'decide' | 'work' | null>(null);
+  const [writing, setWriting] = useState<Tab | null>(null);
   const at = focusTarget(rec, me, { fsec: p.fsec, openThread: p.openThread, inspect: p.inspect });
   const { tab, thread, decision, work } = at;
   const decisions = liveDecisions(rec);
@@ -43,22 +43,21 @@ export function Focus(p: DeskProps) {
           {p.room?.repo ? <div class="nx-fo-repo"><Icon name="branch" size={14} />{p.room.repo.replace(/^(https?:\/\/)?(github\.com\/)?/, '')}</div> : null}
           <div class="nx-fo-tabs" role="tablist" aria-label="Sections">
             {(['discuss', 'decide', 'work'] as Tab[]).map((t, i) => (
-              <button key={t} type="button" role="tab" class="nx-fo-tab" aria-selected={tab === t} data-tip={`${SECTION[t]} · ⌥${i + 1}`} onClick={() => act.fsec(t)}>
+              <button key={t} type="button" role="tab" class="nx-fo-tab" aria-selected={tab === t} data-tip={`${SECTION[t]} · ⌥${i + 1}`} onClick={() => { setWriting(null); act.fsec(t); }}>
                 {SECTION[t]}{needs[t] ? <i class="nx-fo-dot" aria-label="something here needs you"></i> : null}
               </button>
             ))}
+            <NewButton tab={tab} p={p} on={writing === tab} make={() => { if (tab === 'discuss') act.thread(null); setWriting(tab); }} />
           </div>
         </div>
         <div class="nx-fo-items" role="listbox" aria-label={SECTION[tab]}>
           {tab === 'discuss' ? (
             <>
-              <DiscussList p={sp} />
+              <DiscussList p={writing === 'discuss' ? { ...sp, openThread: null } : sp} onNew={() => setWriting('discuss')} />
             </>
           ) : null}
           {tab === 'decide' ? (
             <>
-              {writing === 'decide' ? <div class="nx-fo-pad"><NewDecision p={p} done={() => setWriting(null)} /></div>
-                : decisions.length || earlier.length ? <button type="button" class="nx-textbtn add nx-fo-add" disabled={!writer} onClick={() => setWriting('decide')}>+ Write a decision</button> : null}
               {[...decisions, ...earlier].map((d, i) => {
                 const owe = owesSignature(d, me);
                 return [
@@ -74,8 +73,6 @@ export function Focus(p: DeskProps) {
           ) : null}
           {tab === 'work' ? (
             <>
-              {writing === 'work' ? <div class="nx-fo-pad"><NewWork p={p} done={() => setWriting(null)} /></div>
-                : rec.work.length ? <button type="button" class="nx-textbtn add nx-fo-add" disabled={!writer} onClick={() => setWriting('work')}>+ New work</button> : null}
               {rec.work.map((w) => {
                 const st = objectiveState(w, rec, me);
                 const owe = owesAnswer(w, me);
@@ -93,10 +90,14 @@ export function Focus(p: DeskProps) {
         <div class="nx-fo-foot"><AgentName p={p} /></div>
       </section>
       <section class="nx-fo-page" aria-label={SECTION[tab]}>
-        {tab === 'discuss' ? (thread ? <div class="nx-fo-thread"><FsThread t={thread} p={sp} /></div> : <Empty kind="discuss" scene={p.scene ?? null} />) : null}
-        {tab === 'decide' ? (decision ? <div class="nx-inspector focus"><DecisionDoc d={decision} p={sp} /></div>
-          : writing === 'decide' ? <Empty kind="decide" scene={null} /> : <div class="nx-fo-empty"><DecideEmpty p={sp} write={() => setWriting('decide')} /></div>) : null}
-        {tab === 'work' ? (work ? <div class="nx-inspector focus nx-fo-work"><WorkView w={work} p={sp} /></div> : <Empty kind="work" scene={null} act={writing === 'work' || !writer ? undefined : ['New work', () => setWriting('work')]} />) : null}
+        {tab === 'discuss' ? (writing === 'discuss' ? <div class="nx-fo-new"><NewThread p={sp} page done={() => setWriting(null)} /></div>
+          : thread ? <div class="nx-fo-thread"><FsThread t={thread} p={sp} /></div> : <Empty kind="discuss" scene={p.scene ?? null} />) : null}
+        {tab === 'decide' ? (writing === 'decide' ? <div class="nx-fo-new"><NewDecision p={p} done={() => setWriting(null)} /></div>
+          : decision ? <div class="nx-inspector focus"><DecisionDoc d={decision} p={sp} /></div>
+          : <div class="nx-fo-empty"><DecideEmpty p={sp} write={() => setWriting('decide')} /></div>) : null}
+        {tab === 'work' ? (writing === 'work' ? <div class="nx-fo-new"><NewWork p={p} done={() => setWriting(null)} /></div>
+          : work ? <div class="nx-inspector focus nx-fo-work"><WorkView w={work} p={sp} /></div>
+          : <Empty kind="work" scene={null} act={writer ? ['New work', () => setWriting('work')] : undefined} />) : null}
       </section>
     </div>
   );

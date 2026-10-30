@@ -1255,7 +1255,7 @@ button.nx-rail:hover::before,button.nx-rail:focus-visible::before{background:var
 /* An open thread */
 .tr-open{outline:0;animation:tr-in var(--v-dur-2) var(--v-ease-out) both}
 @keyframes tr-in{from{opacity:0;transform:translateX(8px)}}
-.tr-ohead{display:flex;align-items:center;gap:6px;margin:-2px 0 8px}
+.tr-ohead{display:flex;align-items:center;gap:6px;margin:4px 0 8px}
 .tr-back{display:inline-flex;align-items:center;gap:3px;height:26px;padding:0 8px 0 4px;border:0;border-radius:6px;background:none;font:inherit;font-size:13px;color:var(--v-fg-3);cursor:default}
 .tr-back:hover{background:var(--v-surface-hover);color:var(--v-fg-2)}
 .tr-back svg{width:12px;height:12px}
@@ -1325,3 +1325,19 @@ button.nx-rail:hover::before,button.nx-rail:focus-visible::before{background:var
 .room-screen .win:not(.nx-fws):not(.nx-sheet) .nx-ins-crumb{display:none}
 .room-screen .nx-ins-bar .nx-back.tr-back{display:inline-flex;align-items:center;gap:2px}
 .room-screen .nx-ins-bar button{-webkit-app-region:no-drag}
+
+/* Starting something: one pen at the end of the tab row (a thread, a decision or work, by tab). A new thread opens
+   where a thread would: the back row with Post where Resolve sits, then its subject and the first message. */
+.nx-tabnew{flex:none;margin-left:auto;display:inline-grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:7px;background:none;color:var(--v-fg-3);cursor:default;transition:background var(--v-dur-1) var(--v-ease),color var(--v-dur-1) var(--v-ease)}
+.nx-tabnew:hover{background:var(--v-surface-hover);color:var(--v-fg)}
+.nx-tabnew.on{background:var(--v-surface-selected);color:var(--v-fg)}
+.nx-tabnew:focus-visible{outline:0;box-shadow:var(--v-focus-ring)}
+.nx-tabnew:disabled{opacity:.4}
+.nx-tabnew svg{width:14px;height:14px}
+.nx-desk2 .nx-tabs2{align-items:center}
+.tr-post{margin-left:auto;height:26px;padding:0 12px;font-size:12px}
+.tr-new .tr-card{gap:6px}
+.tr-newf{display:block}
+.tr-newf input{display:block;width:100%;box-sizing:border-box;padding:6px 0 2px;border:0;background:none;outline:0;font:inherit;font-size:14px;line-height:1.5;color:var(--v-fg)}
+.tr-newf input::placeholder{color:var(--v-fg-4)}
+.nx-empty2.bare{margin:14px 0;padding:0;box-shadow:none}
