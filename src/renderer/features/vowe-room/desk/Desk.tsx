@@ -32,6 +32,8 @@ export interface DeskAct {
   inspect(i: Inspect): void;
   wide(on: boolean): void;
   light(parts: string[] | null): void;
+  /** Bring the canvas into view and light `parts` for a moment. */
+  show(parts: string[]): void;
   thread(id: string | null): void;
   /** `parent`: the reply this answers; none answers the thread. */
   reply(thread: string, body: string, parent?: string): void;
@@ -615,7 +617,7 @@ function ThreadMenu({ t, p, at, onClose }: { t: Thread; p: DeskProps; at: { x: n
     <div ref={box} class="v-menu nx-dl-menu" role="menu" aria-label={t.about.name}
       style={`left:${Math.min(at.x, innerWidth - 236)}px;top:${Math.min(at.y, innerHeight - 170)}px`}>
       {item('comment', 'Reply', reply)}
-      {parts.length ? item('canvas', 'Show on canvas', () => act.light(parts)) : null}
+      {parts.length ? item('canvas', 'Show on canvas', () => act.show(parts)) : null}
       {item('copy', 'Copy text', () => { void navigator.clipboard.writeText(plain).then(() => act.toast('Copied')); })}
       {item('check', t.status === 'resolved' ? 'Reopen' : 'Resolve', () => act.resolveThread(t.id, t.status === 'resolved'))}
       <div class="v-menu-sep" role="separator" />
@@ -679,6 +681,7 @@ function ThreadReplies({ t, p, deep }: { t: Thread; p: DeskProps; deep?: boolean
   const [folded, setFolded] = useState<string[]>([]);
   const [opened, setOpened] = useState<string[]>([]);
   const parts = partsOf(t.about, rec);
+  const shows = threadParts(t, rec);
   const tree = replyTree(t.replies);
   const depth = deep ? DEPTH.full : DEPTH.side;
   // Replies that came in while the thread was open rise in; someone else's also carry a wash that fades.
@@ -793,7 +796,7 @@ function ThreadReplies({ t, p, deep }: { t: Thread; p: DeskProps; deep?: boolean
           onInput={setText} onSubmit={(b) => { act.reply(t.id, b); setText(''); }} />
       </label>
       <span class="nx-thread-foot">
-        {parts.length ? <button class="rp-link" type="button" onClick={() => act.light(parts)}>Show on canvas</button> : null}
+        {shows.length ? <button class="rp-link" type="button" onClick={() => act.show(shows)}>Show on canvas</button> : null}
         {t.linked?.map((l, i) => <span key={i} class="nx-linked"><AboutGlyph a={l.kind} />also on {l.name}</span>)}
       </span>
     </div>

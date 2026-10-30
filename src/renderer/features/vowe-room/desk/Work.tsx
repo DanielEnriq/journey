@@ -294,7 +294,7 @@ function PrDetail2({ pr, w, p }: { pr: PR; w: Work; p: DeskProps }) {
       <span class="nx-offer-a">
         {prUrl(w, pr) ? <button type="button" class="nx-btn" onClick={() => act.openExternal(prUrl(w, pr)!)}>Review on GitHub<Ext /></button> : null}
         <button type="button" class="nx-btn" onClick={() => { void navigator.clipboard?.writeText(`gh pr checkout ${pr.num}`).catch(() => {}); act.toast(`Copied: gh pr checkout ${pr.num}`); }}>Copy checkout command</button>
-        <button type="button" class="nx-btn" onClick={() => act.light(pr.parts)}>Show on canvas</button>
+        <button type="button" class="nx-btn" onClick={() => act.show(pr.parts)}>Show on canvas</button>
       </span>
       {t ? <><span class="rp-rk nx-mt">Conversation in the room</span><ThreadCard t={t} p={p} inline /></> : null}
     </div>
