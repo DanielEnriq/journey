@@ -56,6 +56,14 @@ describe('vowe record mapping', () => {
     assert.deepEqual(rec.notices, []);
   });
 
+  it('keeps which reply a reply answers; a reply to the thread has none', () => {
+    const r = raw();
+    r.threads[0]!.replies.push({ ...r.threads[0]!.replies[0]!, id: 'c2', author_kind: 'human', offer: null, offer_state: null, parent_id: 'c1' });
+    const [, first, second] = toVoweRecord(r, { now }).threads[0]!.replies;
+    assert.equal(first!.parent, undefined);
+    assert.equal(second!.parent, 'c1');
+  });
+
   it('makes each decision version its own decision, with its approvers', () => {
     const [v1, v2] = toVoweRecord(raw(), { now }).decisions;
     assert.equal(v1!.id, D);

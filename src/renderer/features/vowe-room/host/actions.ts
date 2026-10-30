@@ -83,9 +83,9 @@ export function createDeskActions(d: HostDeps): DeskAct {
     openExternal: (url) => { if (/^https:\/\//.test(url)) d.openExternal(url); },
 
     // Discuss
-    reply: (t, body) => {
+    reply: (t, body, parent) => {
       if (t.startsWith('line:')) { const [, dec, line] = t.split(':'); void thread({ kind: 'line', id: line, decision: dec, name: 'Decision line' }, body); return; }
-      void run(s.threads.reply(roomId, t, body));
+      void run(s.threads.reply(roomId, t, body, parent));
     },
     offer: (t, reply, accept) => void run(s.threads.answerOffer(roomId, t, reply, accept)),
     newThread: (body) => {

@@ -1126,3 +1126,74 @@ body.nx-resizing .room-screen .win{transition:none}
 .nx-dl-row > .rp-cm-thread{margin:0 10px 8px}
 .nx-dl-menu{position:fixed;z-index:60}
 .nx-dl-menu .v-menu-item:disabled{opacity:.45;pointer-events:none}
+
+/* ---------- Markdown in messages (desk/Markdown.tsx) ---------- */
+.nx-md{display:flex;flex-direction:column;gap:6px;white-space:normal;min-width:0}
+.nx-md-p{display:block}
+.nx-md strong{font-weight:600;color:var(--v-fg)}
+.nx-md em{font-style:italic;color:var(--v-fg)}
+.nx-md-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px}
+.nx-md-list li{position:relative;padding-left:14px}
+ul.nx-md-list li::before{content:'';position:absolute;left:3px;top:.68em;width:4px;height:4px;border-radius:50%;background:var(--v-fg-4)}
+ol.nx-md-list{counter-reset:md calc(var(--start,1) - 1)}
+ol.nx-md-list li{counter-increment:md;padding-left:18px}
+ol.nx-md-list li::before{content:counter(md) '.';position:absolute;left:0;top:0;font-variant-numeric:tabular-nums;color:var(--v-fg-3)}
+.rp-cm-body .nx-ic{background:color-mix(in srgb,var(--v-fg) 6%,transparent);box-shadow:none;padding:1px 4px}
+.nx-cb{display:block;margin:2px 0;border-radius:8px;background:color-mix(in srgb,var(--v-fg) 4%,transparent);box-shadow:inset 0 0 0 .5px var(--v-line-2);overflow:hidden;text-align:left;cursor:auto}
+.nx-cb-h{display:flex;align-items:center;gap:7px;height:24px;padding:0 8px 0 9px;border-bottom:.5px solid var(--v-line-2);font-size:11px;color:var(--v-fg-3)}
+.nx-cb-i{font:600 10px var(--v-font-mono);letter-spacing:-.04em;color:var(--v-info-fg)}
+.nx-cb-path{font:11px var(--v-font-mono);color:var(--v-fg);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nx-cb-lang{font:11px var(--v-font-mono)}
+.nx-cb-range{font:11px var(--v-font-mono);color:var(--v-fg-4)}
+.nx-cb-copy{margin-left:auto;padding:0 5px;border-radius:4px;color:var(--v-fg-4);cursor:pointer}
+.nx-cb-copy:hover{color:var(--v-fg-2);background:var(--v-surface-hover)}
+.nx-cb-copy:focus-visible{outline:2px solid var(--v-accent);outline-offset:1px}
+.nx-cb-pre{margin:0;padding:7px 12px 8px;font:11.5px/1.6 var(--v-font-mono);color:var(--v-fg);white-space:pre;overflow-x:auto;tab-size:2}
+.nx-cb-row{display:block}
+.nx-cb-ln{display:inline-block;min-width:22px;margin-right:12px;text-align:right;color:var(--v-fg-4);user-select:none}
+.nx-tk-k{color:#a2457a}.nx-tk-f{color:#2f6c8f}.nx-tk-s{color:#4f7a2c}.nx-tk-n{color:#9a5b12}.nx-tk-c{color:var(--v-fg-4);font-style:italic}
+[data-theme='dark'] .nx-tk-k,.th-dark .nx-tk-k{color:#e08bbd}
+[data-theme='dark'] .nx-tk-f,.th-dark .nx-tk-f{color:#8cc3e6}
+[data-theme='dark'] .nx-tk-s,.th-dark .nx-tk-s{color:#a7cf86}
+[data-theme='dark'] .nx-tk-n,.th-dark .nx-tk-n{color:#e2b26f}
+.nx-fthread .rp-cm-body{font-size:14px;line-height:1.6}
+.nx-fthread .nx-cb-pre{font-size:12.5px}
+
+/* Replies under replies: each branch hangs on a thread line; the line folds it. Messages carry no border of
+   their own: the line and the face say who answered whom. */
+.nx-tree{gap:2px}
+.nx-tree .rp-cm-r{position:relative;gap:3px;padding:6px 8px 7px;margin-left:-8px;border-left:0;border-radius:8px;box-shadow:none;transition:background var(--v-dur-1) var(--v-ease)}
+.nx-tree .rp-cm-r:hover{background:var(--v-surface-hover)}
+.nx-tree .rp-cm-r.nx-sel{background:var(--v-surface-selected);box-shadow:inset 2px 0 0 var(--v-accent)}
+.nx-tree .rp-cm-r .rp-cm-body{padding-left:25px}
+.nx-tree .nx-vowe-r .rp-cm-head b{color:var(--v-info-fg)}
+.nx-tree > .rp-cm-reply{margin-top:8px}
+.nx-node{display:flex;flex-direction:column;min-width:0}
+.nx-kids{position:relative;display:flex;flex-direction:column;gap:2px;margin-left:9px;padding-left:13px}
+.nx-deep .nx-kids{margin-left:11px;padding-left:15px}
+.nx-rail{position:absolute;left:-4px;top:0;bottom:8px;width:9px;padding:0;border:0;background:none;cursor:default}
+button.nx-rail{cursor:pointer}
+.nx-rail::before{content:"";position:absolute;left:4px;top:0;bottom:0;width:1.5px;border-radius:1px;background:var(--v-line-2);transition:background var(--v-dur-1) var(--v-ease)}
+button.nx-rail:hover::before,button.nx-rail:focus-visible::before{background:var(--v-line-strong)}
+.nx-more,.nx-folded{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;height:26px;padding:0 8px 0 4px;margin:2px 0 4px;border:0;border-radius:7px;background:none;font:inherit;font-size:12px;color:var(--v-fg-3);cursor:pointer}
+.nx-more:hover,.nx-folded:hover{background:var(--v-surface-hover);color:var(--v-fg-2)}
+.nx-more b,.nx-folded b{font-weight:500;color:var(--v-fg-2)}
+.nx-more svg{width:10px;height:10px}
+.nx-folded{margin:0 0 2px -22px;padding-left:0}
+.nx-plus{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1.5px var(--v-line-2);font-size:11px;line-height:1;color:var(--v-fg-3);background:var(--v-surface)}
+.nx-faces{display:inline-flex}
+.nx-faces > * + *{margin-left:-4px}
+.nx-faces > *{box-shadow:0 0 0 1.5px var(--v-surface);border-radius:50%}
+.nx-thinking{display:flex;align-items:center;gap:7px;height:28px;padding-left:0;font-size:12.5px;color:var(--v-fg-3)}
+.nx-thinking b{font-weight:600;color:var(--v-info-fg)}
+.nx-thinking .rp-dots{color:var(--v-info)}
+.nx-acts{position:absolute;right:6px;top:3px;display:none;gap:1px;padding:2px;border-radius:7px;background:var(--v-surface);box-shadow:var(--v-shadow-2);z-index:1}
+.nx-tree .rp-cm-r:hover > .nx-acts,.nx-tree .rp-cm-r:focus-within > .nx-acts,.nx-tree .rp-cm-r.nx-sel > .nx-acts{display:flex}
+.nx-act{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border:0;border-radius:5px;background:var(--v-surface-selected);font:inherit;font-size:11.5px;color:var(--v-fg);cursor:pointer}
+.nx-act:hover{background:var(--v-surface-press)}
+.nx-act svg{width:12px;height:12px}
+.nx-inreply{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:4px 0 6px 25px}
+.nx-inreply .rp-cm-reply{align-self:stretch;background:var(--v-surface);box-shadow:var(--v-shadow-1)}
+.nx-replying{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 4px 0 6px;border-radius:5px;background:var(--v-surface-selected);font-size:11.5px;color:var(--v-fg-2)}
+.nx-replying b{font-weight:500;color:var(--v-fg)}
+.nx-replying kbd{font:10.5px var(--v-font-sans);color:var(--v-fg-4);padding:0 4px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--v-line-2)}

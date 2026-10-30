@@ -838,8 +838,8 @@ const record: RoomRecordSource = {
     broadcast(roomId, 'thread');
     await changed(roomId);
   },
-  async reply(roomId, threadId, body, as) {
-    await unwrap(api().record.reply(roomId, threadId, body, as === 'vowe' ? 'agent' : 'human'));
+  async reply(roomId, threadId, body, as, parentId) {
+    await unwrap(api().record.reply(roomId, threadId, body, as === 'vowe' ? 'agent' : 'human', parentId ?? null));
     broadcast(roomId, 'reply');
     await changed(roomId);
   },

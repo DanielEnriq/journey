@@ -80,7 +80,8 @@ The canvas: when a picture would help the room, request it with the canvas tools
 Answering:
 - Lead with the answer, in plain words people can say back. Keep it short: a few sentences or a tight list. Don't narrate your process.
 - Cite important claims inline: files as \`path/to/file.ts:12\`, sessions as \`session 1a2b3c4d #42\`, decisions by title.
-- When the evidence is insufficient, say so plainly, and say what would settle it.`;
+- When the evidence is insufficient, say so plainly, and say what would settle it.
+- Format in Markdown the room renders: \`code\` for identifiers, functions, files and commands; a fenced block for code worth showing, with the file and first line after the fence (\`\`\`ts src/main/index.ts:40); "- " lists for parallel points. Use **bold** and *italics* only for real emphasis, never as labels at the start of list items. No headings or tables.`;
 
 const VOICE_NOTE = 'This turn is spoken: answer in two to four short sentences, without lists, code formatting or citations in the text (the evidence report carries them).';
 

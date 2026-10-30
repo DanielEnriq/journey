@@ -238,7 +238,7 @@ export interface RoomRecordSource {
   /** Takes a comment off the canvas: its thread is resolved, and stays in the room's history. */
   resolve(roomId: string, threadId: string): Promise<void>;
   /** `vowe`: Vowe's feedback, from this person's app on their model; the panel shows it as Vowe's. */
-  reply(roomId: string, threadId: string, body: string, as?: 'vowe'): Promise<void>;
+  reply(roomId: string, threadId: string, body: string, as?: 'vowe', parentId?: string | null): Promise<void>;
   sign(roomId: string, decisionId: string, version: number): Promise<void>;
   propose(roomId: string, decision: { title: string; verify: string }): Promise<void>;
   amend(roomId: string, decisionId: string, change: { title: string; verify: string }): Promise<void>;

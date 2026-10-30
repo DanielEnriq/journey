@@ -33,8 +33,8 @@ export interface NewThread {
 export interface ThreadService {
   /** permission: comment. Journey: RoomRecordSource.pin covers part/pin anchors; the other `about` kinds are new. */
   create(roomId: string, t: NewThread): Promise<RoomResult<{ id: string }>>;
-  /** permission: comment. Journey: RoomRecordSource.reply. */
-  reply(roomId: string, threadId: string, body: string): Promise<RoomResult<void>>;
+  /** permission: comment. Journey: RoomRecordSource.reply. `parentId`: the reply it answers, in the same thread. */
+  reply(roomId: string, threadId: string, body: string, parentId?: string | null): Promise<RoomResult<{ id: string }>>;
   /** permission: comment. Journey: RoomRecordSource.resolve. */
   resolve(roomId: string, threadId: string): Promise<RoomResult<void>>;
   /** Accept or dismiss an agent's offer in a thread. permission: write. Accepting only records the answer:

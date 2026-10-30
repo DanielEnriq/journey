@@ -62,7 +62,10 @@ export function createVoweServices(journey: () => Journey = () => window.journey
     },
     threads: {
       create: (roomId, t) => write(roomId, () => j().vowe.thread(roomId, toNewThread(t))),
-      reply: (roomId, threadId, body) => write(roomId, async () => voidResult(await j().record.reply(roomId, threadId, body))),
+      reply: (roomId, threadId, body, parentId) => write(roomId, async () => {
+        const res = await j().record.reply(roomId, threadId, body, 'human', parentId ?? null);
+        return res.ok ? { ok: true as const, value: { id: res.value.id } } : res;
+      }),
       resolve: (roomId, threadId) => write(roomId, () => j().record.resolve(roomId, threadId)),
       answerOffer: (roomId, threadId, replyId, accept) => write(roomId, () => j().vowe.answerOffer(roomId, threadId, replyId, accept)),
     },

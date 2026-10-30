@@ -116,19 +116,21 @@ export function createRoomRecordService(client: () => Promise<Cloud>) {
     },
 
     /** `agent`: Vowe's reply, written from this person's app on their model, saved as theirs and shown as Vowe's. */
-    async reply(roomId: string, threadId: string, body: string, authorKind: 'human' | 'agent' = 'human'): Promise<RoomComment> {
+    /** `parentId`: the reply this one answers, in the same thread (the database refuses one from elsewhere). */
+    async reply(roomId: string, threadId: string, body: string, authorKind: 'human' | 'agent' = 'human', parentId: string | null = null): Promise<RoomComment> {
       const room = requireId(roomId, 'Room');
       const thread = requireId(threadId, 'Thread');
+      const parent = parentId === null ? null : requireId(parentId, 'Reply');
       const text = requireText(body, 'Reply', 4000);
       const { supabase } = await signedIn();
       await requireRoom(supabase, room);
       const { data, error } = await supabase
         .from('room_comments')
-        .insert({ room_id: room, thread_id: thread, body: text, ...(authorKind === 'agent' ? { author_kind: 'agent' } : {}) })
+        .insert({ room_id: room, thread_id: thread, body: text, ...(authorKind === 'agent' ? { author_kind: 'agent' } : {}), ...(parent ? { parent_id: parent } : {}) })
         .select(`*, author:users!room_comments_created_by_fkey(${AUTHOR})`)
         .single();
-      // The composite key refuses a thread from another room the same way as a missing one.
-      if (error?.code === '23503') throw new RoomError('not-found', 'No such thread in this room');
+      // The composite keys refuse a thread from another room, or a parent from another thread, as missing.
+      if (error?.code === '23503') throw new RoomError('not-found', parent ? 'No such reply in this thread' : 'No such thread in this room');
       if (error) throw toRoomError(error);
       return toComment(data);
     },

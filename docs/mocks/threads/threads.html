@@ -1,0 +1,353 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Threads mock</title>
+<style>
+:root, .th-light {
+  --v-font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --v-font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --v-font-mono: 'SF Mono', ui-monospace, Menlo, monospace;
+  --v-accent: #0a84ff;
+  --v-bg: #fbfbfa; --v-bg-sunken: #f2f2f0; --v-canvas: #f7f7f6; --v-surface: #ffffff;
+  --v-surface-hover: rgba(0,0,0,.04); --v-surface-selected: rgba(0,0,0,.06);
+  --v-fg: #1d1d1f; --v-fg-2: #424245; --v-fg-3: #6e6e73; --v-fg-4: #8e8e93;
+  --v-line: rgba(0,0,0,.08); --v-line-2: rgba(0,0,0,.13); --v-line-strong: rgba(0,0,0,.28);
+  --v-signal: #e0673f; --v-signal-fg: #b8461f; --v-signal-wash: rgba(224,103,63,.10);
+  --v-info: #5f87a6; --v-info-fg: #3d6585; --v-info-wash: rgba(95,135,166,.12); --v-info-line: rgba(61,101,133,.36);
+  --v-code-wash: rgba(0,0,0,.045);
+  --shadow: 0 0 0 1px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --p-me: #3f7a73; --p-kp: #7a5aa6; --p-ap: #a8762e;
+}
+.th-dark {
+  --v-bg: #1e1e20; --v-bg-sunken: #171719; --v-canvas: #1a1a1c; --v-surface: #2a2a2c;
+  --v-surface-hover: rgba(255,255,255,.05); --v-surface-selected: rgba(255,255,255,.07);
+  --v-fg: #f5f5f7; --v-fg-2: #d1d1d6; --v-fg-3: #98989d; --v-fg-4: #6e6e73;
+  --v-line: rgba(255,255,255,.08); --v-line-2: rgba(255,255,255,.13); --v-line-strong: rgba(255,255,255,.26);
+  --v-signal: #f0855e; --v-signal-fg: #f59a78; --v-signal-wash: rgba(240,133,94,.14);
+  --v-info: #7fa6c4; --v-info-fg: #9cc0dc; --v-info-wash: rgba(127,166,196,.16); --v-info-line: rgba(156,192,220,.34);
+  --v-code-wash: rgba(255,255,255,.07);
+  --shadow: 0 0 0 1px rgba(255,255,255,.07);
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { background: var(--v-bg); }
+body { font: 13px/1.45 var(--v-font-sans); color: var(--v-fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; }
+
+/* ---------- people ---------- */
+.av { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 8.5px; font-weight: 700; letter-spacing: .02em; color: #fff; }
+.av.me { background: var(--p-me); } .av.kp { background: var(--p-kp); } .av.ap { background: var(--p-ap); }
+.av.dot { background: var(--v-info); position: relative; }
+.av.dot::before, .av.dot::after { content: ''; position: absolute; top: 7px; width: 2.4px; height: 3.4px; border-radius: 2px; background: var(--v-surface); }
+.av.dot::before { left: 6.4px; } .av.dot::after { right: 6.4px; }
+.av.dot i { position: absolute; left: 5.5px; right: 5.5px; top: 9.6px; height: 4px; border: 1.5px solid var(--v-surface); border-top: 0; border-radius: 0 0 6px 6px; }
+
+/* ---------- a message ---------- */
+.msg { position: relative; padding: 6px 8px 6px 0; border-radius: 8px; }
+.head { display: flex; align-items: center; gap: 7px; height: 20px; }
+.name { font-weight: 600; font-size: 12.5px; color: var(--v-fg); }
+.name.agent { color: var(--v-info-fg); }
+.time { font-size: 11.5px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; }
+.to { font-size: 11.5px; color: var(--v-fg-3); }
+.to b { font-weight: 500; color: var(--v-fg-2); }
+.body { margin: 3px 0 0 27px; color: var(--v-fg-2); font-size: 13px; line-height: 1.55; max-width: 68ch; text-wrap: pretty; }
+.body p + p, .body p + ul, .body ul + p { margin-top: 6px; }
+.body strong { color: var(--v-fg); font-weight: 600; }
+.body ul { padding: 0; list-style: none; display: grid; gap: 4px; }
+.body li { position: relative; padding-left: 14px; }
+.body li::before { content: ''; position: absolute; left: 3px; top: .72em; width: 4px; height: 4px; border-radius: 50%; background: var(--v-fg-4); }
+.body code { font: 11.5px var(--v-font-mono); padding: 1px 4px; border-radius: 4px; background: var(--v-code-wash); color: var(--v-fg); }
+.tok { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; border-radius: 5px; font-weight: 500; color: var(--v-info-fg); background: var(--v-info-wash); white-space: nowrap; }
+.tok.person { color: var(--v-fg); background: var(--v-surface-selected); }
+.file { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px 0 4px; border-radius: 5px; font: 11.5px/1.6 var(--v-font-mono); color: var(--v-fg); background: var(--v-code-wash); box-shadow: inset 0 0 0 .5px var(--v-line-2); white-space: nowrap; }
+.file svg, .tok svg { width: 11px; height: 11px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.4; opacity: .75; }
+.src { margin: 6px 0 0 27px; display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--v-fg-4); }
+.src span { padding: 0 6px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--v-line); line-height: 17px; }
+
+/* code block */
+.cb { margin: 8px 0; border-radius: 8px; background: var(--v-code-wash); box-shadow: inset 0 0 0 .5px var(--v-line-2); overflow: hidden; max-width: 560px; }
+.cb-h { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px 0 9px; border-bottom: .5px solid var(--v-line-2); font-size: 11.5px; color: var(--v-fg-3); }
+.cb-i { font: 600 10.5px var(--v-font-mono); color: var(--v-info-fg); letter-spacing: -.04em; }
+.cb-n { font: 11.5px var(--v-font-mono); color: var(--v-fg); }
+.cb-l { font: 11px var(--v-font-mono); color: var(--v-fg-4); }
+.cb-c { margin-left: auto; color: var(--v-fg-4); }
+.cb pre { overflow: hidden; margin: 0; padding: 8px 12px 9px 0; font: 12px/1.6 var(--v-font-mono); color: var(--v-fg); white-space: pre; }
+.full .cb pre { font-size: 12.5px; }
+.cb .ln { display: inline-block; width: 34px; padding-right: 12px; text-align: right; color: var(--v-fg-4); user-select: none; }
+.t-k { color: #a2457a; } .t-f { color: #2f6c8f; } .t-c { color: var(--v-fg-4); font-style: italic; } .t-p { color: var(--v-fg-2); }
+.th-dark .t-k { color: #e08bbd; } .th-dark .t-f { color: #8cc3e6; }
+.body em { font-style: italic; color: var(--v-fg); }
+/* hover actions, drawn on one message to show them */
+.acts { position: absolute; right: 6px; top: 3px; display: none; gap: 1px; padding: 2px; border-radius: 7px; background: var(--v-surface); box-shadow: var(--shadow), 0 2px 8px rgba(0,0,0,.08); }
+.msg.hover { background: var(--v-surface-hover); }
+.msg.hover .acts { display: flex; }
+.acts button { height: 22px; padding: 0 7px; border-radius: 5px; font-size: 11.5px; color: var(--v-fg-2); display: inline-flex; align-items: center; gap: 4px; }
+.acts button:first-child { background: var(--v-surface-selected); color: var(--v-fg); }
+.acts svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.msg.sel { background: var(--v-surface-selected); box-shadow: inset 2px 0 0 var(--v-accent); }
+
+/* ---------- the tree ---------- */
+.kids { position: relative; margin-left: 9px; padding-left: 13px; }
+.kids > .rail { position: absolute; left: 0; top: 0; bottom: 10px; width: 9px; margin-left: -4px; cursor: pointer; }
+.kids > .rail::before { content: ''; position: absolute; left: 4px; top: 0; bottom: 0; width: 1.5px; border-radius: 1px; background: var(--v-line-2); }
+.kids > .rail.hot::before { background: var(--v-line-strong); }
+.more { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px 0 4px; margin: 2px 0 4px; border-radius: 7px; font-size: 12px; color: var(--v-fg-3); }
+.more .faces { display: flex; } .more .faces .av { width: 16px; height: 16px; font-size: 7px; box-shadow: 0 0 0 1.5px var(--v-bg); }
+.more .faces .av + .av { margin-left: -4px; }
+.more .faces .av:not(.dot), .collapsed .faces .av:not(.dot) { font-size: 0; }
+.more .faces .av.dot::before, .more .faces .av.dot::after { top: 5.5px; width: 2px; height: 2.8px; } .more .faces .av.dot::before { left: 5px; } .more .faces .av.dot::after { right: 5px; }
+.more .faces .av.dot i { left: 4.3px; right: 4.3px; top: 7.8px; height: 3px; border-width: 1.2px; }
+.more b { font-weight: 500; color: var(--v-fg-2); }
+.more .chev { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.collapsed { display: flex; align-items: center; gap: 7px; height: 28px; font-size: 12px; color: var(--v-fg-3); }
+.collapsed .plus { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px var(--v-line-2); font-size: 11px; line-height: 1; color: var(--v-fg-3); margin-left: 2px; }
+.collapsed b { color: var(--v-fg-2); font-weight: 500; }
+
+.thinking { display: flex; align-items: center; gap: 7px; height: 28px; font-size: 12.5px; color: var(--v-fg-3); }
+.thinking .name { color: var(--v-info-fg); }
+.dots { display: inline-flex; gap: 3px; } .dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--v-info); opacity: .35; } .dots i:nth-child(2) { opacity: .6; } .dots i:nth-child(3) { opacity: .9; }
+
+/* ---------- composers ---------- */
+.compose { display: flex; align-items: flex-start; gap: 8px; padding: 7px 8px 7px 8px; border-radius: 10px; background: var(--v-surface); box-shadow: var(--shadow); }
+.compose .field { flex: 1; min-width: 0; font-size: 13px; line-height: 20px; color: var(--v-fg-4); }
+.compose .field.typed { color: var(--v-fg); }
+.compose .send { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--v-surface-selected); color: var(--v-fg-3); }
+.compose .send.on { background: var(--v-fg); color: var(--v-bg); }
+.compose .send svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.inline { margin: 4px 0 6px 27px; }
+.inline .chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 4px 0 6px; border-radius: 5px; background: var(--v-surface-selected); font-size: 11.5px; color: var(--v-fg-2); margin-bottom: 6px; }
+.inline .chip kbd { font: 10.5px var(--v-font-sans); color: var(--v-fg-4); padding: 0 4px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--v-line-2); }
+.caret { display: inline-block; width: 1.5px; height: 15px; background: var(--v-accent); vertical-align: -3px; margin-left: 1px; }
+
+/* =================================================== SIDEBAR frame */
+.side { width: 420px; height: 900px; display: flex; flex-direction: column; background: var(--v-bg-sunken); border-left: 1px solid var(--v-line); }
+.side .top { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px 0 16px; }
+.seg { display: inline-flex; padding: 2px; border-radius: 7px; background: var(--v-surface-selected); }
+.seg span { height: 22px; padding: 0 10px; border-radius: 5px; display: inline-flex; align-items: center; font-size: 12px; color: var(--v-fg-3); }
+.seg span.on { background: var(--v-surface); color: var(--v-fg); box-shadow: var(--shadow); font-weight: 500; }
+.side .top .sp { flex: 1; }
+.icbtn { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; color: var(--v-fg-3); }
+.icbtn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.side .scroll { flex: 1; overflow: hidden; padding: 0 10px; }
+.card { background: var(--v-surface); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 6px 8px 12px; }
+.card + .card { margin-top: 10px; }
+.about { display: flex; align-items: center; gap: 6px; height: 22px; margin-bottom: 4px; font-size: 11.5px; color: var(--v-fg-3); }
+.about .part { display: inline-flex; align-items: center; gap: 4px; color: var(--v-fg-2); font-weight: 500; }
+.about .part svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.4; }
+.about .open { margin-left: auto; }
+.side .bottom { padding: 10px 10px 12px; }
+.title { font: 600 14px/1.35 var(--v-font-display); letter-spacing: -.01em; color: var(--v-fg); margin: 0 0 2px; }
+.side .cb pre { font-size: 11.5px; }
+.side .card .title { padding-right: 6px; }
+.closed { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; }
+.closed .title { font-size: 13px; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; font-family: var(--v-font-sans); }
+.closed .n { font-size: 11.5px; color: var(--v-fg-4); }
+.group { font-size: 11px; font-weight: 600; color: var(--v-fg-4); padding: 14px 4px 6px; letter-spacing: .01em; }
+
+/* ================================================= FULLSCREEN frame */
+.full { width: 1440px; height: 900px; display: grid; grid-template-rows: 52px 1fr; background: var(--v-bg); }
+.bar { display: flex; align-items: center; gap: 10px; padding: 0 16px 0 92px; border-bottom: 1px solid var(--v-line); position: relative; }
+.lights { position: absolute; left: 18px; top: 19px; display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+.crumbs { font-size: 13px; color: var(--v-fg-3); display: flex; gap: 7px; align-items: center; }
+.crumbs b { color: var(--v-fg); font-weight: 500; }
+.bar .sp { flex: 1; }
+.btn { height: 28px; padding: 0 12px; border-radius: 7px; font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; color: var(--v-fg-2); }
+.btn.dark { background: var(--v-fg); color: var(--v-bg); }
+.btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.cols { display: grid; grid-template-columns: 300px 1fr 280px; min-height: 0; }
+.list { background: var(--v-bg-sunken); border-right: 1px solid var(--v-line); padding: 14px 10px; }
+.list .row { padding: 9px 10px; border-radius: 8px; }
+.list .row.on { background: var(--v-surface); box-shadow: var(--shadow); }
+.list .row .t { font-size: 13px; font-weight: 500; color: var(--v-fg); line-height: 1.35; }
+.list .row .m { font-size: 11.5px; color: var(--v-fg-3); margin-top: 3px; display: flex; gap: 6px; align-items: center; }
+.list .row .m .u { width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
+.list .new { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-bottom: 10px; border-radius: 8px; color: var(--v-fg-4); font-size: 12.5px; background: var(--v-surface); box-shadow: var(--shadow); }
+.main { overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.read { flex: 1; overflow: hidden; padding: 30px 40px 0; }
+.col { width: 720px; margin: 0 auto; }
+.kicker { font-size: 11.5px; color: var(--v-fg-3); display: flex; gap: 6px; align-items: center; }
+.kicker .part { display: inline-flex; align-items: center; gap: 4px; color: var(--v-fg-2); font-weight: 500; }
+.kicker svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.4; }
+.h1 { font: 600 22px/1.3 var(--v-font-display); letter-spacing: -.015em; margin: 6px 0 18px; color: var(--v-fg); }
+.full .body { font-size: 14px; line-height: 1.6; }
+.full .body code, .full .file { font-size: 12.5px; }
+.full .name { font-size: 13px; }
+.full .msg { padding: 8px 10px 8px 6px; }
+.full .kids { margin-left: 15px; }
+.foot { padding: 12px 40px 18px; }
+.foot .col { }
+.rail-r { border-left: 1px solid var(--v-line); padding: 22px 20px; }
+.rail-r h4 { font-size: 11px; font-weight: 600; color: var(--v-fg-4); margin: 0 0 8px; letter-spacing: .01em; }
+.rail-r .box { padding: 10px 12px; border-radius: 10px; background: var(--v-surface); box-shadow: var(--shadow); margin-bottom: 20px; }
+.rail-r .box b { display: block; font-size: 13px; font-weight: 500; }
+.rail-r .box span { font-size: 12px; color: var(--v-fg-3); }
+.rail-r .ppl { display: grid; gap: 8px; margin-bottom: 20px; }
+.rail-r .ppl div { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--v-fg-2); }
+.rail-r .ppl em { margin-left: auto; font-style: normal; font-size: 11.5px; color: var(--v-fg-4); }
+.rail-r .ghost { height: 30px; border-radius: 8px; display: flex; align-items: center; padding: 0 12px; font-size: 12.5px; box-shadow: inset 0 0 0 1px var(--v-line-2); color: var(--v-fg-2); }
+.full .src { margin-left: 27px; }
+
+/* page for both frames */
+.stage { display: flex; gap: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const I = {
+  file: '<svg viewBox="0 0 12 12"><path d="M3 1.5h4l2.5 2.5v6.5h-6.5z"/><path d="M7 1.5V4h2.5"/></svg>',
+  part: '<svg viewBox="0 0 12 12"><rect x="1.5" y="2.5" width="9" height="7" rx="1.5"/><path d="M1.5 5h9"/></svg>',
+  reply: '<svg viewBox="0 0 12 12"><path d="M5 2.5 1.8 5.5 5 8.5"/><path d="M2 5.5h5a3 3 0 0 1 3 3v1"/></svg>',
+  link: '<svg viewBox="0 0 12 12"><path d="M5 7 7 5"/><path d="M6.5 3.2 7.6 2.1a2 2 0 0 1 2.8 2.8L9.3 6"/><path d="M5.5 8.8 4.4 9.9a2 2 0 0 1-2.8-2.8L2.7 6"/></svg>',
+  check: '<svg viewBox="0 0 12 12"><path d="m2.5 6.3 2.3 2.2 4.7-5"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 10 10"><path d="m3.5 2 3 3-3 3"/></svg>',
+  up: '<svg viewBox="0 0 12 12"><path d="M6 10V2.5M2.8 5.5 6 2.3l3.2 3.2"/></svg>',
+  expand: '<svg viewBox="0 0 14 14"><path d="M8.5 1.5h4v4M5.5 12.5h-4v-4M12.5 1.5 8 6M1.5 12.5 6 8"/></svg>',
+  collapse: '<svg viewBox="0 0 14 14"><path d="M12.5 5.5h-4v-4M1.5 8.5h4v4M8.5 5.5 13 1M5.5 8.5 1 13"/></svg>',
+  phone: '<svg viewBox="0 0 14 14"><path d="M3 1.5h2l1 3-1.5 1a7 7 0 0 0 4 4l1-1.5 3 1v2a1.5 1.5 0 0 1-1.5 1.5A10.5 10.5 0 0 1 1.5 3 1.5 1.5 0 0 1 3 1.5z"/></svg>',
+};
+const P = {
+  me: { cls: 'me', name: 'You', ini: 'DE' },
+  kp: { cls: 'kp', name: 'Kevin Pei', ini: 'KP' },
+  ap: { cls: 'ap', name: 'Anuraghav', ini: 'AP' },
+  dot: { cls: 'dot', name: 'dot', ini: '' , agent: true },
+};
+const av = (p) => `<span class="av ${P[p].cls}">${p === 'dot' ? '<i></i>' : P[p].ini}</span>`;
+const file = (t) => `<span class="file">${I.file}${t}</span>`;
+const part = (t) => `<span class="tok">${I.part}${t}</span>`;
+const person = (t) => `<span class="tok person">@${t}</span>`;
+const codeblock = (name, from, toks) => {
+  const lines = [[]]; for (const t of toks) { if (t === '\n') lines.push([]); else lines.at(-1).push(t); }
+  return `<div class="cb"><div class="cb-h"><span class="cb-i">&lt;/&gt;</span><span class="cb-n">${name}</span><span class="cb-l">${from}–${from + lines.length - 1}</span><span class="cb-c">Copy</span></div><pre>${lines.map((l, i) => `<span class="ln">${from + i}</span>${l.map(([k, v]) => `<span class="t-${k}">${v.replace(/</g,'&lt;')}</span>`).join('')}`).join('\n')}</pre></div>`;
+};
+const agent = `<span class="tok">@dot</span>`;
+
+// The thread, as data: who, when, body, children, plus view flags.
+const thread = {
+  title: 'Is session restore blocking the window?',
+  on: 'Electron main process',
+  root: { id: 'root', who: 'me', t: '12m', body: `<p>${agent} is ${part('Electron main process')} all good before we put it in front of Kevin's team?</p>`, kids: [
+    { id: 'a', who: 'dot', t: '11m', src: ['describe_canvas', 'read_code'], body:
+      `<p>Mostly. The sandbox and the IPC sender checks hold up. One thing isn't settled: <code>restoreSession()</code> runs <em>before</em> <code>createWindow()</code>, so a slow keychain unlock delays first paint.</p>
+       ${codeblock('src/main/index.ts', 40, [
+         ['k','app'],['p','.'],['f','whenReady'],['p','().'],['f','then'],['p','('],['k','async'],['p',' () => {'],'\n',
+         ['p','  '],['k','await'],['p',' '],['f','restoreSession'],['p','(); '],['c','// keychain'],'\n',
+         ['p','  '],['f','createWindow'],['p','();'],'\n',
+         ['p','});']])}
+       <p>No test covers a failed restore. <code>auth-e2e</code> only signs in fresh.</p>`,
+      kids: [
+        { id: 'b', who: 'kp', t: '9m', body: `<p>It waits because <code>safeStorage</code> has to unlock first. We can open the window, then restore behind the splash.</p>`, kids: [
+          { id: 'c', who: 'me', t: '7m', to: 'Kevin Pei', body: `<p>Yes — after first paint, keep the splash until it resolves. ${agent} how long does it take on a cold start?</p>`, kids: [
+            { id: 'd', who: 'dot', thinking: 'Reading src/main/index.ts' },
+          ] },
+          { id: 'e', who: 'ap', t: '6m', body: `<p>If it fails we should land on sign-in, not a blank window.</p>`, kids: [] },
+        ] },
+        { id: 'f', who: 'me', t: '8m', body: `<p>Which test would you add first?</p>`, kids: [
+          { id: 'g', who: 'dot', t: '8m', body: `<p>A restore with an <strong>expired refresh token</strong>, since it's the path that blocks longest: <code>auth-e2e/restore-expired.mjs</code>.</p>`, kids: [] },
+          { id: 'h', who: 'kp', t: '5m', body: `<p>+1, and one with the keychain locked.</p>`, kids: [] },
+        ] },
+      ] },
+    { id: 'i', who: 'kp', t: '4m', body: `<p>Separate thing: the call log is full of TURN lookups failing for <code>*.turn.livekit.cloud</code>.</p>`, kids: [
+      { id: 'j', who: 'dot', t: '4m', body: `<p>Those are retries during a network change; the call reconnected.</p>`, kids: [] },
+      { id: 'k', who: 'kp', t: '3m', body: `<p>Fine for now.</p>`, kids: [] },
+    ] },
+  ] },
+};
+
+const count = (n) => n.kids?.reduce((s, k) => s + 1 + count(k), 0) ?? 0;
+const facesOf = (n, out = []) => { for (const k of n.kids ?? []) { if (!out.includes(k.who)) out.push(k.who); facesOf(k, out); } return out; };
+
+function message(n, o) {
+  if (n.thinking) return `<div class="thinking">${av('dot')}<span class="name">dot</span><span>${n.thinking}</span><span class="dots"><i></i><i></i><i></i></span></div>`;
+  const p = P[n.who];
+  const cls = ['msg', o.hover === n.id ? 'hover' : '', o.sel === n.id ? 'sel' : ''].join(' ');
+  return `<div class="${cls}">
+    <div class="head">${av(n.who)}<span class="name ${p.agent ? 'agent' : ''}">${p.name}</span><span class="time">${n.t}</span></div>
+    <div class="body">${n.body}</div>
+    ${n.src && o.sources ? `<div class="src">${n.src.map((s) => `<span>${s}</span>`).join('')}</div>` : ''}
+    <div class="acts"><button>${I.reply}Reply</button><button>${I.link}</button><button>${I.check}</button></div>
+  </div>`;
+}
+
+function inline(o) {
+  return `<div class="compose inline" style="flex-direction:column;gap:0">
+      <span class="chip">Replying to <b style="font-weight:500;color:var(--v-fg)">Anuraghav</b> <kbd>esc</kbd></span>
+      <div style="display:flex;gap:8px;width:100%;align-items:center"><div class="field typed">Agreed, sign-in with the error kept<span class="caret"></span></div><span class="send on">${I.up}</span></div>
+    </div>`;
+}
+
+// depth: how many levels of children to draw before "N more replies".
+function tree(n, depth, o, level = 0) {
+  let h = message(n, o);
+  if (o.inlineUnder === n.id) h += inline(o);
+  const kids = n.kids ?? [];
+  if (!kids.length) return h;
+  if (o.collapsed?.includes(n.id)) {
+    const f = facesOf(n);
+    return h + `<div class="kids"><div class="collapsed"><span class="plus">+</span><span class="more" style="height:auto;margin:0;padding:0"><span class="faces">${f.slice(0,3).map(av).join('')}</span></span><b>${count(n)} replies</b><span>· ${f.map((w) => P[w].name).slice(0,2).join(' and ')}</span></div></div>`;
+  }
+  if (level >= depth) {
+    const f = facesOf(n);
+    return h + `<div class="kids"><span class="rail"></span><button class="more"><span class="faces">${f.slice(0,3).map(av).join('')}</span><b>${count(n)} more ${count(n) === 1 ? 'reply' : 'replies'}</b>${I.chev}</button></div>`;
+  }
+  return h + `<div class="kids"><span class="rail ${o.hotRail === n.id ? 'hot' : ''}"></span>${kids.map((k) => tree(k, depth, o, level + 1)).join('')}</div>`;
+}
+
+function sidebar(theme) {
+  const o = { sources: false, hover: 'b', collapsed: ['i'] };
+  return `<div class="side th-${theme}">
+    <div class="top"><span class="seg"><span class="on">Discuss</span><span>Decide</span><span>Work</span></span><span class="sp"></span><span class="icbtn">${I.expand}</span></div>
+    <div class="scroll">
+      <div class="card">
+        <div class="about"><span class="part">${I.part}Electron main process</span><span class="open icbtn" style="width:22px;height:22px">${I.expand}</span></div>
+        <div class="title">${thread.title}</div>
+        ${tree(thread.root, 2, o)}
+        <div class="compose" style="margin:8px 6px 2px 0">${av('me')}<div class="field">Reply to thread…</div></div>
+      </div>
+      <div class="group">Earlier</div>
+      <div class="card closed" style="padding:0 12px"><span class="title">Canvas persistence plan</span><span class="n">4 replies</span></div>
+      <div class="card closed" style="padding:0 12px"><span class="title">hello</span><span class="n">1 reply</span></div>
+    </div>
+  </div>`;
+}
+
+function fullscreen(theme) {
+  const o = { sources: true, sel: 'e', inlineUnder: 'e', hotRail: 'b' };
+  return `<div class="full th-${theme}">
+    <div class="bar"><span class="lights"><i></i><i></i><i></i></span>
+      <span class="crumbs"><span>Voice test</span><span>/</span><span>Discuss</span><span>/</span><b>${thread.title}</b></span><span class="sp"></span>
+      <span class="btn">${I.phone}Start Call</span><span class="btn dark">Share</span><span class="icbtn">${I.collapse}</span></div>
+    <div class="cols">
+      <div class="list">
+        <div class="new">${av('me')}Start a thread…</div>
+        <div class="row on"><div class="t">${thread.title}</div><div class="m"><span class="u"></span>Electron main process · 11 replies</div></div>
+        <div class="row"><div class="t">Canvas persistence plan</div><div class="m">Supabase · 4 replies</div></div>
+        <div class="row"><div class="t">hello</div><div class="m">Vowe agent runtime · 1 reply</div></div>
+      </div>
+      <div class="main">
+        <div class="read"><div class="col">
+          <div class="kicker">Conversation on <span class="part">${I.part}Electron main process</span></div>
+          <div class="h1">${thread.title}</div>
+          ${tree(thread.root, 5, o)}
+        </div></div>
+        <div class="foot"><div class="col"><div class="compose">${av('me')}<div class="field">Reply to thread…</div></div></div></div>
+      </div>
+      <div class="rail-r">
+        <h4>About</h4><div class="box"><b>Electron main process</b><span>Show on the canvas</span></div>
+        <h4>In this thread</h4>
+        <div class="ppl"><div>${av('me')}You<em>3</em></div><div>${av('kp')}Kevin Pei<em>4</em></div><div>${av('ap')}Anuraghav<em>1</em></div><div>${av('dot')}dot<em>4</em></div></div>
+        <h4>Led to</h4><div class="ghost">Start a decision from this</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+const q = new URLSearchParams(location.search);
+const view = q.get('view') ?? 'side', theme = q.get('theme') ?? 'light';
+document.body.className = 'th-' + theme;
+document.getElementById('root').innerHTML = view === 'side' ? sidebar(theme) : fullscreen(theme);
+</script>
+</body>
+</html>

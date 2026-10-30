@@ -105,7 +105,7 @@ export class AskVowe {
     const { userId, name } = this.me();
     if (!userId || this.busy) return;
     const where = on ? `on ${on.name}` : 'on the canvas';
-    const question = `${name ?? 'Someone'} just pinned this comment ${where}: "${comment}". Reply in that comment's thread with brief, specific feedback (one to three sentences): whether it holds up against the system on the canvas, and what to check or change. Point at the part if it helps. Don't restate the comment.`;
+    const question = `${name ?? 'Someone'} just pinned this comment ${where}: "${comment}". Reply in that comment's thread. If it asks you something, answer it; when it asks for code, show the lines in a fenced block. Otherwise give brief, specific feedback (one to three sentences): whether it holds up against the system on the canvas, and what to check or change. Point at the part if it helps. Don't restate the comment.`;
     this.store.setState({ reviewing: threadId, error: null });
     let text = '';
     this.turn = agentOverIpc(this.agent).ask({

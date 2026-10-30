@@ -1,4 +1,4 @@
-import { h, Fragment, useEffect, useRef, useState, Avatar } from '../journey.js';
+import { h, Fragment, useEffect, useRef, useState, Avatar, type ComponentChildren } from '../journey.js';
 import { Icon, type IconName } from '../../../ui/icons.js';
 import { useEvidence } from '../state/semantics.js';
 import { BasisGlyph } from '../canvas/faces.js';
@@ -11,6 +11,8 @@ import { ObjectiveCard, WorkView, objectiveState } from './Work.js';
 import { DecisionDoc } from './DecisionDoc.js';
 import { Focus } from './Focus.js';
 import { MentionField, withTokens } from './Mention.js';
+import { Markdown } from './Markdown.js';
+import { countUnder, facesUnder, replyTree, type ReplyNode } from '../state/replies.js';
 import type { Scene } from '../../../../shared/canvas/index.js';
 
 import type { Depth } from '../state/ui.js';
@@ -29,7 +31,8 @@ export interface DeskAct {
   wide(on: boolean): void;
   light(parts: string[] | null): void;
   thread(id: string | null): void;
-  reply(thread: string, body: string): void;
+  /** `parent`: the reply this answers; none answers the thread. */
+  reply(thread: string, body: string, parent?: string): void;
   offer(thread: string, reply: string, accept: boolean): void;
   newThread(body: string): void;
   sign(decision: string): void;
@@ -161,7 +164,7 @@ export function Words({ text, light, act }: { text: string; light(p: string[] | 
     out.push(t.slice(last));
     return out;
   };
-  return <>{withTokens(text, refs, act)}</>;
+  return <Markdown text={text} words={(t) => withTokens(t, refs, act)} />;
 }
 
 export const DEC_STATE: Record<Decision['state'], string> = { suggested: 'Suggested', draft: 'Draft', review: 'In review', agreed: 'Agreed', superseded: 'Superseded', dismissed: 'Dismissed' };
@@ -333,7 +336,7 @@ export function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
       <div class="nx-fthread-main">
         <span class="nx-eyebrow">Conversation · {ABOUT_WORD[t.about.kind] ? `on ${ABOUT_WORD[t.about.kind]}` : 'on the canvas'}</span>
         <h2>{t.about.name}</h2>
-        <ThreadCard t={t} p={{ ...p, openThread: t.id }} inline />
+        <ThreadCard t={t} p={{ ...p, openThread: t.id }} inline deep />
       </div>
       <aside class="nx-margin">
         <div class="nx-rsec">
@@ -540,7 +543,7 @@ function ThreadMenu({ t, p, at, onClose }: { t: Thread; p: DeskProps; at: { x: n
   );
 }
 
-export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim?: boolean; inline?: boolean }) {
+export function ThreadCard({ t, p, dim, inline, deep }: { t: Thread; p: DeskProps; dim?: boolean; inline?: boolean; deep?: boolean }) {
   const { nameOf, agentName } = useNames();
   const { rec, me, act } = p;
   const expanded = inline || p.openThread === t.id;
@@ -574,7 +577,7 @@ export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim
             {t.replies.length > 1 ? <span class="rp-cm-replies"><span class="rp-avstack">{[...new Set(t.replies.slice(1).map((r) => r.by))].map((id) => <Who key={id} id={id} size={16} />)}</span>{repliesLine(t)}</span> : <span class="rp-cm-replies rp-quiet">No replies</span>}
             {t.presence ? <span class="rp-pres rp-busy"><Who id={t.presence.personId} size={16} />{nameOf(t.presence.personId)} is {t.presence.mode === 'typing' ? 'writing' : 'reading'}</span> : offer && !expanded ? <span class="nx-offer-tag">{agentName()} suggests a decision</span> : null}
           </div>
-          {expanded ? <ThreadReplies t={t} p={p} /> : null}
+          {expanded ? <ThreadReplies t={t} p={p} deep={deep} /> : null}
         </div>
       </div>
     </div>
@@ -582,15 +585,86 @@ export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim
 }
 
 /** An open conversation's replies, someone writing, the reply field and where it points. */
-function ThreadReplies({ t, p }: { t: Thread; p: DeskProps }) {
-  const { agentName } = useNames();
+/** How many levels of replies show before "N more replies": the sidebar keeps two, full screen five. */
+const DEPTH = { side: 2, full: 5 };
+
+function ThreadReplies({ t, p, deep }: { t: Thread; p: DeskProps; deep?: boolean }) {
+  const { agentName, nameOf } = useNames();
   const { rec, me, act } = p;
   const [text, setText] = useState('');
+  // The reply being answered, its draft, the branches folded away, and those opened past the depth.
+  const [to, setTo] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [folded, setFolded] = useState<string[]>([]);
+  const [opened, setOpened] = useState<string[]>([]);
   const parts = partsOf(t.about, rec);
+  const tree = replyTree(t.replies);
+  const depth = deep ? DEPTH.full : DEPTH.side;
+  // The agent writing shows under the message it's answering; anyone else writing, at the end.
+  const agentUnder = t.presence?.personId === AGENT && t.presence.mode === 'typing' ? t.presence.under ?? '' : null;
+  const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  const thinking = <div class="nx-thinking" role="status"><Who id={AGENT} size={18} /><b>{agentName()}</b><span>is replying</span><span class="rp-dots"><i /><i /><i /></span></div>;
+
+  const node = (n: ReplyNode, level: number): ComponentChildren => {
+    const id = n.r.id;
+    const under = countUnder(n);
+    const faces = facesUnder(n);
+    const answering = agentUnder === id;
+    let below: ComponentChildren = null;
+    if (folded.includes(id) && under) {
+      below = (
+        <div class="nx-kids">
+          <button type="button" class="nx-folded" onClick={() => setFolded(toggle(folded, id))}>
+            <span class="nx-plus" aria-hidden="true">+</span><span class="nx-faces">{faces.slice(0, 3).map((w) => <Who key={w} id={w} size={16} />)}</span>
+            <b>{under} {under === 1 ? 'reply' : 'replies'}</b><span>· {faces.slice(0, 2).map((w) => (w === me ? 'You' : nameOf(w))).join(' and ')}</span>
+          </button>
+        </div>
+      );
+    } else if (under && level >= depth && !opened.includes(id)) {
+      below = (
+        <div class="nx-kids">
+          <span class="nx-rail" aria-hidden="true" />
+          <button type="button" class="nx-more" onClick={() => setOpened(toggle(opened, id))}>
+            <span class="nx-faces">{faces.slice(0, 3).map((w) => <Who key={w} id={w} size={16} />)}</span>
+            <b>{under} more {under === 1 ? 'reply' : 'replies'}</b><Icon name="chevron-r" />
+          </button>
+        </div>
+      );
+    } else if (under || answering) {
+      // Opening a branch past the depth starts its count again, as a thread of its own.
+      const next = opened.includes(id) ? 1 : level + 1;
+      below = (
+        <div class="nx-kids">
+          {under ? <button type="button" class="nx-rail" aria-label={`Fold ${under} ${under === 1 ? 'reply' : 'replies'}`} onClick={() => setFolded(toggle(folded, id))} /> : <span class="nx-rail" aria-hidden="true" />}
+          {n.kids.map((k) => node(k, next))}
+          {answering ? thinking : null}
+        </div>
+      );
+    }
+    return (
+      <div key={id} class="nx-node">
+        <ReplyRow r={n.r} t={t} p={p} sel={to === id} onReply={() => { setTo(to === id ? null : id); setFolded(folded.filter((x) => x !== id)); }} />
+        {to === id ? (
+          <div class="nx-inreply">
+            <span class="nx-replying">Replying to <b>{n.r.by === me ? 'yourself' : nameOf(n.r.by)}</b><kbd>esc</kbd></span>
+            <label class="rp-cm-reply">
+              <Who id={me} /><span class="rp-sr">Reply to {nameOf(n.r.by)}</span>
+              <MentionField p={p} autoFocus placeholder={rec.vowe ? `Reply, or @${agentName()} to ask it` : 'Reply'} value={draft}
+                onInput={setDraft} onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setTo(null); } }}
+                onSubmit={(b) => { act.reply(t.id, b, id); setDraft(''); setTo(null); }} />
+            </label>
+          </div>
+        ) : null}
+        {below}
+      </div>
+    );
+  };
+
   return (
-    <div class="rp-cm-thread">
-      {t.replies.slice(1).map((r) => <ReplyRow key={r.id} r={r} t={t} p={p} />)}
-      {t.presence?.mode === 'typing' ? <div class="rp-cm-typing"><Who id={t.presence.personId} /><span class="rp-bubble"><span class="rp-dots"><i /><i /><i /></span></span></div> : null}
+    <div class={'rp-cm-thread nx-tree' + (deep ? ' nx-deep' : '')}>
+      {tree.map((n) => node(n, 1))}
+      {agentUnder === '' ? thinking : null}
+      {t.presence?.mode === 'typing' && agentUnder === null ? <div class="rp-cm-typing"><Who id={t.presence.personId} /><span class="rp-bubble"><span class="rp-dots"><i /><i /><i /></span></span></div> : null}
       <label class="rp-cm-reply">
         <Who id={me} /><span class="rp-sr">Reply</span>
         <MentionField p={p} placeholder={rec.vowe ? `Reply, @${agentName()} to ask it, or just say it on the call` : 'Reply, or @ someone in the room'} value={text}
@@ -604,11 +678,12 @@ function ThreadReplies({ t, p }: { t: Thread; p: DeskProps }) {
   );
 }
 
-function ReplyRow({ r, t, p }: { r: Reply; t: Thread; p: DeskProps }) {
+function ReplyRow({ r, t, p, sel, onReply }: { r: Reply; t: Thread; p: DeskProps; sel?: boolean; onReply?(): void }) {
   const { nameOf } = useNames();
   const { me, act } = p;
   return (
-    <div class={`rp-cm-r${r.fresh ? ' rp-fresh' : ''}${r.by === AGENT ? ' nx-vowe-r' : ''}`}>
+    <div class={`rp-cm-r${r.fresh ? ' rp-fresh' : ''}${r.by === AGENT ? ' nx-vowe-r' : ''}${sel ? ' nx-sel' : ''}`}>
+      {onReply ? <span class="nx-acts"><button type="button" class="nx-act" aria-pressed={sel} onClick={onReply}><Icon name="reply" />Reply</button></span> : null}
       <span class="rp-cm-head"><Who id={r.by} /><b>{r.by === me ? 'You' : nameOf(r.by)}</b><span class="rp-cm-time">{r.ago}</span>{r.spoken ? <span class="nx-spoken">said in the call</span> : null}</span>
       <span class="rp-cm-body" onPointerEnter={() => r.points && act.light(r.points)} onPointerLeave={() => r.points && act.light(null)}><Words text={r.body} light={act.light} act={act} /></span>
       {r.evidence ? <Evidence ids={r.evidence} /> : null}
