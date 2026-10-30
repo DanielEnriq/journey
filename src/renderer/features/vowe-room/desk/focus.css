@@ -9,25 +9,26 @@
 .nx-fo-list { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--v-bg); box-shadow: inset -1px 0 0 var(--v-line); }
 .nx-fo-head { flex: none; padding: 18px 20px 0 24px; }
 .nx-fo-name { font: 600 20px/1.15 var(--v-font-display); letter-spacing: -.016em; color: var(--v-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nx-fo-repo { margin-top: 5px; font: 400 10.5px/1 var(--v-font-mono); letter-spacing: .04em; color: var(--v-fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nx-fo-tabs { display: flex; gap: 18px; margin-top: 16px; box-shadow: inset 0 -1px 0 var(--v-line); }
-.nx-fo-tab { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0; border: 0; background: transparent; color: var(--v-fg-3); font: 500 13px/1 var(--v-font-sans); cursor: pointer; }
+.nx-fo-repo { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; line-height: 1; color: var(--v-fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-fo-repo svg { flex: none; width: 12px; height: 12px; }
+.nx-fo-tabs { display: flex; gap: 2px; margin: 14px 0 0 -4px; padding-bottom: 10px; box-shadow: inset 0 -1px 0 var(--v-line); }
+.nx-fo-tab { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 7px; border: 0; background: transparent; color: var(--v-fg-3); font: 500 13px/1 var(--v-font-sans); cursor: pointer; }
 .nx-fo-tab:hover, .nx-fo-tab[aria-selected="true"] { color: var(--v-fg); }
-.nx-fo-tab[aria-selected="true"]::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.5px; background: var(--v-fg); }
-.nx-fo-tab:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); border-radius: 4px; }
-.nx-fo-n { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--v-fg-4); }
-.nx-fo-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--v-signal); }
+.nx-fo-tab[aria-selected="true"] { background: var(--v-surface-raised); box-shadow: var(--v-shadow-1); }
+.nx-fo-tab:hover:not([aria-selected="true"]) { background: var(--v-surface-hover); }
+.nx-fo-tab:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); }
+.nx-fo-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
 .nx-fo-items { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 8px 0 24px; }
 .nx-fo-row { position: relative; display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 11px 20px 12px 24px; border: 0; background: transparent; text-align: left; font: inherit; color: var(--v-fg-2); cursor: pointer; }
 .nx-fo-row:hover { background: var(--v-surface-hover); }
 .nx-fo-row:focus-visible { outline: 0; box-shadow: inset var(--v-focus-ring); }
 .nx-fo-row[aria-selected="true"] { background: var(--v-surface); }
 .nx-fo-row[aria-selected="true"]::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 1px; background: var(--v-fg); }
-.nx-fo-k { display: flex; align-items: center; gap: 6px; font: 500 10px/1.2 var(--v-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--v-fg-3); }
+.nx-fo-k { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.2; color: var(--v-fg-3); }
 .nx-fo-k.is-needs { color: var(--v-signal-fg); }
-.nx-fo-t { font-size: 13.5px; line-height: 1.4; color: var(--v-fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nx-fo-t { font-size: 13px; line-height: 1.4; color: var(--v-fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .nx-fo-m { font-size: 12px; color: var(--v-fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nx-fo-h { display: block; padding: 18px 24px 6px; font: 500 10px/1 var(--v-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--v-fg-4); }
+.nx-fo-h { display: block; padding: 18px 24px 6px; font-size: 12px; font-weight: 600; line-height: 1; color: var(--v-fg-3); }
 .nx-fo-compose { margin: 6px 20px 8px 24px; }
 .nx-fo-add { display: block; margin: 6px 24px 8px; }
 .nx-fo-pad { padding: 6px 20px 10px 24px; }
@@ -64,3 +65,17 @@ button.nx-fo-crumb:focus-visible { outline: 0; box-shadow: var(--v-focus-ring); 
 /* Narrower windows: the list narrows; documents stack their margin under the page. */
 .room-screen .win.nx-fws.nx-small .nx-fo { grid-template-columns: 272px minmax(0, 1fr); }
 .room-screen .win.nx-fws.nx-small .nx-fo-page .nx-docl.shell { display: block; overflow-y: auto; }
+
+/* The Discuss list is the Desk's own (DiscussList): the same field, sections, rows and fold, set on the list's
+   24px edge. The open thread's row is marked like a selected row. */
+.nx-fo-items > .nx-compose { margin: 6px 20px 4px 24px; }
+.nx-fo-items > .tr-list, .nx-fo-items > .tr-fold { margin-left: 14px; margin-right: 10px; }
+.nx-fo-items > .nx-empty3 { margin: 16px 24px; }
+.nx-fo-items .tr-row[aria-current="true"] { background: var(--v-surface-selected); }
+
+/* The canvas sits under Focus; its tool rail must not show through while the Desk's edge opens. */
+.room-screen .win.nx-fws .surface > .tools { visibility: hidden; }
+.nx-fo-items > .nx-fo-add { display: block; margin: 6px 24px 8px; }
+.nx-fo-empty > .nx-empty2 { margin-top: 72px; padding-top: 0; padding-bottom: 0; box-shadow: none; }
+.nx-fo-empty > .nx-empty3 { margin: 72px auto 0; padding: 0 48px; max-width: 560px; }
+.nx-fo-empty > .nx-fo-act { margin-top: 12px; }

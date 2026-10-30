@@ -7,7 +7,8 @@ import type { Inspect, Tab } from '../state/ui.js';
 
 export function pickThread(rec: VoweRecord, me: string, current: string | null): Thread | null {
   const open = rec.threads.filter((t) => t.status === 'open');
-  return open.find((t) => t.id === current) ?? open.find((t) => t.waiting === me) ?? open[open.length - 1] ?? null;
+  // One you opened stays open, resolved or not (the resolved fold opens those, and resolving keeps it in view).
+  return rec.threads.find((t) => t.id === current) ?? open.find((t) => t.waiting === me) ?? open[open.length - 1] ?? null;
 }
 
 /** A decision in review that you were asked to sign and haven't signed at this version. */

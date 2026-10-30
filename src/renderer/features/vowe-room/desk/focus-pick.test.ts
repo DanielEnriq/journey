@@ -13,11 +13,12 @@ const work = (id: string, o: Partial<Work> = {}): Work =>
 const rec = (o: Partial<VoweRecord>): VoweRecord => ({ threads: [], decisions: [], work: [], ...o }) as unknown as VoweRecord;
 
 describe('Focus pickers', () => {
-  it('threads: what you had open, else what waits on you, else the newest; never a resolved one', () => {
+  it('threads: what you had open (even resolved), else what waits on you, else the newest open one', () => {
     const r = rec({ threads: [thread('a'), thread('b', { waiting: ME }), thread('c'), thread('d', { status: 'resolved' })] });
     assert.equal(pickThread(r, ME, 'c')?.id, 'c');
     assert.equal(pickThread(r, ME, null)?.id, 'b');
-    assert.equal(pickThread(r, ME, 'd')?.id, 'b');
+    assert.equal(pickThread(r, ME, 'd')?.id, 'd');
+    assert.equal(pickThread(r, ME, 'gone')?.id, 'b');
     assert.equal(pickThread(rec({ threads: [thread('a'), thread('c')] }), ME, null)?.id, 'c');
     assert.equal(pickThread(rec({}), ME, null), null);
   });

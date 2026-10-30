@@ -20,6 +20,7 @@ import type { Depth } from '../state/ui.js';
 import { useNames, type Names } from '../state/directory.js';
 import type { Capabilities } from '../contracts/services.js';
 import { mayWrite } from '../state/permissions.js';
+import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 
 // The Desk, Direction A: Journey's "Where we are" column with three surfaces, Discuss, Decide and Work.
 // Each is a human surface first (threads, decisions, work items people own) that Vowe takes part in.
@@ -341,27 +342,33 @@ export function AgentName({ p }: { p: DeskProps }) {
 export function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
   const { agentName } = useNames();
   const { rec, act } = p;
-  const parts = partsOf(t.about, rec);
+  const parts = threadParts(t, rec);
   const led = rec.decisions.filter((d) => d.from === t.id);
   return (
     <div class="nx-fthread">
       <div class="nx-fthread-main">
         <span class="tr-subs" onPointerEnter={() => parts.length && act.light(parts)} onPointerLeave={() => parts.length && act.light(null)}><Subject a={t.about} lit={parts.length > 0} />{t.linked?.map((l, i) => <Subject key={i} a={l} />)}</span>
-        <h2>{t.title ?? t.about.name}</h2>
+        {t.title ? <h2>{t.title}</h2> : null}
         <ThreadCard t={t} p={{ ...p, openThread: t.id }} inline deep />
       </div>
       <aside class="nx-margin">
         <button type="button" class={'tr-resolve' + (t.status === 'resolved' ? ' on' : '')} aria-pressed={t.status === 'resolved'} onClick={() => act.resolveThread(t.id, t.status === 'resolved')}><Icon name="check" size={14} />{t.status === 'resolved' ? 'Resolved' : 'Resolve'}</button>
-        <div class="nx-rsec">
-          <span class="nx-rk2">About</span>
-          {parts.length ? <button type="button" class="nx-rc" onClick={() => act.light(parts)}><span><b>{t.about.name}</b></span><em>Show on the canvas</em></button> : <p class="nx-quiet">Not pinned to a part.</p>}
-          {t.linked?.map((l, i) => <span key={i} class="nx-quiet">Also about {l.name}</span>)}
-        </div>
-        <div class="nx-rsec">
-          <span class="nx-rk2">Led to</span>
-          {led.length ? led.map((d) => <button key={d.id} type="button" class="nx-rc" onClick={() => act.inspect({ kind: 'decision', id: d.id })}><span><b>{d.title}</b></span><em>Decision v{d.version} · {DEC_STATE[d.state].toLowerCase()}</em></button>)
-            : <><p class="nx-quiet">Nothing yet.</p><button type="button" class="nx-btn" disabled={!mayWrite(p.role)} onClick={() => act.draftFrom(t.id)}>Start a decision from this</button></>}
-        </div>
+        {parts.length ? (
+          <div class="nx-rsec">
+            <span class="nx-rk2">On the canvas</span>
+            {p.scene?.nodes.length ? (
+              <button type="button" class="nx-fs-glimpse" aria-label="Show on the canvas" onPointerEnter={() => act.light(parts)} onPointerLeave={() => act.light(null)} onClick={() => act.light(parts)}>
+                <SceneGlimpse scene={p.scene} lit={parts} height={180} />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {led.length ? (
+          <div class="nx-rsec">
+            <span class="nx-rk2">Led to</span>
+            {led.map((d) => <button key={d.id} type="button" class="nx-rc" onClick={() => act.inspect({ kind: 'decision', id: d.id })}><span><AboutGlyph a="decision" /><b>{d.title}</b></span><em>v{d.version} · {DEC_STATE[d.state].toLowerCase()}</em></button>)}
+          </div>
+        ) : <button type="button" class="nx-btn nx-fs-draft" disabled={!mayWrite(p.role)} onClick={() => act.draftFrom(t.id)}><AboutGlyph a="decision" />Draft a decision</button>}
       </aside>
     </div>
   );
@@ -375,26 +382,31 @@ export function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
  * bottom. Opening one swaps the list for the thread.
  */
 function DiscussTab(p: DeskProps) {
+  const open = p.rec.threads.find((t) => t.id === p.openThread);
+  if (open) return <ThreadOpen key={open.id} t={open} p={p} />;
+  return <section class="rp-sec nx-tabbody"><DiscussList p={p} /></section>;
+}
+
+/** The field and the sectioned threads, the same in the Desk and in full screen (where the open one stays marked). */
+export function DiscussList({ p }: { p: DeskProps }) {
   const { agentName } = useNames();
   const { rec, me, act, focus } = p;
   const [draft, setDraft] = useState('');
-  const [showDone, setShowDone] = useState(false);
-  const open = rec.threads.find((t) => t.id === p.openThread);
-  if (open) return <ThreadOpen key={open.id} t={open} p={p} />;
+  const [showDone, setShowDone] = useState(() => rec.threads.some((t) => t.id === p.openThread && t.status === 'resolved'));
   const live = rec.threads.filter((t) => t.status === 'open');
   const done = rec.threads.filter((t) => t.status === 'resolved').reverse();
   const view = p.scene ? new Set(p.scene.nodes.map((n) => n.component)) : null;
   const secs = sections(live, { me, parts: (t) => partsOf(t.about, rec), focus: focus?.id, view });
   const words: Record<SectionKey, string> = { needs: 'Needs you', here: focus ? `On ${focus.name}` : view ? 'In this view' : 'On the canvas', rest: 'Everything else' };
   return (
-    <section class="rp-sec nx-tabbody">
+    <>
       <label class="rp-cm-reply nx-compose">
         <Who id={me} /><span class="rp-sr">New thread</span>
         <Subject a={focus ? { kind: 'part', id: focus.id, name: focus.name } : { kind: 'part', id: 'canvas', name: 'Canvas' }} />
-        <MentionField p={p} placeholder={rec.vowe ? `Start a thread, or @${agentName()} to ask it` : 'Start a thread'} value={draft}
+        <MentionField p={p} placeholder={rec.vowe ? `Start a thread, or @${agentName()} to ask it` : 'Start a thread'} value={draft} disabled={!mayWrite(p.role)}
           onInput={setDraft} onSubmit={(t) => { act.newThread(t); setDraft(''); }} />
       </label>
-      {!live.length && !done.length ? <p class="nx-quiet">No conversations yet.</p> : null}
+      {!live.length && !done.length ? <p class="nx-empty3"><AboutGlyph a="part" />No threads yet</p> : null}
       <ThreadList secs={secs.map((x) => ({ label: secs.length > 1 || x.key !== 'rest' ? words[x.key] : null, key: x.key, threads: x.threads }))} p={p} />
       {done.length ? (
         <>
@@ -402,7 +414,7 @@ function DiscussTab(p: DeskProps) {
           {showDone ? <ThreadList secs={[{ key: 'done', label: null, threads: done }]} p={p} /> : null}
         </>
       ) : null}
-    </section>
+    </>
   );
 }
 
@@ -468,6 +480,7 @@ function ThreadRow({ t, p, onMenu }: { t: Thread; p: DeskProps; onMenu(e: MouseE
     : led ? <span class="tr-st done"><AboutGlyph a="decision" />Led to decision v{led.version}</span> : null;
   return (
     <div role="listitem" data-id={t.id} onContextMenu={onMenu} onPointerEnter={() => light(true)} onPointerLeave={() => light(false)}
+      aria-current={p.openThread === t.id ? 'true' : undefined}
       class={'tr-row' + (t.replies.some((r) => r.fresh) ? ' unread' : '') + (t.status === 'resolved' ? ' done' : '') + (p.flash === `thread:${t.id}` ? ' nx-flash' : '')}>
       <button type="button" class="tr-main" onClick={() => act.thread(t.id)} onFocus={() => light(true)} onBlur={() => light(false)}>
         <span class="tr-top"><span class="tr-subs"><Subject a={t.about} more={t.linked?.length} /></span><span class="tr-time">{last.ago}</span></span>
@@ -595,10 +608,10 @@ export function ThreadCard({ t, p, dim, inline, deep }: { t: Thread; p: DeskProp
             <span class="rp-cm-body"><Words text={root.body} light={act.light} act={act} /></span>
             {root.evidence ? <Evidence ids={root.evidence} /> : null}
           </button>
-          <div class="rp-cm-foot">
+          {inline ? null : <div class="rp-cm-foot">
             {t.replies.length > 1 ? <span class="rp-cm-replies"><span class="rp-avstack">{[...new Set(t.replies.slice(1).map((r) => r.by))].map((id) => <Who key={id} id={id} size={16} />)}</span>{repliesLine(t)}</span> : <span class="rp-cm-replies rp-quiet">No replies</span>}
             {t.presence ? <span class="rp-pres rp-busy"><Who id={t.presence.personId} size={16} />{nameOf(t.presence.personId)} is {t.presence.mode === 'typing' ? 'writing' : 'reading'}</span> : offer && !expanded ? <span class="nx-offer-tag">{agentName()} suggests a decision</span> : null}
-          </div>
+          </div>}
           {expanded ? <ThreadReplies t={t} p={p} deep={deep} /> : null}
         </div>
       </div>
@@ -718,7 +731,7 @@ function ThreadReplies({ t, p, deep }: { t: Thread; p: DeskProps; deep?: boolean
       {t.presence?.mode === 'typing' && agentUnder === null ? <div class="rp-cm-typing"><Who id={t.presence.personId} /><span class="rp-bubble"><span class="rp-dots"><i /><i /><i /></span></span></div> : null}
       <label class="rp-cm-reply">
         <Who id={me} /><span class="rp-sr">Reply</span>
-        <MentionField p={p} placeholder={rec.vowe ? `Reply, @${agentName()} to ask it, or just say it on the call` : 'Reply, or @ someone in the room'} value={text}
+        <MentionField p={p} placeholder={rec.vowe ? `Reply, or @${agentName()} to ask it` : 'Reply, or @ someone in the room'} value={text}
           onInput={setText} onSubmit={(b) => { act.reply(t.id, b); setText(''); }} />
       </label>
       <span class="nx-thread-foot">
@@ -796,18 +809,17 @@ export function NewDecision({ p, done, from }: { p: DeskProps; done(): void; fro
 
 export function DecideEmpty({ p, write }: { p: DeskProps; write(): void }) {
   const { nameOf } = useNames();
-  const { rec, act } = p;
+  const { rec, act, me } = p;
   const threads = rec.threads.filter((t) => t.status === 'open' && (t.about.kind === 'part' || t.about.kind === 'scenario')).slice(0, 3);
   return (
     <div class="nx-empty2">
-      <b>No decisions yet</b>
-      <p>A decision is what the room agrees to do and why. It counts once the people asked have signed it.</p>
+      <p class="nx-empty3"><AboutGlyph a="decision" />No decisions yet</p>
       <button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={write}>Write a decision</button>
-      {threads.length ? <span class="nx-empty2-k">Or start from a conversation</span> : null}
+      {threads.length ? <span class="tr-h">From a thread</span> : null}
       {threads.map((t) => (
         <div key={t.id} class="nx-empty2-row">
-          <span><b>{t.about.name}</b> · {nameOf(t.replies[0].by)}: {t.replies[t.replies.length - 1].body.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1').slice(0, 64)}…</span>
-          <button type="button" class="nx-textbtn strong" onClick={() => act.draftFrom(t.id)}>Start a draft from this</button>
+          <span class="nx-empty2-t"><Subject a={t.about} /><span><b>{t.replies[0].by === me ? 'You' : nameOf(t.replies[0].by)}</b> {t.title ?? preview(t.replies[0].body)}</span></span>
+          <button type="button" class="nx-btn" disabled={!mayWrite(p.role)} onClick={() => act.draftFrom(t.id)}>Draft</button>
         </div>
       ))}
     </div>
@@ -857,11 +869,10 @@ function WorkTab(p: DeskProps) {
       {composing ? <NewWork p={p} done={() => setComposing(false)} /> : null}
       {!list.length && !composing ? (
         <div class="nx-empty2">
-          <b>No work yet</b>
-          <p>Work is an objective with a plan. A person or a connected coding agent does it, and its PRs stay together here.{noAgent ? ' No coding agent is connected to this room, so a person would do it.' : ''}</p>
+          <p class="nx-empty3"><AboutGlyph a="work" />No work yet</p>
           <button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>New work</button>
-          {ready.length ? <span class="nx-empty2-k">Or start from a signed decision</span> : null}
-          {ready.map((d) => <div key={d.id} class="nx-empty2-row"><span><b>{d.title}</b> · v{d.version}</span><button type="button" class="nx-textbtn strong" onClick={() => act.prepareWork(d.id)}>Plan it</button></div>)}
+          {ready.length ? <span class="tr-h">From a signed decision</span> : null}
+          {ready.map((d) => <div key={d.id} class="nx-empty2-row"><span class="nx-empty2-t"><Subject a={{ kind: 'decision', id: d.id, name: d.title }} /></span><button type="button" class="nx-btn" onClick={() => act.prepareWork(d.id)}>Plan it</button></div>)}
         </div>
       ) : null}
       {list.map((w) => <ObjectiveCard key={w.id} w={w} p={p} dim={!rel(w)} />)}
@@ -994,7 +1005,7 @@ function Inspector(p: DeskProps) {
   return (
     <div class={'nx-inspector' + (p.narrow ? ' narrow' : '') + (p.depth === 'focus' ? ' focus' : '')} aria-label={d ? 'Decision' : 'Work'}>
       <div class="nx-ins-bar">
-        <button type="button" class="nx-back" title={`All of ${inspect.kind === 'decision' ? 'Decide' : 'Work'}`} onClick={() => act.inspect(null)}>{inspect.kind === 'decision' ? 'Decide' : 'Work'}</button><i class="nx-crumbsep">/</i>
+        <button type="button" class="nx-back tr-back" title={`All of ${inspect.kind === 'decision' ? 'Decide' : 'Work'}`} onClick={() => act.inspect(null)}><Icon name="chevron-l" size={14} />{inspect.kind === 'decision' ? 'Decide' : 'Work'}</button><i class="nx-crumbsep">/</i>
         <span class="nx-ins-crumb">{d ? d.title : w?.title}</span>
       </div>
       {d ? <DecisionDoc d={d} p={p} /> : w ? <WorkView w={w} p={p} /> : null}
