@@ -981,7 +981,7 @@ body.nx-resizing .room-screen .win{transition:none}
 .room-screen .win.nx-fws.nx-small .nx-ins-bar{right:calc(178px + 34%)}
 
 /* Back / forward, after the rooms and new-room controls */
-.room-screen .win.nx-fws .nx-ins-bar{left:226px}
+.room-screen .win.nx-fws .nx-ins-bar{left:max(226px,calc(var(--left-column) + 20px))}
 .room-screen .nx-crumbsep{font-style:normal;color:var(--v-fg-4);margin:0 -2px}
 
 /* Full-screen workspace: rail · list · item */
@@ -1341,3 +1341,11 @@ button.nx-rail:hover::before,button.nx-rail:focus-visible::before{background:var
 .tr-newf textarea{display:block;width:100%;box-sizing:border-box;min-height:69px;max-height:min(40vh,320px);margin:0;padding:6px 0 0;border:0;background:none;outline:0;font:inherit;font-size:14px;line-height:21px;color:var(--v-fg);resize:none;overflow-y:auto}
 .tr-newf textarea::placeholder{color:var(--v-fg-4)}
 .nx-empty2.bare{margin:14px 0;padding:0;box-shadow:none}
+
+/* Vowe's answer as it's written: an ordinary reply whose head says what it's doing, with a caret while words come. */
+.nx-writing .rp-cm-head.nx-thinking{height:auto;padding-left:0;font-size:inherit;color:inherit}
+.nx-writing .rp-cm-head.nx-thinking b{font-weight:inherit;color:inherit}
+.nx-writing .rp-cm-head.nx-thinking > span:not(.nx-spin){color:var(--v-fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.nx-writing.has-text .rp-cm-body .nx-md > :last-child::after{content:'';display:inline-block;width:2px;height:1em;margin-left:2px;vertical-align:-2px;border-radius:1px;background:var(--v-info);animation:nx-caret 1s steps(2,start) infinite}
+@keyframes nx-caret{to{visibility:hidden}}
+@media (prefers-reduced-motion:reduce){.nx-writing.has-text .rp-cm-body .nx-md > :last-child::after{animation:none}}

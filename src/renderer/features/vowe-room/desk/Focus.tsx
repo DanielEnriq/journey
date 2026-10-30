@@ -117,8 +117,12 @@ function Empty({ kind, scene, act }: { kind: Tab; scene: Scene | null; act?: [st
 }
 
 /** Room / Section / Item, for the band while Focus is open. */
-export function focusCrumbs(p: Pick<DeskProps, 'rec' | 'me' | 'fsec' | 'fwrite' | 'openThread' | 'inspect'>): { section: string; item: string | null; thread: string | null } {
-  if (p.fwrite) return { section: SECTION[p.fwrite], item: NEW_WORD[p.fwrite], thread: null };
+export interface Crumbs { tab: Tab; section: string; item: string | null; current: string | null; thread: string | null }
+export function focusCrumbs(p: Pick<DeskProps, 'rec' | 'me' | 'fsec' | 'fwrite' | 'openThread' | 'inspect'>): Crumbs {
+  if (p.fwrite) return { tab: p.fwrite, section: SECTION[p.fwrite], item: NEW_WORD[p.fwrite], current: null, thread: null };
   const at = focusTarget(p.rec, p.me, { fsec: p.fsec, openThread: p.openThread, inspect: p.inspect });
-  return { section: SECTION[at.tab], item: at.thread ? threadTitle(at.thread) : at.decision?.title ?? at.work?.title ?? null, thread: at.thread?.id ?? null };
+  return {
+    tab: at.tab, section: SECTION[at.tab], item: at.thread ? threadTitle(at.thread) : at.decision?.title ?? at.work?.title ?? null,
+    current: at.thread?.id ?? at.decision?.id ?? at.work?.id ?? null, thread: at.thread?.id ?? null,
+  };
 }

@@ -59,8 +59,9 @@ export interface Thread {
   linked?: About[];
   /** Who it's waiting on, if anyone. */
   waiting?: PersonId;
-  /** `under`: the reply being answered, when it's one (an agent answering shows beneath it). */
-  presence?: { personId: PersonId; mode: 'typing' | 'reading'; under?: string };
+  /** `under`: the reply being answered, when it's one (an agent answering shows beneath it). `draft` and `doing`,
+   *  live from the asker's own turn: the agent's answer so far, and what it's doing in words. */
+  presence?: { personId: PersonId; mode: 'typing' | 'reading'; under?: string; draft?: string; doing?: string };
   /** The passage a comment is anchored to (plan steps, decision lines). */
   quote?: string;
   at?: { x: number; y: number };

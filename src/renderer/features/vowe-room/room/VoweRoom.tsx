@@ -6,7 +6,7 @@ import { RoomTitle } from '../../room/shell.js';
 import { Surface, type PartMarks } from '../canvas/Surface.js';
 import { Desk, type DeskAct } from '../desk/Desk.js';
 import { focusCrumbs } from '../desk/Focus.js';
-import { threadTitle } from '../desk/focus-pick.js';
+import { FocusCrumbs } from '../desk/Crumbs.js';
 import { doingOf } from '../state/agent-doing.js';
 import { MentionSources } from '../desk/Mention.js';
 import type { MentionItem } from '../state/mentions.js';
@@ -217,21 +217,8 @@ export function VoweRoom(p: VoweRoomProps) {
             </Surface>
           </main>
           {wide && sheet ? <button type="button" class="nx-sheet-edge" aria-label="Back to the canvas" title="Back to the canvas · Esc" onClick={() => p.act.depth('compact')}><span>‹ Canvas</span></button> : null}
-          {crumbs ? (
-            <nav class="nx-fo-crumbs" aria-label="Where you are">
-              <button type="button" class="nx-fo-crumb" data-tip="Back to the canvas · Esc" onClick={() => p.act.depth(exitDepth(u))}>{p.room.name}</button>
-              <i aria-hidden="true">/</i><span class="nx-fo-crumb is-sec">{crumbs.section}</span>
-              {crumbs.item ? <><i aria-hidden="true">/</i><span class="nx-fo-crumb is-item" aria-current="page">{crumbs.item}</span></> : null}
-              {doing ? h(away ? 'button' : 'span', {
-                class: 'nx-fo-agent', ...(away ? { type: 'button', onClick: () => p.act.thread(away.id) } : {}), 'data-tip': doing.tip,
-                onPointerEnter: doing.parts ? () => p.act.light(doing.parts!) : undefined, onPointerLeave: doing.parts ? () => p.act.light(null) : undefined,
-              }, <>
-                <i class="nx-agentmark" aria-hidden="true"></i><b>{n.agentName()}</b>
-                {away ? <><i aria-hidden="true">›</i><span class="nx-fo-agent-at">{threadTitle(away)}</span></> : null}
-                <i aria-hidden="true">›</i><span>{doing.verb}</span>{doing.what ? <span class="nx-fo-agent-on">{doing.what}</span> : null}
-              </>) : null}
-            </nav>
-          ) : null}
+          {crumbs ? <FocusCrumbs room={p.room.name} crumbs={crumbs} rec={rec} act={p.act} back={() => p.act.depth(exitDepth(u))}
+            agent={doing ? { name: n.agentName(), doing, away } : null} /> : null}
           <aside class="desk" aria-label="Where the room is" aria-hidden={!u.deskOpen}>
             {u.deskOpen && !sheet && !focusMode ? <div class="nx-split" role="separator" aria-orientation="vertical" aria-label="Resize the Desk" title="Drag to widen or narrow · double-click to switch" onPointerDown={startDrag} onDblClick={() => p.act.depth(depth === 'expanded' ? 'compact' : 'expanded')}><i></i></div> : null}
             <div class="desk-panel">

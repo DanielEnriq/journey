@@ -28,12 +28,15 @@ export interface AskState {
   reviewing: string | null;
   /** The tool call it's in the middle of, as the model made it; null between calls. */
   doing: { tool: string; input: unknown } | null;
+  /** A thread answer as it's written: the current step's text, which starts over when a tool call begins.
+   *  It stays after the turn, until the next, so the thread can show it until the posted reply lands. */
+  draft: string;
 }
 
 const NOTHING = { selected: [], circled: [], names: [] };
 
 export class AskVowe {
-  readonly store = new Store<AskState>({ open: false, about: NOTHING, question: null, answer: '', status: 'idle', error: null, approval: null, canvas: [], provider: null, reviewing: null, doing: null });
+  readonly store = new Store<AskState>({ open: false, about: NOTHING, question: null, answer: '', status: 'idle', error: null, approval: null, canvas: [], provider: null, reviewing: null, doing: null, draft: '' });
   private conversationId: string | null = null;
   private turn: VoiceTurnHandle | null = null;
   private recent: { speaker: string; text: string }[] = [];
@@ -108,7 +111,7 @@ export class AskVowe {
     if (!userId || this.busy) return;
     const where = on ? `on ${on.name}` : 'on the canvas';
     const question = `${name ?? 'Someone'} just pinned this comment ${where}: "${comment}". Reply in that comment's thread. If it asks you something, answer it; when it asks for code, show the lines in a fenced block. Otherwise give brief, specific feedback (one to three sentences): whether it holds up against the system on the canvas, and what to check or change. Point at the part if it helps. Don't restate the comment.`;
-    this.store.setState({ reviewing: threadId, error: null, doing: null });
+    this.store.setState({ reviewing: threadId, error: null, doing: null, draft: '' });
     let text = '';
     this.turn = agentOverIpc(this.agent).ask({
       roomId: this.roomId,
@@ -123,7 +126,8 @@ export class AskVowe {
       switch (e.type) {
         case 'turn.started': this.conversationId = e.conversationId; return;
         case 'text.final': text = e.text; return;
-        case 'tool.started': return this.store.setState({ doing: { tool: e.call.name, input: e.call.input } });
+        case 'text.delta': return this.store.setState({ draft: s.draft + e.delta });
+        case 'tool.started': return this.store.setState({ doing: { tool: e.call.name, input: e.call.input }, draft: '' });
         case 'tool.finished': return this.store.setState({ doing: null });
         case 'approval.requested': return this.store.setState({ open: true, approval: e.request });
         case 'canvas.applied': if (!e.result.ok) this.store.setState({ canvas: s.canvas.concat([`The canvas didn’t take one of Vowe’s changes: ${e.result.error.message}`]) }); return;

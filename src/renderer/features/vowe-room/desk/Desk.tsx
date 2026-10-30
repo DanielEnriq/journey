@@ -519,7 +519,7 @@ function ThreadRow({ t, p, onMenu }: { t: Thread; p: DeskProps; onMenu(e: MouseE
   const parts = threadParts(t, rec);
   const who = (id: string) => (id === me ? 'You' : nameOf(id));
   const light = (on: boolean) => { if (parts.length) act.light(on ? parts : null); };
-  const status = t.presence?.personId === AGENT && t.presence.mode === 'typing' ? <span class="tr-st agent">{agentName()} is replying<span class="rp-dots"><i /><i /><i /></span></span>
+  const status = t.presence?.personId === AGENT && t.presence.mode === 'typing' ? <span class="tr-st agent">{agentName()} {t.presence.doing ? `· ${t.presence.doing}` : 'is replying'}<span class="rp-dots"><i /><i /><i /></span></span>
     : t.presence ? <span class="tr-st">{who(t.presence.personId)} {t.presence.mode === 'typing' ? 'is writing' : 'is reading'}</span>
     : t.waiting === me && t.status === 'open' ? <span class="tr-st waiting">Waiting on you</span>
     : t.status === 'resolved' ? <span class="tr-st done"><Icon name="check" size={14} />Resolved</span>
@@ -683,14 +683,26 @@ function ThreadReplies({ t, p, deep }: { t: Thread; p: DeskProps; deep?: boolean
   const depth = deep ? DEPTH.full : DEPTH.side;
   // Replies that came in while the thread was open rise in; someone else's also carry a wash that fades.
   const first = useMemo(() => new Set(t.replies.map((r) => r.id)), [t.id]);
-  const arrived = (r: Reply) => (first.has(r.id) ? '' : r.by === me ? 'mine' : 'theirs');
+  // Yours rises once, when you send it: the server's copy that replaces it arrives quietly.
+  const sent = useRef(new Set<string>());
+  const arrived = (r: Reply) => {
+    if (first.has(r.id)) return '';
+    if (r.by !== me) return 'theirs';
+    if (r.id.startsWith('local:')) { sent.current.add(r.body); return 'mine'; }
+    return sent.current.has(r.body) ? '' : 'mine';
+  };
   // The agent writing shows under the message it's answering; anyone else writing, at the end.
   const agentUnder = t.presence?.personId === AGENT && t.presence.mode === 'typing' ? t.presence.under ?? '' : null;
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   const asked = agentUnder ? t.replies.find((r) => r.id === agentUnder)?.by : t.replies[0].by;
+  // Its answer as it's written, under a line that says what it's doing until the words come.
+  const live = t.presence?.personId === AGENT ? t.presence : null;
   const thinking = (
-    <div class="nx-thinking" role="status">
-      <Who id={AGENT} size={18} /><b>{agentName()}</b><span>is answering {asked === me ? 'you' : asked ? nameOf(asked) : 'the thread'}</span><span class="nx-spin" aria-hidden="true" />
+    <div class={'rp-cm-r nx-vowe-r nx-writing' + (live?.draft ? ' has-text' : '')}>
+      <span class="rp-cm-head nx-thinking" role="status"><Who id={AGENT} /><b>{agentName()}</b>
+        <span>{live?.doing ?? (live?.draft ? 'is writing' : `is answering ${asked === me ? 'you' : asked ? nameOf(asked) : 'the thread'}`)}</span>
+        {live?.draft && !live.doing ? null : <span class="nx-spin" aria-hidden="true" />}</span>
+      {live?.draft ? <span class="rp-cm-body"><Words text={live.draft} light={act.light} act={act} /></span> : null}
     </div>
   );
   // With a message focused: J and K (or ↓ and ↑) move, R replies to it, ← folds what's under it (or goes to the
