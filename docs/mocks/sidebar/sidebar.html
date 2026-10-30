@@ -1,0 +1,725 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Room sidebar mock</title>
+<style>
+:root, .th-light {
+  --v-font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --v-font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --v-font-mono: 'SF Mono', ui-monospace, Menlo, monospace;
+  --v-accent: #0a84ff; --v-accent-wash: rgba(10,132,255,.10); --v-accent-line: rgba(10,132,255,.42);
+  --v-bg: #fbfbfa; --v-bg-sunken: #f2f2f0; --v-canvas: #f7f7f6; --v-surface: #ffffff;
+  --v-surface-hover: rgba(0,0,0,.04); --v-surface-selected: rgba(0,0,0,.06);
+  --v-fg: #1d1d1f; --v-fg-2: #424245; --v-fg-3: #6e6e73; --v-fg-4: #8e8e93;
+  --v-line: rgba(0,0,0,.08); --v-line-2: rgba(0,0,0,.13); --v-line-strong: rgba(0,0,0,.28);
+  --v-signal: #e0673f; --v-signal-fg: #b8461f; --v-signal-wash: rgba(224,103,63,.10);
+  --v-info: #5f87a6; --v-info-fg: #3d6585; --v-info-wash: rgba(95,135,166,.12); --v-info-line: rgba(61,101,133,.36);
+  --v-success: #3f8f5a;
+  --v-code-wash: rgba(0,0,0,.045);
+  --v-grid: rgba(0,0,0,.055);
+  --shadow: 0 0 0 1px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --pop: 0 0 0 .5px rgba(0,0,0,.14), 0 10px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.06);
+  --p-me: #3f7a73; --p-kp: #7a5aa6; --p-ap: #a8762e; --p-ac: #5d7a3e;
+}
+.th-dark {
+  --v-accent: #3d9bff; --v-accent-wash: rgba(61,155,255,.16); --v-accent-line: rgba(61,155,255,.5);
+  --v-bg: #1e1e20; --v-bg-sunken: #171719; --v-canvas: #1a1a1c; --v-surface: #2a2a2c;
+  --v-surface-hover: rgba(255,255,255,.05); --v-surface-selected: rgba(255,255,255,.07);
+  --v-fg: #f5f5f7; --v-fg-2: #d1d1d6; --v-fg-3: #98989d; --v-fg-4: #6e6e73;
+  --v-line: rgba(255,255,255,.08); --v-line-2: rgba(255,255,255,.13); --v-line-strong: rgba(255,255,255,.26);
+  --v-signal: #f0855e; --v-signal-fg: #f59a78; --v-signal-wash: rgba(240,133,94,.14);
+  --v-info: #7fa6c4; --v-info-fg: #9cc0dc; --v-info-wash: rgba(127,166,196,.16); --v-info-line: rgba(156,192,220,.34);
+  --v-success: #6cbf86;
+  --v-code-wash: rgba(255,255,255,.07);
+  --v-grid: rgba(255,255,255,.05);
+  --shadow: 0 0 0 1px rgba(255,255,255,.07);
+  --pop: 0 0 0 .5px rgba(255,255,255,.16), 0 12px 36px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { background: var(--v-bg); }
+body { font: 13px/1.45 var(--v-font-sans); color: var(--v-fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: default; }
+svg.i { width: 12px; height: 12px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- people ---------- */
+.av { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; position: relative;
+  font-size: 8.5px; font-weight: 700; letter-spacing: .02em; color: #fff; }
+.av.me { background: var(--p-me); } .av.kp { background: var(--p-kp); } .av.ap { background: var(--p-ap); } .av.ac { background: var(--p-ac); }
+.av.dot { background: var(--v-info); }
+.av.dot::before, .av.dot::after { content: ''; position: absolute; top: 7px; width: 2.4px; height: 3.4px; border-radius: 2px; background: var(--v-surface); }
+.av.dot::before { left: 6.4px; } .av.dot::after { right: 6.4px; }
+.av.dot i { position: absolute; left: 5.5px; right: 5.5px; top: 9.6px; height: 4px; border: 1.5px solid var(--v-surface); border-top: 0; border-radius: 0 0 6px 6px; }
+.av.here::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 7px; height: 7px; border-radius: 50%; background: var(--v-success); box-shadow: 0 0 0 1.5px var(--v-bg-sunken); }
+.av.dot.here::after { top: auto; left: auto; height: 7px; width: 7px; }
+.faces { display: inline-flex; align-items: center; }
+.faces .av { box-shadow: 0 0 0 1.5px var(--fbg, var(--v-bg-sunken)); }
+.faces .av + .av { margin-left: -5px; }
+.faces.s16 .av { width: 16px; height: 16px; font-size: 0; }
+.faces.s16 .av.dot::before, .faces.s16 .av.dot::after { top: 5.5px; width: 2px; height: 2.8px; } .faces.s16 .av.dot::before { left: 5px; } .faces.s16 .av.dot::after { right: 5px; }
+.faces.s16 .av.dot i { left: 4.3px; right: 4.3px; top: 7.8px; height: 3px; border-width: 1.2px; }
+.faces.s16 .av.here::after { width: 6px; height: 6px; right: -1.5px; bottom: -1.5px; }
+
+/* ---------- subject chips: one vocabulary for what a thread is about ---------- */
+.sub { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px 0 5px; border-radius: 5px; font-size: 11.5px; font-weight: 500; color: var(--v-fg-2); background: var(--v-surface-selected); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.sub .i { width: 11px; height: 11px; opacity: .8; }
+.sub.lit { color: var(--v-accent); background: var(--v-accent-wash); }
+.sub .more { color: var(--v-fg-4); font-weight: 500; }
+.sub.via { background: none; padding: 0; color: var(--v-fg-4); font-weight: 400; }
+.sub.gone { color: var(--v-fg-4); text-decoration: line-through; text-decoration-color: var(--v-line-strong); }
+.subs { display: flex; gap: 4px; align-items: center; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+
+/* ================================================= the window */
+.win { width: 1240px; height: 900px; display: grid; grid-template-columns: 1fr 420px; background: var(--v-canvas); overflow: hidden; position: relative; }
+.win.full { width: 1440px; grid-template-columns: 1fr; background: var(--v-bg); }
+
+/* ---------- canvas ---------- */
+.cv { position: relative; overflow: hidden; background-color: var(--v-canvas);
+  background-image: radial-gradient(var(--v-grid) 1px, transparent 1.2px); background-size: 20px 20px; }
+.cv-bar { position: absolute; inset: 0 0 auto 0; height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 92px; }
+.lights { position: absolute; left: 18px; top: 20px; display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+.crumb { font-size: 13px; color: var(--v-fg-3); display: flex; gap: 8px; align-items: center; }
+.crumb b { color: var(--v-fg); font-weight: 600; }
+.viewtab { position: absolute; left: 20px; top: 66px; display: flex; gap: 6px; }
+.viewtab span { height: 26px; padding: 0 10px; border-radius: 7px; display: inline-flex; align-items: center; font-size: 12.5px; color: var(--v-fg-3); }
+.viewtab span.on { background: var(--v-surface); color: var(--v-fg); box-shadow: var(--shadow); font-weight: 500; }
+.node { position: absolute; width: 176px; height: 92px; border-radius: 12px; background: var(--v-surface); box-shadow: var(--shadow); padding: 11px 13px; transition: box-shadow .18s ease; }
+.node b { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; letter-spacing: -.005em; }
+.node b .i { width: 12px; height: 12px; color: var(--v-fg-3); }
+.node span { display: block; margin-top: 4px; font: 10.5px/1.4 var(--v-font-mono); color: var(--v-fg-3); }
+.node.sel { box-shadow: 0 0 0 2px var(--v-accent), 0 0 0 6px var(--v-accent-wash); }
+.node.lit { box-shadow: 0 0 0 1.5px var(--v-accent-line), 0 0 0 6px var(--v-accent-wash), 0 4px 14px rgba(10,132,255,.12); }
+.node.dim, .frame.dim, svg .dim { opacity: .45; }
+.pin { position: absolute; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px 0 5px; border-radius: 10px; background: var(--v-surface); box-shadow: var(--shadow), 0 1px 3px rgba(0,0,0,.06); font-size: 11px; font-weight: 600; color: var(--v-fg-2); }
+.pin .i { width: 11px; height: 11px; }
+.pin.unread { color: var(--v-signal-fg); }
+.pin.unread::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
+.pin.lit { background: var(--v-accent); color: #fff; box-shadow: none; }
+.frame { position: absolute; border-radius: 18px; border: 1.5px dashed var(--v-line-2); transition: background .18s ease; }
+.frame .lbl { position: absolute; left: 12px; top: -11px; height: 21px; padding: 0 8px; border-radius: 6px; background: var(--v-canvas); display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--v-fg-3); }
+.frame.lit { border-color: var(--v-accent-line); background: var(--v-accent-wash); }
+.frame.lit .lbl { color: var(--v-accent); }
+.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wires path { fill: none; stroke: var(--v-line-strong); stroke-width: 1.2; }
+.wires path.lit { stroke: var(--v-accent); stroke-width: 2.4; }
+.wires path.flow { stroke: var(--v-accent); stroke-width: 2.4; stroke-dasharray: 2 7; stroke-linecap: round; animation: march 1s linear infinite; }
+.wires text { font: 10.5px var(--v-font-sans); fill: var(--v-fg-3); }
+@keyframes march { to { stroke-dashoffset: -18; } }
+.cv-tools { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); width: 40px; padding: 6px 0; border-radius: 12px; background: var(--v-surface); box-shadow: var(--shadow); display: grid; gap: 4px; justify-items: center; }
+.cv-tools i { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--v-fg-3); }
+.cv-tools i.on { background: var(--v-surface-selected); color: var(--v-fg); }
+.cv-tools svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.4; }
+
+/* ================================================= the sidebar */
+.side { position: relative; display: flex; flex-direction: column; background: var(--v-bg-sunken); border-left: 1px solid var(--v-line); min-height: 0; --fbg: var(--v-bg-sunken); }
+.tb { flex: none; display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 12px 0 14px; position: relative; z-index: 3; }
+.tb .sp { flex: 1; }
+.tb .ttl { display: none; min-width: 0; font: 600 13px var(--v-font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.condensed .tb { box-shadow: 0 .5px 0 var(--v-line); background: var(--v-bg-sunken); }
+.condensed .tb .ttl { display: block; flex: 1; }
+.condensed .tb .sp { display: none; }
+.condensed .here-pill b { display: none; }
+.still *, .still *::before, .still *::after { animation-duration: 0s !important; animation-delay: 0s !important; }
+.still .dots i, .still .spin, .still .caret, .still .flow { animation: none !important; }
+.still .spin { border-top-color: var(--v-info); border-right-color: var(--v-info); }
+.still .dots i:first-child { opacity: 1; } .still .dots i:nth-child(2) { opacity: .6; }
+.btn { height: 28px; padding: 0 11px; border-radius: 7px; font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; color: var(--v-fg-2); white-space: nowrap; }
+.btn:hover { background: var(--v-surface-hover); }
+.btn.call { background: var(--v-surface); color: var(--v-fg); box-shadow: var(--shadow); }
+.btn.call.live { background: var(--v-success); color: #fff; box-shadow: none; }
+.btn .i { width: 13px; height: 13px; }
+.icb { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--v-fg-3); }
+.icb:hover { background: var(--v-surface-hover); }
+.icb .i { width: 14px; height: 14px; }
+.here-pill { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px 0 4px; border-radius: 14px; font-size: 12px; color: var(--v-fg-3); }
+.here-pill:hover, .here-pill.on { background: var(--v-surface-hover); }
+.here-pill b { font-weight: 500; color: var(--v-fg-2); }
+
+.sc { flex: 1; overflow: hidden; position: relative; }
+.hdr { padding: 6px 18px 14px; }
+.goal { font: 600 18px/1.3 var(--v-font-display); letter-spacing: -.015em; color: var(--v-fg); text-wrap: balance; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 8px 0 0 -6px; font-size: 12px; color: var(--v-fg-3); }
+.meta > span { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px; border-radius: 6px; }
+.meta > span:hover, .meta > span.on { background: var(--v-surface-hover); color: var(--v-fg-2); }
+.meta .i { width: 12px; height: 12px; }
+.meta b { font-weight: 500; color: var(--v-fg-2); }
+.meta .wait { color: var(--v-signal-fg); }
+.meta .wait::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
+.meta .sep { width: 2px; height: 2px; padding: 0; border-radius: 50%; background: var(--v-fg-4); margin: 0 1px; }
+
+.tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; padding: 8px 14px 10px; background: var(--v-bg-sunken); }
+.condensed .tabs { box-shadow: 0 .5px 0 var(--v-line); }
+.tab { position: relative; height: 28px; padding: 0 11px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--v-fg-3); }
+.tab:hover { color: var(--v-fg-2); }
+.tab.on { background: var(--v-surface); color: var(--v-fg); box-shadow: var(--shadow); }
+.tab .n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; background: var(--v-signal); color: #fff; }
+.tab .d { width: 6px; height: 6px; border-radius: 50%; background: var(--v-signal); }
+
+.list { padding: 2px 10px 16px; }
+.new { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px 6px 7px; margin: 0 0 6px; border-radius: 10px; background: var(--v-surface); box-shadow: var(--shadow); }
+.new .ph { flex: 1; min-width: 0; color: var(--v-fg-4); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.new kbd, kbd { font: 10.5px var(--v-font-sans); color: var(--v-fg-4); padding: 0 4px; height: 16px; line-height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--v-line-2); display: inline-block; }
+.sec { display: flex; align-items: center; gap: 6px; padding: 14px 8px 5px; font-size: 11.5px; font-weight: 600; color: var(--v-fg-3); }
+.sec em { font-style: normal; font-weight: 500; color: var(--v-fg-4); }
+.sec .ln { flex: 1; height: .5px; background: var(--v-line); margin-left: 6px; }
+.sec.need { color: var(--v-signal-fg); }
+
+.row { position: relative; display: grid; gap: 4px; padding: 9px 10px 10px; border-radius: 10px; transition: background .15s ease; }
+.row:hover, .row.hover { background: var(--v-surface-hover); }
+.row.unread { background: color-mix(in srgb, var(--v-accent) 5%, transparent); }
+.row.unread:hover, .row.unread.hover { background: color-mix(in srgb, var(--v-accent) 8%, transparent); }
+.row.open { background: var(--v-surface); box-shadow: var(--shadow); }
+.row .top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.row .top .subs { flex: 1; }
+.row .t { font-size: 13px; line-height: 1.42; color: var(--v-fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: pretty; }
+.row.unread .t { font-weight: 500; }
+.row .who { font-weight: 600; }
+.row .bot { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--v-fg-4); min-width: 0; }
+.row .bot .st { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.time { font-size: 11.5px; color: var(--v-fg-4); font-variant-numeric: tabular-nums; flex: none; }
+.st.waiting { color: var(--v-signal-fg); font-weight: 500; }
+.st.agent { color: var(--v-info-fg); }
+.st.done { color: var(--v-fg-4); }
+.st .i { width: 11px; height: 11px; }
+.dots { display: inline-flex; gap: 2.5px; } .dots i { width: 3.5px; height: 3.5px; border-radius: 50%; background: currentColor; opacity: .3; animation: blink 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 40% { opacity: 1; } }
+.offer { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.mini { height: 24px; padding: 0 9px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; color: var(--v-fg-2); box-shadow: inset 0 0 0 1px var(--v-line-2); }
+.mini.strong { background: var(--v-fg); color: var(--v-bg); box-shadow: none; }
+.fold { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; margin-top: 4px; border-radius: 8px; font-size: 12px; color: var(--v-fg-3); }
+.fold .i { width: 10px; height: 10px; }
+
+/* ---------- popover ---------- */
+.popover { position: absolute; z-index: 5; width: 330px; border-radius: 12px; background: var(--v-surface); box-shadow: var(--pop); padding: 6px; }
+.popover::before { content: ''; position: absolute; top: -6px; left: 30px; width: 12px; height: 12px; transform: rotate(45deg); background: var(--v-surface); box-shadow: -.5px -.5px 0 rgba(0,0,0,.1); }
+.popover h5 { font-size: 11.5px; font-weight: 600; color: var(--v-fg-4); padding: 6px 8px 4px; }
+.prow { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 8px; border-radius: 7px; }
+.prow:hover, .prow.hover { background: var(--v-surface-hover); }
+.prow .av { width: 26px; height: 26px; font-size: 10px; }
+.prow .nm { flex: 1; min-width: 0; display: grid; }
+.prow .nm b { font-weight: 500; font-size: 13px; }
+.prow .nm span { font-size: 11.5px; color: var(--v-fg-4); }
+.prow .role { font-size: 12px; color: var(--v-fg-3); display: inline-flex; align-items: center; gap: 3px; }
+.prow .role .i { width: 9px; height: 9px; opacity: 0; }
+.prow.hover .role .i { opacity: 1; }
+.pfoot { display: flex; gap: 6px; padding: 6px 4px 2px; margin-top: 4px; border-top: .5px solid var(--v-line); }
+.pfoot .btn { flex: 1; justify-content: center; }
+.pfoot .btn.call { flex: none; }
+
+/* ---------- the open thread (sidebar) ---------- */
+.th-head { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px 0 8px; }
+.back { display: inline-flex; align-items: center; gap: 3px; height: 26px; padding: 0 8px 0 4px; border-radius: 6px; font-size: 12.5px; color: var(--v-fg-3); }
+.back .i { width: 12px; height: 12px; }
+.thread { margin: 0 10px; padding: 12px 8px 10px 14px; border-radius: 12px; background: var(--v-surface); box-shadow: var(--shadow); --fbg: var(--v-surface); }
+.thread .subs { margin-bottom: 7px; }
+.thread h3 { font: 600 15px/1.35 var(--v-font-display); letter-spacing: -.01em; margin: 0 6px 8px 0; }
+
+.msg { position: relative; padding: 6px 8px 7px; margin-left: -8px; border-radius: 8px; transition: background .15s ease; }
+.msg:hover, .msg.hover { background: var(--v-surface-hover); }
+.msg.sel { background: var(--v-surface-selected); box-shadow: inset 2px 0 0 var(--v-accent); }
+.msg.fresh { animation: arrive .22s ease-out both, wash 2.4s ease-out both; }
+.msg.fresh.still { animation: none; background: var(--v-accent-wash); }
+@keyframes arrive { from { opacity: 0; transform: translateY(4px); } }
+@keyframes wash { 0%, 30% { background: var(--v-accent-wash); } }
+.msg.parent .head .av { box-shadow: 0 0 0 2px var(--v-surface), 0 0 0 3.5px var(--v-accent-line); }
+.head { display: flex; align-items: center; gap: 7px; height: 20px; }
+.name { font-weight: 600; font-size: 12.5px; color: var(--v-fg); }
+.name.agent { color: var(--v-info-fg); }
+.to { font-size: 11.5px; color: var(--v-fg-4); display: inline-flex; align-items: center; gap: 3px; }
+.to .i { width: 10px; height: 10px; }
+.to b { font-weight: 500; color: var(--v-fg-3); }
+.body { margin: 3px 0 0 27px; color: var(--v-fg-2); font-size: 13px; line-height: 1.55; max-width: 68ch; text-wrap: pretty; }
+.body p + p, .body p + .cb, .body .cb + p { margin-top: 6px; }
+.body strong { color: var(--v-fg); font-weight: 600; }
+.body code { font: 11.5px var(--v-font-mono); padding: 1px 4px; border-radius: 4px; background: var(--v-code-wash); color: var(--v-fg); }
+.tok { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; border-radius: 5px; font-weight: 500; color: var(--v-info-fg); background: var(--v-info-wash); white-space: nowrap; }
+.tok.part { color: var(--v-fg); background: var(--v-surface-selected); }
+.tok .i { width: 11px; height: 11px; opacity: .75; }
+.caret { display: inline-block; width: 1.5px; height: 14px; background: var(--v-info); vertical-align: -2px; margin-left: 1px; animation: blink 1s steps(1) infinite; }
+.cb { margin: 8px 0; border-radius: 8px; background: var(--v-code-wash); box-shadow: inset 0 0 0 .5px var(--v-line-2); overflow: hidden; max-width: 560px; animation: arrive .25s ease-out both; }
+.cb-h { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px 0 9px; border-bottom: .5px solid var(--v-line-2); font-size: 11.5px; color: var(--v-fg-3); }
+.cb-i { font: 600 10.5px var(--v-font-mono); color: var(--v-info-fg); letter-spacing: -.04em; }
+.cb-n { font: 11.5px var(--v-font-mono); color: var(--v-fg); }
+.cb-l { font: 11px var(--v-font-mono); color: var(--v-fg-4); }
+.cb-c { margin-left: auto; color: var(--v-fg-4); }
+.cb pre { overflow: hidden; margin: 0; padding: 8px 12px 9px 0; font: 11.5px/1.6 var(--v-font-mono); color: var(--v-fg); white-space: pre; }
+.full .cb pre { font-size: 12.5px; }
+.cb .ln { display: inline-block; width: 34px; padding-right: 12px; text-align: right; color: var(--v-fg-4); user-select: none; }
+.t-k { color: #a2457a; } .t-f { color: #2f6c8f; } .t-c { color: var(--v-fg-4); font-style: italic; } .t-p { color: var(--v-fg-2); }
+.th-dark .t-k { color: #e08bbd; } .th-dark .t-f { color: #8cc3e6; }
+.acts { position: absolute; right: 6px; top: 3px; display: none; gap: 1px; padding: 2px; border-radius: 7px; background: var(--v-surface); box-shadow: var(--shadow), 0 2px 8px rgba(0,0,0,.08); }
+.msg:hover > .acts, .msg.hover > .acts, .msg.sel > .acts { display: flex; }
+.acts span { height: 22px; padding: 0 6px; border-radius: 5px; font-size: 11.5px; color: var(--v-fg-2); display: inline-flex; align-items: center; gap: 5px; }
+.acts span:first-child { background: var(--v-surface-selected); color: var(--v-fg); }
+.acts .i { width: 12px; height: 12px; }
+.acts kbd { height: 14px; line-height: 14px; font-size: 10px; padding: 0 3px; }
+
+/* the tree */
+.kids { position: relative; margin-left: 9px; padding-left: 13px; }
+.full .kids { margin-left: 11px; padding-left: 15px; }
+.kids > .rail { position: absolute; left: -4px; top: 0; bottom: 8px; width: 9px; }
+.kids > .rail::before { content: ''; position: absolute; left: 4px; top: 0; bottom: 0; width: 1.5px; border-radius: 1px; background: var(--v-line-2); transition: background .15s ease; }
+.kids > .rail.hot::before { background: var(--v-accent-line); }
+.more { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px 0 4px; margin: 2px 0 4px; border-radius: 7px; font-size: 12px; color: var(--v-fg-3); }
+.more b { font-weight: 500; color: var(--v-fg-2); }
+.more .i { width: 10px; height: 10px; }
+.collapsed { display: inline-flex; align-items: center; gap: 7px; height: 28px; margin-left: -22px; font-size: 12px; color: var(--v-fg-3); }
+.collapsed .plus { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px var(--v-line-2); font-size: 11px; line-height: 1; color: var(--v-fg-3); background: var(--v-surface); }
+.collapsed b { color: var(--v-fg-2); font-weight: 500; }
+.newline { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; font-size: 11px; font-weight: 600; color: var(--v-signal-fg); }
+.newline::after { content: ''; flex: 1; height: 1px; background: color-mix(in srgb, var(--v-signal) 45%, transparent); }
+
+/* dot working, in place */
+.work { margin: 2px 0 4px; padding: 6px 8px 7px; margin-left: -8px; border-radius: 8px; }
+.work .head .verb { font-size: 12px; color: var(--v-fg-3); }
+.steps { margin: 5px 0 0 27px; display: grid; gap: 3px; }
+.step { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--v-fg-3); animation: arrive .2s ease-out both; }
+.step .i { width: 11px; height: 11px; }
+.step.done { color: var(--v-fg-4); }
+.step.done .i { color: var(--v-success); }
+.step.now { color: var(--v-fg-2); }
+.step .spin { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--v-info-line); border-top-color: var(--v-info); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.step code { font: 11px var(--v-font-mono); color: inherit; }
+.src { margin: 6px 0 0 27px; display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--v-fg-4); }
+.src span { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--v-line); line-height: 17px; }
+.src .i { width: 10px; height: 10px; }
+
+.compose { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 10px; background: var(--v-surface); box-shadow: var(--shadow); }
+.compose .field { flex: 1; min-width: 0; font-size: 13px; line-height: 20px; color: var(--v-fg-4); }
+.compose .send { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--v-surface-selected); color: var(--v-fg-3); }
+.compose .send .i { width: 12px; height: 12px; stroke-width: 1.8; }
+.thread .compose { margin: 8px 6px 2px 0; background: var(--v-bg); box-shadow: inset 0 0 0 1px var(--v-line); }
+
+/* ================================================= full screen */
+.full .bar { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px 0 92px; border-bottom: .5px solid var(--v-line); position: relative; }
+.full .bar .sp { flex: 1; }
+.cols { display: grid; grid-template-columns: 320px minmax(0, 1fr) 280px; height: 848px; }
+.flist { background: var(--v-bg-sunken); border-right: .5px solid var(--v-line); padding: 12px 10px; overflow: hidden; --fbg: var(--v-bg-sunken); }
+.flist .row { padding: 8px 10px 9px; }
+.fmain { overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.fread { flex: 1; overflow: hidden; padding: 28px 40px 0; --fbg: var(--v-bg); }
+.fcol { max-width: 720px; margin: 0 auto; }
+.fcol .subs { margin-bottom: 8px; }
+.h1 { font: 600 22px/1.3 var(--v-font-display); letter-spacing: -.015em; margin: 0 0 16px; color: var(--v-fg); }
+.full .body { font-size: 14px; line-height: 1.6; }
+.full .body code { font-size: 12.5px; }
+.full .name { font-size: 13px; }
+.full .msg { padding: 8px 10px 8px; }
+.ffoot { padding: 10px 40px 18px; }
+.rail-r { border-left: .5px solid var(--v-line); padding: 22px 20px; }
+.rail-r h4 { font-size: 11.5px; font-weight: 600; color: var(--v-fg-4); margin: 0 0 8px; }
+.rail-r .box { padding: 10px 12px; border-radius: 10px; background: var(--v-surface); box-shadow: var(--shadow); margin-bottom: 22px; display: grid; gap: 8px; }
+.rail-r .box .lnk { font-size: 12px; color: var(--v-fg-3); display: flex; align-items: center; gap: 5px; }
+.rail-r .ppl { display: grid; gap: 2px; margin-bottom: 22px; --fbg: var(--v-bg); }
+.rail-r .ppl div { display: flex; gap: 8px; align-items: center; height: 30px; padding: 0 6px; margin: 0 -6px; border-radius: 7px; font-size: 12.5px; color: var(--v-fg-2); }
+.rail-r .ppl div.hover { background: var(--v-surface-hover); }
+.rail-r .ppl em { margin-left: auto; font-style: normal; font-size: 11.5px; color: var(--v-fg-4); }
+.rail-r .ghost { height: 30px; border-radius: 8px; display: flex; align-items: center; padding: 0 12px; font-size: 12.5px; box-shadow: inset 0 0 0 1px var(--v-line-2); color: var(--v-fg-2); }
+.keys { display: flex; gap: 16px; align-items: center; padding: 8px 4px 0; font-size: 11.5px; color: var(--v-fg-4); white-space: nowrap; }
+.keys span { display: inline-flex; gap: 5px; align-items: center; }
+
+/* ================================================= subject kinds sheet */
+.kinds { width: 1240px; height: 900px; padding: 36px 40px; background: var(--v-bg); display: grid; grid-template-rows: auto 1fr; gap: 22px; }
+.kinds h2 { font: 600 20px var(--v-font-display); letter-spacing: -.01em; }
+.kgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; min-height: 0; }
+.kcard { display: grid; grid-template-rows: auto 1fr auto; border-radius: 14px; background: var(--v-surface); box-shadow: var(--shadow); overflow: hidden; }
+.kcard .khead { padding: 14px 14px 10px; display: grid; gap: 8px; }
+.kcard .khead b { font-size: 13px; font-weight: 600; }
+.kcard .kcv { position: relative; overflow: hidden; background-color: var(--v-canvas); background-image: radial-gradient(var(--v-grid) 1px, transparent 1.2px); background-size: 20px 20px; border-top: .5px solid var(--v-line); border-bottom: .5px solid var(--v-line); }
+.kcard .kcv .stage { position: absolute; left: 0; top: 0; width: 780px; height: 848px; transform-origin: 0 0; }
+.kcard .row { margin: 10px; background: var(--v-bg-sunken); }
+.kfoot { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.kfoot div { border-radius: 10px; padding: 10px 12px; background: var(--v-bg-sunken); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ---------- icons: one stroke family, 12px grid ----------
+const S = (d, vb = 12) => `<svg class="i" viewBox="0 0 ${vb} ${vb}">${d}</svg>`;
+const I = {
+  part: S('<rect x="1.5" y="2.5" width="9" height="7" rx="1.6"/>'),
+  parts: S('<rect x="1.2" y="1.2" width="6.6" height="5.2" rx="1.2"/><rect x="4.2" y="5.6" width="6.6" height="5.2" rx="1.2"/>'),
+  edge: S('<circle cx="2.6" cy="6" r="1.5"/><circle cx="9.4" cy="6" r="1.5"/><path d="M4.1 6h3.8"/>'),
+  region: S('<rect x="1.5" y="1.5" width="9" height="9" rx="2.2" stroke-dasharray="2 1.6"/>'),
+  flow: S('<circle cx="2" cy="8.5" r="1.1"/><circle cx="6" cy="4" r="1.1"/><path d="M3 7.4 5.1 5"/><path d="M7 4.6 9.8 7.6"/><path d="M8.4 7.8h1.5V6.3"/>'),
+  view: S('<rect x="1.5" y="2.5" width="9" height="7.5" rx="1.5"/><path d="M1.5 5h9"/><path d="M4 2.5v2.5"/>'),
+  line: S('<path d="M3 1.5h4.5L9.5 3.5v7h-6.5z"/><path d="M4.5 5.5h3.5M4.5 7.5h3.5"/>'),
+  repo: S('<path d="M2.5 2a1 1 0 0 1 1-1h6v8.5h-6a1 1 0 0 0-1 1z"/><path d="M2.5 10.5a1 1 0 0 0 1 1h6v-2"/>'),
+  session: S('<rect x="1.2" y="2" width="9.6" height="8" rx="1.6"/><path d="m3.4 5 1.6 1.2-1.6 1.2M6.3 7.5h2"/>'),
+  phone: S('<path d="M3 1.5h2l1 3-1.5 1a7 7 0 0 0 3 3l1-1.5 3 1v2a1.3 1.3 0 0 1-1.3 1.3A10 10 0 0 1 1.7 2.8 1.3 1.3 0 0 1 3 1.5z"/>', 13),
+  share: S('<path d="M6 7.5V1.5M3.6 3.7 6 1.3l2.4 2.4"/><path d="M3.5 5.5h-1v5h7v-5h-1"/>'),
+  expand: S('<path d="M7.5 1.5h3v3M4.5 10.5h-3v-3M10.5 1.5 7 5M1.5 10.5 5 7"/>'),
+  collapse: S('<path d="M10.5 4.5h-3v-3M1.5 7.5h3v3M7.5 4.5 11 1M4.5 7.5 1 11"/>'),
+  panel: S('<rect x="1.5" y="2" width="9" height="8" rx="1.5"/><path d="M7.5 2v8"/>'),
+  chev: S('<path d="m4.5 2.5 3 3.5-3 3.5"/>'),
+  chevd: S('<path d="m2.5 4.5 3.5 3 3.5-3"/>'),
+  back: S('<path d="m7.5 2.5-3.5 3.5 3.5 3.5"/>'),
+  reply: S('<path d="M5 2.5 1.8 5.5 5 8.5"/><path d="M2 5.5h5a3 3 0 0 1 3 3v1"/>'),
+  link: S('<path d="M5 7 7 5"/><path d="M6.5 3.2 7.6 2.1a2 2 0 0 1 2.8 2.8L9.3 6"/><path d="M5.5 8.8 4.4 9.9a2 2 0 0 1-2.8-2.8L2.7 6"/>'),
+  check: S('<path d="m2.5 6.3 2.3 2.2 4.7-5"/>'),
+  up: S('<path d="M6 10V2.5M2.8 5.5 6 2.3l3.2 3.2"/>'),
+  upleft: S('<path d="M9.5 9.5 3 3M3 7V3h4"/>'),
+  decision: S('<path d="M6 1.5 10.5 6 6 10.5 1.5 6z"/>'),
+  search: S('<circle cx="5.2" cy="5.2" r="3.2"/><path d="m7.6 7.6 2.6 2.6"/>'),
+  file: S('<path d="M3 1.5h4l2.5 2.5v6.5h-6.5z"/><path d="M7 1.5V4h2.5"/>'),
+  eye: S('<path d="M1 6s1.8-3.5 5-3.5S11 6 11 6 9.2 9.5 6 9.5 1 6 1 6z"/><circle cx="6" cy="6" r="1.4"/>'),
+  plus: S('<path d="M6 2v8M2 6h8"/>'),
+  cursor: S('<path d="m2.5 1.5 7 3-3 1.2-1.2 3z"/>', 12), hand: S('<path d="M4 6V2.5a1 1 0 0 1 2 0V6m0-3a1 1 0 0 1 2 0v3m0-2a1 1 0 0 1 2 0v3a4 4 0 0 1-4 4h-.5A4 4 0 0 1 2 7.5L1.5 6a1 1 0 0 1 1.8-.8L4 6.5"/>'),
+  circle: S('<circle cx="6" cy="6" r="4.2"/>'), pen: S('<path d="M2 10c1.5-3 3-1 4.5-3.5S8.5 3 10 2"/>'), comment: S('<path d="M2 2.5h8v5.5H5L2.5 10V8H2z"/>'),
+};
+const P = {
+  me: { cls: 'me', name: 'You', full: 'Daniel Enriquez', ini: 'DE', mail: 'In the room' },
+  kp: { cls: 'kp', name: 'Kevin Pei', full: 'Kevin Pei', ini: 'KP', mail: 'kevinxpei@gmail.com' },
+  ap: { cls: 'ap', name: 'Anuraghav', full: 'Anuraghav Padmaprasad', ini: 'AP', mail: 'ap8414@nyu.edu' },
+  ac: { cls: 'ac', name: 'anuchan', full: 'anuchan.2004', ini: 'A2', mail: 'anuchan.2004@gmail.com' },
+  dot: { cls: 'dot', name: 'dot', ini: '', agent: true },
+};
+const av = (p, here) => `<span class="av ${P[p].cls}${here ? ' here' : ''}">${p === 'dot' ? '<i></i>' : P[p].ini}</span>`;
+const faces = (ps, s16 = true, here = []) => `<span class="faces${s16 ? ' s16' : ''}">${ps.map((p) => av(p, here.includes(p))).join('')}</span>`;
+
+// ---------- subjects: what a thread is about, named the way the canvas draws it ----------
+const SUBJ = {
+  main: { k: 'part', name: 'Electron main process', lights: { nodes: ['main'] } },
+  sup: { k: 'part', name: 'Supabase', lights: { nodes: ['sup'] } },
+  rtc: { k: 'edge', name: 'Renderer → LiveKit calls', lights: { edges: ['r-lk'], nodes: [] } },
+  auth: { k: 'region', name: 'Auth', lights: { frames: ['auth'] } },
+  signin: { k: 'flow', name: 'Sign-in flow', lights: { flows: ['signin'] } },
+  canvasparts: { k: 'parts', name: 'Renderer', more: 2, lights: { nodes: ['ren', 'main', 'sup'] } },
+  view: { k: 'view', name: 'Architecture', lights: {} },
+  line: { k: 'line', name: 'Decision · Retry 5×', lights: {} },
+};
+const GLYPH = { part: I.part, parts: I.parts, edge: I.edge, region: I.region, flow: I.flow, view: I.view, line: I.line };
+const chip = (id, o = {}) => { const s = SUBJ[id]; return `<span class="sub${o.lit ? ' lit' : ''}">${GLYPH[s.k]}${s.name}${s.more ? `<span class="more">+${s.more}</span>` : ''}</span>`; };
+const via = (id) => `<span class="sub via">via ${GLYPH[SUBJ[id].k]}${SUBJ[id].name}</span>`;
+
+// ---------- the canvas ----------
+const NODES = {
+  ren: { x: 92, y: 150, name: 'Renderer', sub: 'Room UI · canvas surface', pins: 1 },
+  lk: { x: 352, y: 150, name: 'LiveKit calls', sub: 'WebRTC audio rooms' },
+  vw: { x: 600, y: 150, name: 'Vowe agent runtime', sub: 'In main · model sign-in', pins: 1 },
+  main: { x: 352, y: 400, name: 'Electron main process', sub: 'Node · IPC · auth · git', pins: 3, unread: true },
+  sup: { x: 352, y: 630, name: 'Supabase', sub: 'Auth · Postgres/RLS · Realtime', pins: 1 },
+};
+const EDGES = {
+  'r-lk': { d: 'M268 196 H352', label: 'WebRTC', lx: 291, ly: 188, mid: [300, 196], pins: 1 },
+  'r-main': { d: 'M180 242 V446 H352', label: 'IPC requests', lx: 188, ly: 340 },
+  'vw-main': { d: 'M688 242 V446 H528', label: 'hosts agent', lx: 600, ly: 438 },
+  'main-sup': { d: 'M440 492 V630', label: 'Auth · record · Realtime', lx: 448, ly: 566 },
+};
+const FRAMES = { auth: { x: 320, y: 370, w: 240, h: 380, name: 'Auth', pins: 1 } };
+const FLOWS = { signin: 'M180 242 V446 H352 M440 492 V630' };
+
+function canvas(lit = {}, o = {}) {
+  const on = (kind, id) => (lit[kind] ?? []).includes(id);
+  const anyLit = Object.values(lit).some((v) => v && v.length);
+  const nodes = Object.entries(NODES).map(([id, n]) => {
+    const cls = ['node', o.sel === id ? 'sel' : '', on('nodes', id) ? 'lit' : '', anyLit && o.dimOthers && !on('nodes', id) && o.sel !== id ? 'dim' : ''].join(' ');
+    const pin = n.pins ? `<span class="pin${n.unread ? ' unread' : ''}${on('nodes', id) ? ' lit' : ''}" style="left:10px;bottom:-10px">${I.comment}${n.pins}</span>` : '';
+    return `<div class="${cls}" style="left:${n.x}px;top:${n.y}px"><b>${I.part}${n.name}</b><span>${n.sub}</span>${pin}</div>`;
+  }).join('');
+  const frames = Object.entries(FRAMES).map(([id, f]) => `<div class="frame${on('frames', id) ? ' lit' : ''}" style="left:${f.x}px;top:${f.y}px;width:${f.w}px;height:${f.h}px"><span class="lbl">${I.region}${f.name}</span>${f.pins ? `<span class="pin${on('frames', id) ? ' lit' : ''}" style="right:12px;top:-11px">${I.comment}${f.pins}</span>` : ''}</div>`).join('');
+  const wires = `<svg class="wires" viewBox="0 0 780 848">${Object.entries(EDGES).map(([id, e]) => `<path class="${on('edges', id) ? 'lit' : ''}" d="${e.d}"/><text x="${e.lx}" y="${e.ly}">${e.label}</text>`).join('')}
+    ${Object.entries(FLOWS).filter(([id]) => on('flows', id)).map(([, d]) => `<path class="flow" d="${d}"/>`).join('')}</svg>`;
+  const edgePins = Object.entries(EDGES).filter(([, e]) => e.pins).map(([id, e]) => `<span class="pin${on('edges', id) ? ' lit' : ''}" style="left:${e.mid[0] - 16}px;top:${e.mid[1] + 8}px">${I.comment}${e.pins}</span>`).join('');
+  const flowPin = on('flows', 'signin') ? `<span class="pin lit" style="left:150px;top:300px">${I.flow}Sign-in flow</span>` : '';
+  return `${frames}${wires}${nodes}${edgePins}${flowPin}`;
+}
+
+function canvasPane(lit, o = {}) {
+  return `<div class="cv">
+    <div class="cv-bar"><span class="lights"><i></i><i></i><i></i></span><span class="icb">${I.panel}</span><span class="crumb"><b>Voice test</b><span>Journey</span></span></div>
+    <div class="viewtab"><span class="on">Architecture</span><span>Sign-in</span><span>+</span></div>
+    <div class="cv-tools"><i class="on">${I.cursor}</i><i>${I.hand}</i><i>${I.circle}</i><i>${I.pen}</i><i>${I.comment}</i></div>
+    <div style="position:absolute;left:0;top:52px;width:780px;height:848px">${canvas(lit, o)}</div>
+  </div>`;
+}
+
+// ---------- thread rows: subject, the conversation's own words, who and where it stands ----------
+const T = {
+  restore: { subs: ['main'], who: 'kp', t: 'asked you: open the window first and restore behind the splash?', time: '9m', faces: ['kp', 'dot', 'ap'], n: 11, st: ['waiting', 'Waiting on you'], unread: true },
+  offer: { subs: ['signin'], who: 'dot', t: 'suggests a decision: restore the session after first paint, and land on sign-in if it fails.', time: '6m', faces: ['dot', 'kp'], n: 4, offer: true, unread: true },
+  turn: { subs: ['rtc'], who: 'kp', t: 'The call log is full of TURN lookups failing during network changes. Expected?', time: '4m', faces: ['kp', 'dot'], n: 2, st: ['agent', 'dot is replying'] },
+  ipc: { subs: ['auth'], who: 'ap', t: 'Who owns the IPC sender checks once auth moves behind the splash?', time: '22m', faces: ['ap', 'me', 'kp'], n: 6 },
+  batch: { subs: ['canvasparts'], who: 'me', t: 'Should canvas ops batch before they go out on Realtime, or stay one write each?', time: '1h', faces: ['me', 'dot'], n: 3 },
+  retry: { subs: ['line'], who: 'kp', t: 'Why five retries and not three? The worker already backs off.', time: '2h', faces: ['kp', 'me'], n: 5, st: ['done', 'Led to Decision v2'], icon: 'decision' },
+  hello: { subs: ['view'], who: 'me', t: 'First pass at the architecture view. Missing anything?', time: '5d', faces: ['me', 'kp'], n: 2 },
+  rls: { subs: ['sup'], who: 'ap', t: 'RLS on room_comments lets a member read every thread, fine for now?', time: '3h', faces: ['ap', 'dot'], n: 2 },
+};
+
+function row(id, o = {}) {
+  const r = T[id];
+  const lit = o.lit ? r.subs : [];
+  const subs = `<span class="subs">${r.subs.map((s) => chip(s, { lit: lit.includes(s) })).join('')}${o.via ? via(o.via) : ''}</span>`;
+  const st = r.st ? `<span class="st ${r.st[0]}">${r.st[0] === 'agent' ? `${r.st[1]}<span class="dots"><i></i><i></i><i></i></span>` : r.st[0] === 'done' ? `${I.decision}${r.st[1]}` : r.st[1]}</span>` : '';
+  const offer = r.offer && !o.compact ? `<div class="offer"><span class="mini strong">Draft the decision</span><span class="mini">Not now</span></div>` : '';
+  const cls = ['row', r.unread ? 'unread' : '', o.hover ? 'hover' : '', o.open ? 'open' : ''].join(' ');
+  return `<div class="${cls}" data-subj="${r.subs.join(' ')}">
+    <div class="top">${subs}<span class="time">${r.time}</span></div>
+    <div class="t"><span class="who">${P[r.who].name}</span> ${r.t}</div>
+    ${offer}
+    <div class="bot">${faces(r.faces)}<span>${r.n} ${r.n === 1 ? 'reply' : 'replies'}</span>${st}</div>
+  </div>`;
+}
+
+// ---------- the sidebar ----------
+const toolbar = (o = {}) => `<div class="tb">
+    <span class="here-pill${o.popover ? ' on' : ''}">${faces(['me', 'kp'], false, ['me', 'kp'])}<b>2 here</b></span>
+    <span class="ttl">Make session restore never block the first window</span>
+    <span class="sp"></span>
+    <span class="btn call${o.live ? ' live' : ''}">${I.phone}${o.live ? 'Join · 2' : 'Call'}</span>
+    <span class="btn">${I.share}Share</span>
+    <span class="icb">${I.expand}</span><span class="icb">${I.panel}</span>
+  </div>`;
+const header = () => `<div class="hdr">
+    <div class="goal">Make session restore never block the first window</div>
+    <div class="meta">
+      <span>${I.repo}<b>journey</b>+2</span><span class="sep"></span>
+      <span>${faces(['me', 'kp', 'ap', 'ac'], true, ['me', 'kp'])}</span><span class="sep"></span>
+      <span>${I.session}2 sessions</span><span class="wait">1 waits on you</span>
+    </div>
+  </div>`;
+const tabs = (n = 2) => `<div class="tabs"><span class="tab on">Discuss<span class="n">${n}</span></span><span class="tab">Decide<span class="d"></span></span><span class="tab">Work</span></div>`;
+const newThread = (subj) => `<div class="new">${av('me')}${chip(subj)}<span class="ph">Start a thread, or @dot to ask it</span></div>`;
+
+function discuss(o = {}) {
+  const sel = o.sel;
+  const here = sel ? `<div class="sec">${I.part}Electron main process<em>3</em><span class="ln"></span></div>
+      ${row('ipc', { compact: true, via: 'auth' }).replace('Auth</span>', 'Auth</span>').replace(`<span class="sub via">via ${GLYPH.region}Auth</span>`, '')}
+      ${row('offer', { compact: true, via: null })}
+      ${row('rls', { compact: true })}`.replace('', '') : '';
+  return `<div class="list">
+    ${newThread(sel ? 'main' : 'view')}
+    <div class="sec need">Needs you<em>2</em><span class="ln"></span></div>
+    ${row('restore', { lit: o.hover === 'restore' })}
+    ${sel ? '' : row('offer')}
+    ${sel ? `<div class="sec">${I.part}On Electron main process<em>3</em><span class="ln"></span></div>
+        ${row('offer', { via: null, compact: true }).replace('</span><span class="time">', `${via('signin').replace('via ', 'via ')}</span><span class="time">`).replace(chip('signin'), '')}
+        ${row('ipc', { compact: true }).replace(chip('auth'), `${chip('auth')}<span class="sub via">contains it</span>`)}
+        ${row('batch', { compact: true })}`
+      : `<div class="sec">In this view<em>4</em><span class="ln"></span></div>
+        ${row('turn', { hover: o.hover === 'turn', lit: o.hover === 'turn' })}
+        ${row('ipc', { hover: o.hover === 'ipc', lit: o.hover === 'ipc' })}
+        ${row('batch')}
+        ${row('rls')}`}
+    <div class="sec">Everything else<em>${sel ? 4 : 2}</em><span class="ln"></span></div>
+    ${row('retry')}
+    ${row('hello')}
+    <div class="fold">${I.chev}3 resolved</div>
+  </div>`;
+}
+
+function sidebar(o = {}) {
+  return `<div class="side${o.condensed ? ' condensed' : ''}">
+    ${toolbar(o)}
+    <div class="sc"><div>
+      ${o.condensed ? '' : header()}
+      ${tabs()}
+      ${discuss(o)}
+    </div></div>
+    ${o.popover ? people() : ''}
+  </div>`;
+}
+
+const people = () => `<div class="popover" style="left:10px;top:46px">
+    <h5>In this room</h5>
+    ${['me', 'kp', 'ap', 'ac'].map((p, i) => `<div class="prow${i === 1 ? ' hover' : ''}">${av(p, ['me', 'kp'].includes(p))}<span class="nm"><b>${P[p].full}${p === 'me' ? ' <span style="color:var(--v-fg-4);font-weight:400">(you)</span>' : ''}</b><span>${['me', 'kp'].includes(p) ? (p === 'kp' ? 'Here · looking at Electron main' : 'Here') : P[p].mail}</span></span><span class="role">${p === 'me' ? 'Owner' : 'Member'}${I.chevd}</span></div>`).join('')}
+    <div class="pfoot"><span class="btn">${I.plus}Invite</span><span class="btn">${I.link}Copy link</span></div>
+  </div>`;
+
+// ---------- an open thread ----------
+const agent = `<span class="tok">@dot</span>`;
+const tpart = (t) => `<span class="tok part">${I.part}${t}</span>`;
+const codeblock = (name, from, toks) => {
+  const lines = [[]]; for (const t of toks) { if (t === '\n') lines.push([]); else lines.at(-1).push(t); }
+  return `<div class="cb"><div class="cb-h"><span class="cb-i">&lt;/&gt;</span><span class="cb-n">${name}</span><span class="cb-l">${from}–${from + lines.length - 1}</span><span class="cb-c">Copy</span></div><pre>${lines.map((l, i) => `<span class="ln">${from + i}</span>${l.map(([k, v]) => `<span class="t-${k}">${v.replace(/</g, '&lt;')}</span>`).join('')}`).join('\n')}</pre></div>`;
+};
+
+const thread = {
+  title: 'Is session restore blocking the window?',
+  root: { id: 'root', who: 'me', t: '12m', body: `<p>${agent} is ${tpart('Electron main process')} all good before we put it in front of Kevin's team?</p>`, kids: [
+    { id: 'a', who: 'dot', t: '11m', src: [['search', 'restoreSession'], ['file', 'src/main/index.ts']], body:
+      `<p>Mostly. The sandbox and the IPC sender checks hold up. One thing isn't settled: <code>restoreSession()</code> runs <em>before</em> <code>createWindow()</code>, so a slow keychain unlock delays first paint.</p>
+       ${codeblock('src/main/index.ts', 40, [['k', 'app'], ['p', '.'], ['f', 'whenReady'], ['p', '().'], ['f', 'then'], ['p', '('], ['k', 'async'], ['p', ' () => {'], '\n',
+         ['p', '  '], ['k', 'await'], ['p', ' '], ['f', 'restoreSession'], ['p', '(); '], ['c', '// keychain'], '\n', ['p', '  '], ['f', 'createWindow'], ['p', '();'], '\n', ['p', '});']])}`,
+      kids: [
+        { id: 'b', who: 'kp', t: '9m', body: `<p>It waits because <code>safeStorage</code> has to unlock first. We can open the window, then restore behind the splash.</p>`, kids: [
+          { id: 'c', who: 'me', t: '7m', to: 'kp', body: `<p>Yes, after first paint, and keep the splash until it resolves. ${agent} how long does it take on a cold start?</p>`, kids: [
+            { id: 'd', who: 'dot', working: true },
+          ] },
+          { id: 'e', who: 'ap', t: 'now', fresh: true, body: `<p>If it fails we should land on sign-in, not a blank window.</p>`, kids: [] },
+        ] },
+        { id: 'f', who: 'me', t: '8m', body: `<p>Which test would you add first?</p>`, kids: [
+          { id: 'g', who: 'dot', t: '8m', body: `<p>A restore with an <strong>expired refresh token</strong>, since it's the path that blocks longest: <code>auth-e2e/restore-expired.mjs</code>.</p>`, kids: [] },
+          { id: 'h', who: 'kp', t: '5m', body: `<p>+1, and one with the keychain locked.</p>`, kids: [] },
+        ] },
+      ] },
+    { id: 'i', who: 'kp', t: '4m', body: `<p>Separate thing: the call log is full of TURN lookups failing.</p>`, kids: [
+      { id: 'j', who: 'dot', t: '4m', body: `<p>Those are retries during a network change; the call reconnected.</p>`, kids: [] },
+      { id: 'k', who: 'kp', t: '3m', body: `<p>Fine for now.</p>`, kids: [] },
+    ] },
+  ] },
+};
+const count = (n) => n.kids?.reduce((s, k) => s + 1 + count(k), 0) ?? 0;
+const facesOf = (n, out = []) => { for (const k of n.kids ?? []) { if (!out.includes(k.who)) out.push(k.who); facesOf(k, out); } return out; };
+
+function working(o) {
+  const streamed = o.stream ?? 'On a cold start it’s about <strong>1.4s</strong>, almost all of it the keychain unlock in';
+  return `<div class="work">
+    <div class="head">${av('dot')}<span class="name agent">dot</span><span class="verb">is answering Daniel</span></div>
+    <div class="steps">
+      <span class="step done">${I.check}Searched <code>restoreSession</code> · 3 files</span>
+      <span class="step done">${I.check}Read <code>src/main/auth.ts:12–48</code></span>
+      <span class="step now"><span class="spin"></span>Writing</span>
+    </div>
+    <div class="body" style="margin-top:6px">${streamed}<span class="caret"></span></div>
+  </div>`;
+}
+
+function message(n, o) {
+  if (n.working) return working(o);
+  const p = P[n.who];
+  const cls = ['msg', o.hover === n.id ? 'hover' : '', o.sel === n.id ? 'sel' : '', n.fresh ? 'fresh' + (o.still ? ' still' : '') : '', o.parent === n.id ? 'parent' : ''].join(' ');
+  const to = n.to && o.showTo ? `<span class="to">${I.reply}<b>${P[n.to].name}</b></span>` : '';
+  return `<div class="${cls}">
+    <div class="head">${av(n.who)}<span class="name ${p.agent ? 'agent' : ''}">${p.name}</span>${to}<span class="time">${n.t}</span></div>
+    <div class="body">${n.body}</div>
+    ${n.src && o.sources ? `<div class="src">${n.src.map(([i, s]) => `<span>${I[i]}${s}</span>`).join('')}</div>` : ''}
+    <div class="acts"><span>${I.reply}Reply<kbd>R</kbd></span><span>${I.link}</span><span>${I.check}</span></div>
+  </div>`;
+}
+
+function tree(n, depth, o, level = 0) {
+  let h = n.id === 'root' ? '' : `<div class="node-w">${message(n, o)}`;
+  const kids = n.kids ?? [];
+  const close = n.id === 'root' ? '' : '</div>';
+  if (!kids.length) return h + close;
+  if (o.collapsed?.includes(n.id)) {
+    const f = facesOf(n);
+    return h + `<div class="kids"><span class="collapsed"><span class="plus">+</span>${faces(f.slice(0, 3))}<b>${count(n)} replies</b><span>· ${f.map((w) => P[w].name).slice(0, 2).join(' and ')}</span></span></div>` + close;
+  }
+  if (level >= depth) {
+    const f = facesOf(n);
+    return h + `<div class="kids"><span class="rail"></span><span class="more">${faces(f.slice(0, 3))}<b>${count(n)} more ${count(n) === 1 ? 'reply' : 'replies'}</b>${I.chev}</span></div>` + close;
+  }
+  const inner = kids.map((k) => (o.newBefore === k.id ? `<div class="newline">2 new</div>` : '') + tree(k, depth, o, level + 1)).join('');
+  if (n.id === 'root') return inner;
+  return h + `<div class="kids${o.hotRail === n.id ? ' hot' : ''}"><span class="rail ${o.hotRail === n.id ? 'hot' : ''}"></span>${inner}</div>` + close;
+}
+
+function sideThread(o = {}) {
+  const op = { hover: null, hotRail: 'b', parent: 'b', collapsed: ['i'], still: o.still, ...o };
+  return `<div class="side">
+    ${toolbar()}
+    <div class="th-head"><span class="back">${I.back}Discuss</span><span style="flex:1"></span><span class="icb">${I.expand}</span></div>
+    <div class="sc">
+      <div class="thread">
+        <span class="subs">${chip('main', { lit: true })}${via('signin')}</span>
+        <h3>${thread.title}</h3>
+        <div class="msg" style="margin-bottom:2px"><div class="head">${av('me')}<span class="name">You</span><span class="time">12m</span></div><div class="body">${thread.root.body}</div></div>
+        ${tree(thread.root, 4, op)}
+        <div class="compose">${av('me')}<div class="field">Reply to the thread, or @dot</div><kbd>⌘↩</kbd></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---------- full screen ----------
+function full(o = {}) {
+  const op = { sources: true, sel: 'c', parent: 'b', hotRail: 'b', showTo: true, collapsed: [], still: o.still, ...o };
+  return `<div class="win full"><div>
+    <div class="bar"><span class="lights"><i></i><i></i><i></i></span>
+      <span class="crumb"><span>Voice test</span><span>/</span><span>Discuss</span><span>/</span><b>${thread.title}</b></span><span class="sp"></span>
+      <span class="here-pill">${faces(['me', 'kp'], false, ['me', 'kp'])}<b>2 here</b></span>
+      <span class="btn call">${I.phone}Call</span><span class="btn">${I.share}Share</span><span class="icb">${I.collapse}</span></div>
+    <div class="cols">
+      <div class="flist">
+        ${newThread('main')}
+        <div class="sec need">Needs you<em>2</em><span class="ln"></span></div>
+        ${row('restore', { open: true, compact: true })}
+        ${row('offer', { compact: true })}
+        <div class="sec">In this view<em>4</em><span class="ln"></span></div>
+        ${row('turn', { compact: true })}
+        ${row('ipc', { compact: true })}
+        ${row('batch', { compact: true })}
+      </div>
+      <div class="fmain" style="position:relative">
+        <div class="fread"><div class="fcol">
+          <span class="subs">${chip('main')}${via('signin')}</span>
+          <div class="h1">${thread.title}</div>
+          <div class="msg"><div class="head">${av('me')}<span class="name">You</span><span class="time">12m</span></div><div class="body">${thread.root.body}</div></div>
+          ${tree(thread.root, 5, op)}
+        </div></div>
+        <div class="ffoot"><div class="fcol"><div class="compose">${av('me')}<div class="field">Reply to the thread, or @dot</div><kbd>⌘↩</kbd><span class="send">${I.up}</span></div>
+          <div class="keys"><span><kbd>J</kbd> <kbd>K</kbd> move</span><span><kbd>R</kbd> reply</span><span><kbd>←</kbd> <kbd>→</kbd> fold</span><span><kbd>⌘↑</kbd> parent</span></div></div></div>
+      </div>
+      <div class="rail-r">
+        <h4>About</h4>
+        <div class="box">${chip('main', { lit: true })}${via('signin')}<span class="lnk">${I.eye}Hover to light it on the canvas</span></div>
+        <h4>In this thread</h4>
+        <div class="ppl"><div>${av('me', true)}You<em>3</em></div><div class="hover">${av('kp', true)}Kevin Pei<em>4</em></div><div>${av('ap')}Anuraghav<em>1</em></div><div>${av('dot')}dot<em>4</em></div></div>
+        <h4>Led to</h4><div class="ghost">Start a decision from this</div>
+      </div>
+    </div>
+  </div></div>`;
+}
+
+// ---------- subject kinds ----------
+function kinds() {
+  const K = [
+    { id: 'main', t: 'A part', lit: { nodes: ['main'] }, row: 'restore', at: [-133, -47], note: 'Pin on the part' },
+    { id: 'rtc', t: 'A connection', lit: { edges: ['r-lk'] }, row: 'turn', at: [-52, 109], note: 'Pin at its middle' },
+    { id: 'auth', t: 'A subsystem', lit: { frames: ['auth'] }, row: 'ipc', at: [-133, -117], note: 'Pin on the frame' },
+    { id: 'signin', t: 'A flow', lit: { flows: ['signin'], nodes: [] }, row: 'offer', at: [-52, -40], note: 'Starts at its first part' },
+  ];
+  return `<div class="kinds">
+    <h2>One way to name what a thread is about</h2>
+    <div class="kgrid">${K.map((k) => `<div class="kcard">
+      <div class="khead"><b>${k.t}</b><span>${chip(k.id, { lit: true })}</span></div>
+      <div class="kcv"><div class="stage" style="transform:translate(${k.at[0]}px,${k.at[1]}px) scale(.62)">${canvas(k.lit)}</div></div>
+      ${row(k.row, { compact: true, lit: true })}
+    </div>`).join('')}</div>
+    <div class="kfoot">
+      <div>${chip('canvasparts')}<span class="sub via">several parts</span></div>
+      <div>${chip('view')}<span class="sub via">the whole view</span></div>
+      <div>${chip('line')}<span class="sub via">off the canvas</span></div>
+      <div><span class="sub gone">${I.part}Session cache</span><span class="sub via">a removed part</span></div>
+    </div>
+  </div>`;
+}
+
+// ---------- views ----------
+const q = new URLSearchParams(location.search);
+const view = q.get('view') ?? 'room', theme = q.get('theme') ?? 'light', still = q.has('still');
+document.body.className = 'th-' + theme + (still ? ' still' : '');
+const VIEWS = {
+  room: () => `<div class="win">${canvasPane(SUBJ.rtc.lights)}${sidebar({ hover: 'turn' })}</div>`,
+  selected: () => `<div class="win">${canvasPane({ nodes: [] }, { sel: 'main' })}${sidebar({ sel: 'main', hover: null })}</div>`,
+  scrolled: () => `<div class="win">${canvasPane({ frames: ['auth'] })}${sidebar({ condensed: true, popover: true, hover: 'ipc' })}</div>`,
+  thread: () => `<div class="win">${canvasPane({ nodes: ['main'] })}${sideThread({ hover: 'b', still })}</div>`,
+  full: () => full({ still }),
+  kinds: () => kinds(),
+};
+document.getElementById('root').innerHTML = (VIEWS[view] ?? VIEWS.room)();
+
+// ---------- live: hover a row and its subject lights on the canvas; dot streams its answer ----------
+const cvStage = document.querySelector('.cv > div:last-child');
+document.querySelectorAll('.row[data-subj]').forEach((el) => {
+  el.addEventListener('mouseenter', () => {
+    if (!cvStage) return;
+    const lit = { nodes: [], edges: [], frames: [], flows: [] };
+    for (const s of el.dataset.subj.split(' ')) { const l = SUBJ[s]?.lights ?? {}; for (const k in l) lit[k].push(...l[k]); }
+    cvStage.innerHTML = canvas(lit, { sel: view === 'selected' ? 'main' : null });
+  });
+});
+if (!still) {
+  const body = document.querySelector('.work .body');
+  const full = 'On a cold start it’s about <strong>1.4s</strong>, almost all of it the keychain unlock in <code>safeStorage.decryptString()</code>. Opening the window first hides it behind the splash.';
+  if (body) { let i = 20; const tick = () => { i = Math.min(full.length, i + 3); while (full[i - 1] === '<' || (full.slice(0, i).split('<').length > full.slice(0, i).split('>').length)) i++; body.innerHTML = full.slice(0, i) + '<span class="caret"></span>'; if (i < full.length) setTimeout(tick, 45); }; setTimeout(tick, 600); }
+}
+</script>
+</body>
+</html>

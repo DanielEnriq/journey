@@ -1197,3 +1197,104 @@ button.nx-rail:hover::before,button.nx-rail:focus-visible::before{background:var
 .nx-replying{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 4px 0 6px;border-radius:5px;background:var(--v-surface-selected);font-size:11.5px;color:var(--v-fg-2)}
 .nx-replying b{font-weight:500;color:var(--v-fg)}
 .nx-replying kbd{font:10.5px var(--v-font-sans);color:var(--v-fg-4);padding:0 4px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--v-line-2)}
+
+/* ================================================================ The sidebar, second pass
+   Tabs that only badge what waits on you; one chip vocabulary for what a thread is about; threads as three-line
+   rows in sections (Needs you, here, everything else, resolved folded); an open thread in place of the list. */
+.nx-desk2 .nx-tabs2{justify-content:flex-start;gap:2px;margin:4px 0 10px;padding:0;background:none}
+.nx-desk2 .nx-tab2{flex:none;height:28px;padding:0 11px;border-radius:7px;font-size:13px}
+.nx-desk2 .nx-tab2.on{background:var(--v-surface-raised);box-shadow:var(--v-shadow-1)}
+.nx-desk2 .nx-tab2 .nx-tabn{min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:inline-grid;place-items:center;font:600 10.5px/1 var(--v-font-ui);color:#fff;background:var(--v-signal)}
+.nx-desk2 .nx-tab2 .nx-tabdot{position:static;width:6px;height:6px}
+
+/* Subject chips */
+.nx-sub{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:100%;height:18px;padding:0 6px 0 5px;border-radius:5px;background:var(--v-surface-selected);font-size:11.5px;font-weight:500;color:var(--v-fg-2);white-space:nowrap}
+.nx-sub .nx-ag{flex:none;opacity:.8}
+.nx-sub-n{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nx-sub em{font-style:normal;color:var(--v-fg-4)}
+.nx-sub.lit{color:var(--v-accent);background:color-mix(in srgb,var(--v-accent) 11%,transparent)}
+.tr-subs{display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden}
+.nx-compose{gap:8px}
+.nx-compose > .nx-sub{flex:none;max-width:45%}
+
+/* Sections and rows */
+.tr-list{display:flex;flex-direction:column;margin:0 -6px}
+.tr-sec{display:flex;flex-direction:column;gap:2px}
+.tr-h{display:flex;align-items:center;gap:6px;padding:14px 8px 5px;font-size:11.5px;font-weight:600;color:var(--v-fg-3)}
+.tr-h::after{content:"";flex:1;height:.5px;margin-left:6px;background:var(--v-line)}
+.tr-h em{font-style:normal;font-weight:500;color:var(--v-fg-4)}
+.tr-sec.needs .tr-h{color:var(--v-signal-fg)}
+.tr-sec:first-child .tr-h{padding-top:6px}
+.tr-row{position:relative;display:flex;flex-direction:column;border-radius:10px;transition:background var(--v-dur-1) var(--v-ease)}
+.tr-row:hover{background:var(--v-surface-hover)}
+.tr-row.unread{background:color-mix(in srgb,var(--v-accent) 5%,transparent)}
+.tr-row.unread:hover{background:color-mix(in srgb,var(--v-accent) 8%,transparent)}
+.tr-row.done{opacity:.72}
+.tr-main{display:flex;flex-direction:column;gap:4px;width:100%;padding:9px 10px 10px;border:0;border-radius:10px;background:none;font:inherit;color:inherit;text-align:left;cursor:default}
+.tr-main:focus-visible{outline:0;box-shadow:var(--v-focus-ring)}
+.tr-top{display:flex;align-items:center;gap:8px;min-width:0}
+.tr-top .tr-subs{flex:1}
+.tr-time{flex:none;font-size:11.5px;color:var(--v-fg-4);font-variant-numeric:tabular-nums}
+.tr-t{font-size:13px;line-height:1.42;color:var(--v-fg);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-wrap:pretty}
+.tr-t b{font-weight:600}
+.tr-row.unread .tr-t{font-weight:500}
+.tr-bot{display:flex;align-items:center;gap:7px;min-width:0;font-size:11.5px;color:var(--v-fg-4)}
+.tr-bot .nx-faces > *{box-shadow:0 0 0 1.5px var(--v-bg-sunken,var(--v-bg))}
+.tr-st{margin-left:auto;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.tr-st svg{width:11px;height:11px}
+.tr-st.waiting{color:var(--v-signal-fg);font-weight:500}
+.tr-st.agent{color:var(--v-info-fg)}
+.tr-st.agent .rp-dots{color:var(--v-info)}
+.tr-offer{display:flex;gap:6px;padding:0 10px 10px;margin-top:-4px}
+.tr-offer .nx-btn{height:24px;font-size:12px}
+.tr-fold{display:flex;align-items:center;gap:6px;height:30px;margin:8px -6px 0;padding:0 10px;border:0;border-radius:8px;background:none;font:inherit;font-size:12px;color:var(--v-fg-3);cursor:default}
+.tr-fold:hover{background:var(--v-surface-hover)}
+.tr-fold svg{width:10px;height:10px;transition:transform var(--v-dur-1) var(--v-ease)}
+.tr-fold[aria-expanded="true"] svg{transform:rotate(90deg)}
+
+/* An open thread */
+.tr-open{outline:0;animation:tr-in var(--v-dur-2) var(--v-ease-out) both}
+@keyframes tr-in{from{opacity:0;transform:translateX(8px)}}
+.tr-ohead{display:flex;align-items:center;gap:6px;margin:-2px 0 8px}
+.tr-back{display:inline-flex;align-items:center;gap:3px;height:26px;padding:0 8px 0 4px;border:0;border-radius:6px;background:none;font:inherit;font-size:12.5px;color:var(--v-fg-3);cursor:default}
+.tr-back:hover{background:var(--v-surface-hover);color:var(--v-fg-2)}
+.tr-back svg{width:12px;height:12px}
+.tr-resolve{margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px 0 7px;border:0;border-radius:7px;background:none;box-shadow:inset 0 0 0 1px var(--v-line-2);font:inherit;font-size:12px;font-weight:500;color:var(--v-fg-2);cursor:default;transition:background var(--v-dur-1) var(--v-ease),color var(--v-dur-1) var(--v-ease)}
+.tr-resolve:hover{background:var(--v-surface-hover)}
+.tr-resolve svg{width:12px;height:12px}
+.tr-resolve.on{box-shadow:none;background:color-mix(in srgb,var(--v-success) 14%,transparent);color:var(--v-success)}
+.tr-resolve.on svg{animation:tr-tick var(--v-dur-2) var(--v-ease-out) both}
+@keyframes tr-tick{from{transform:scale(.4);opacity:0}}
+.nx-margin > .tr-resolve{margin:0 0 16px;align-self:flex-start}
+.tr-card{display:flex;flex-direction:column;padding:12px 8px 10px 14px;border-radius:12px;background:var(--v-surface-raised);box-shadow:var(--v-shadow-1)}
+.tr-card > .tr-subs{margin-bottom:7px}
+.tr-title{margin:0 6px 8px 0;font:600 15px/1.35 var(--v-font-display);letter-spacing:-.01em;color:var(--v-fg)}
+.tr-root{gap:3px;padding:6px 8px 7px;margin-left:-8px;border:0;box-shadow:none}
+.tr-root .rp-cm-body{padding-left:25px}
+.tr-open .nx-tree .nx-faces > *{box-shadow:0 0 0 1.5px var(--v-surface-raised)}
+.tr-open.is-done .tr-card{opacity:.85}
+.tr-donenote{display:flex;align-items:center;gap:6px;margin:10px 0 2px;font-size:12px;color:var(--v-fg-3)}
+.tr-donenote svg{width:12px;height:12px;color:var(--v-success)}
+.nx-fthread-main > .tr-subs{margin-bottom:6px}
+
+/* Replies, in motion: new ones rise in (someone else's with a wash that fades), a focused message is selected,
+   pointing at a reply darkens the line it hangs on and rings the face of the message it answers. */
+.nx-tree .rp-cm-r[data-id]{outline:0}
+.nx-tree .rp-cm-r[data-id]:focus-visible{background:var(--v-surface-selected);box-shadow:inset 2px 0 0 var(--v-accent)}
+.nx-tree .rp-cm-r.nx-arrive{animation:nx-rise 220ms var(--v-ease-out) both}
+.nx-tree .rp-cm-r.nx-arrive.theirs{animation:nx-rise 220ms var(--v-ease-out) both,nx-wash 2.4s var(--v-ease-out) both}
+@keyframes nx-rise{from{opacity:0;transform:translateY(4px)}}
+@keyframes nx-wash{0%,30%{background:color-mix(in srgb,var(--v-accent) 10%,transparent)}}
+.nx-kids:has(> .nx-node > .rp-cm-r:hover) > .nx-rail::before{background:color-mix(in srgb,var(--v-accent) 45%,transparent)}
+.nx-node:has(> .nx-kids > .nx-node > .rp-cm-r:hover) > .rp-cm-r .rp-cm-head > :first-child{box-shadow:0 0 0 2px var(--v-surface-raised),0 0 0 3.5px color-mix(in srgb,var(--v-accent) 45%,transparent);border-radius:50%;transition:box-shadow var(--v-dur-1) var(--v-ease)}
+.nx-act kbd{height:14px;line-height:14px;padding:0 3px;border-radius:3px;font:10px var(--v-font-ui);color:var(--v-fg-4);box-shadow:inset 0 0 0 1px var(--v-line-2)}
+.nx-thinking{animation:nx-rise 200ms var(--v-ease-out) both}
+.nx-thinking span:not(.nx-spin){color:var(--v-fg-3)}
+.nx-spin{width:10px;height:10px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--v-info) 30%,transparent);border-top-color:var(--v-info);animation:nx-spin .8s linear infinite}
+@keyframes nx-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){
+  .tr-open,.tr-resolve.on svg,.nx-tree .rp-cm-r.nx-arrive,.nx-tree .rp-cm-r.nx-arrive.theirs,.nx-thinking{animation:none}
+  .nx-tree .rp-cm-r.nx-arrive.theirs{background:color-mix(in srgb,var(--v-accent) 6%,transparent)}
+  .nx-spin{animation-duration:2.4s}
+}
+.nx-desk2 .tr-card > .nx-tree{margin-top:0;padding-top:0;border-top:0}

@@ -365,7 +365,7 @@ function Room(props: InnerProps) {
       agentReply={(threadId, body, parentId) => act(props.agentReply(roomId, threadId, body, parentId))}
       access={ui.access} role={summary?.role ?? ui.access?.members.find((m) => m.userId === ui.access?.viewerId)?.role ?? null} me={props.self()}
       call={inCall ? call : null} callAction={callAction} onRename={rename} space={space ?? (summary?.repo ? repoName(summary.repo) : null)} people={inCall ? [me, ...others] : [me, ...looking]} sessions={sessions} speaking={speaking} inCall={summary?.inCall.length ?? 0} overlays={notices}
-      deskTop={summary ? <RoomCards room={sources.room} work={sources.work} roomId={roomId} attachError={props.attachError} onJoin={join}
+      deskTop={summary ? <RoomCards room={sources.room} work={sources.work} roomId={roomId} attachError={props.attachError} onJoin={join} access={ui.access}
         people={membership && ui.access ? <PeopleSection source={membership} access={ui.access} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} /> : undefined} /> : null}
       share={ui.share} openShare={ui.openShare} light={light} windowOverlay={ui.toasts}
       peoplePanel={ui.people && membership && ui.access ? (

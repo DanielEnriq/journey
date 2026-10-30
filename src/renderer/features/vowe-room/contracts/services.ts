@@ -35,8 +35,8 @@ export interface ThreadService {
   create(roomId: string, t: NewThread): Promise<RoomResult<{ id: string }>>;
   /** permission: comment. Journey: RoomRecordSource.reply. `parentId`: the reply it answers, in the same thread. */
   reply(roomId: string, threadId: string, body: string, parentId?: string | null): Promise<RoomResult<{ id: string }>>;
-  /** permission: comment. Journey: RoomRecordSource.resolve. */
-  resolve(roomId: string, threadId: string): Promise<RoomResult<void>>;
+  /** permission: comment. Journey: RoomRecordSource.resolve. `reopen` opens a resolved thread again. */
+  resolve(roomId: string, threadId: string, reopen?: boolean): Promise<RoomResult<void>>;
   /** Accept or dismiss an agent's offer in a thread. permission: write. Accepting only records the answer:
    *  whatever the offer makes (a decision draft, a plan revision) is created by a separate, visible write. */
   answerOffer(roomId: string, threadId: string, replyId: string, accept: boolean): Promise<RoomResult<void>>;

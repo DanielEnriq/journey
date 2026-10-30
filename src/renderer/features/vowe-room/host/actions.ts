@@ -88,6 +88,7 @@ export function createDeskActions(d: HostDeps): DeskAct {
       void run(s.threads.reply(roomId, t, body, parent));
     },
     offer: (t, reply, accept) => void run(s.threads.answerOffer(roomId, t, reply, accept)),
+    resolveThread: (t, reopen) => void run(s.threads.resolve(roomId, t, reopen)),
     newThread: (body) => {
       if (!body) return;
       const sel = d.selection();

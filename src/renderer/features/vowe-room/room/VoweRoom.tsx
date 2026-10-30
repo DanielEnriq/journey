@@ -150,7 +150,7 @@ export function VoweRoom(p: VoweRoomProps) {
   const deskProps = {
     fsec: u.fsec, rec, me: dir.me, tab: u.tab, inspect: u.inspect, depth, compare: u.compare, openThread: u.thread, focus, focusOn: u.focusOn, hereLine: p.hereLine,
     flash: u.flash, noticesOpen: u.noticesOpen, sinceOpen: u.sinceOpen, act: p.act, role: p.role, caps, narrow: !wide || insW < 660, everywhere: u.everywhere,
-    room: { name: p.room.name, repo: p.room.repo }, scene: focusMode ? s.scenes[s.doc.activeView] ?? null : null,
+    room: { name: p.room.name, repo: p.room.repo }, scene: s.scenes[s.doc.activeView] ?? null,
   };
   // The @ menu's other sources: the room's sessions, and the parts on the canvas as it shows now.
   const scene = s.scenes[s.doc.activeView];

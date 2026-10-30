@@ -135,13 +135,14 @@ export function createRoomRecordService(client: () => Promise<Cloud>) {
       return toComment(data);
     },
 
-    async resolve(roomId: string, threadId: string): Promise<void> {
+    /** Resolves a thread, or with `reopen` opens it again. */
+    async resolve(roomId: string, threadId: string, reopen = false): Promise<void> {
       const room = requireId(roomId, 'Room');
       const thread = requireId(threadId, 'Thread');
       const { supabase } = await signedIn();
       const { data, error } = await supabase
         .from('room_threads')
-        .update({ resolved_at: new Date().toISOString() })
+        .update({ resolved_at: reopen === true ? null : new Date().toISOString() })
         .eq('id', thread)
         .eq('room_id', room)
         .select('id');

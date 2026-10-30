@@ -443,7 +443,7 @@ export function registerIpc() {
   handle('record:get', (roomId) => roomResult(() => roomRecord.getRecord(roomId)));
   handle('record:addThread', (roomId, thread) => roomResult(() => roomRecord.addThread(roomId, thread)));
   handle('record:reply', (roomId, threadId, body, authorKind, parentId) => roomResult(() => roomRecord.reply(roomId, threadId, body, authorKind === 'agent' ? 'agent' : 'human', parentId ?? null)));
-  handle('record:resolve', (roomId, threadId) => roomResult(() => roomRecord.resolve(roomId, threadId)));
+  handle('record:resolve', (roomId, threadId, reopen) => roomResult(() => roomRecord.resolve(roomId, threadId, reopen === true)));
   handle('record:propose', (roomId, decision) => roomResult(() => roomRecord.propose(roomId, decision)));
   handle('record:amend', (roomId, decisionId, change) => roomResult(() => roomRecord.amend(roomId, decisionId, change)));
   handle('record:sign', (roomId, decisionId, version) => roomResult(() => roomRecord.sign(roomId, decisionId, version)));
