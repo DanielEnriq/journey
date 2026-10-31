@@ -1186,8 +1186,8 @@ export interface Channels {
     'spaces:rename': (workspaceId: string, name: string) => RoomResult<void>;
     'record:get': (roomId: string) => RoomResult<RoomRecord>;
     'record:addThread': (roomId: string, thread: NewThread) => RoomResult<RoomThread>;
-    'record:reply': (roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent') => RoomResult<RoomComment>;
-    'record:resolve': (roomId: string, threadId: string) => RoomResult<void>;
+    'record:reply': (roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent', parentId?: string | null) => RoomResult<RoomComment>;
+    'record:resolve': (roomId: string, threadId: string, reopen?: boolean) => RoomResult<void>;
     'record:propose': (roomId: string, decision: { title: string; verify: string }) => RoomResult<RoomDecision>;
     'record:amend': (roomId: string, decisionId: string, change: { title?: string; verify?: string }) => RoomResult<RoomDecision>;
     /** Signs the decision's current version; refused if `version` isn't current any more. */
@@ -1474,8 +1474,10 @@ export interface JourneyApi {
   record: {
     get(roomId: string): Promise<RoomResult<RoomRecord>>;
     addThread(roomId: string, thread: NewThread): Promise<RoomResult<RoomThread>>;
-    reply(roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent'): Promise<RoomResult<RoomComment>>;
-    resolve(roomId: string, threadId: string): Promise<RoomResult<void>>;
+    /** `parentId`: the reply this one answers, in the same thread; none answers the thread itself. */
+    reply(roomId: string, threadId: string, body: string, authorKind?: 'human' | 'agent', parentId?: string | null): Promise<RoomResult<RoomComment>>;
+    /** `reopen`: open a resolved thread again. */
+    resolve(roomId: string, threadId: string, reopen?: boolean): Promise<RoomResult<void>>;
     propose(roomId: string, decision: { title: string; verify: string }): Promise<RoomResult<RoomDecision>>;
     amend(roomId: string, decisionId: string, change: { title?: string; verify?: string }): Promise<RoomResult<RoomDecision>>;
     sign(roomId: string, decisionId: string, version: number): Promise<RoomResult<RoomDecision>>;

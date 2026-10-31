@@ -11,6 +11,7 @@ import { Who } from './Desk.js';
 // The @ menu every composer in the Desk shares: the room's people (the agent among them, marked as one), the
 // coding sessions attached to it, its decisions, and the parts on the canvas. Arrows move, Enter or Tab picks,
 // Esc closes. A pick shows as "@Label" in the field and is sent as a token (state/mentions.ts).
+// The field grows with what's written, up to a few lines, then scrolls. Enter sends, Shift-Enter starts a new line.
 
 /** What the Desk can't read from the record: the room's attached sessions and the canvas's parts. */
 export const MentionSources = createContext<{ sessions: MentionItem[]; parts: MentionItem[] }>({ sessions: [], parts: [] });
@@ -61,7 +62,7 @@ const stateWords = (m: MentionItem) => STATE_WORDS[m.kind === 'person' ? m.state
 export function MentionField({ value, onInput, onSubmit, p, placeholder, label, autoFocus, disabled, onKeyDown }: {
   value: string;
   onInput(v: string): void;
-  /** Enter with the menu closed: the text with picked mentions as tokens. */
+  /** Enter (not Shift-Enter) with the menu closed: the text with picked mentions as tokens. */
   onSubmit(text: string): void;
   p: DeskProps;
   placeholder?: string;
@@ -72,13 +73,20 @@ export function MentionField({ value, onInput, onSubmit, p, placeholder, label, 
   onKeyDown?(e: KeyboardEvent): void;
 }) {
   const items = useItems(p);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   const picked = useRef<MentionItem[]>([]);
   const [caret, setCaret] = useState(0);
   const [closed, setClosed] = useState<number | null>(null);
   const [active, setActive] = useState(0);
   useEffect(() => { if (!value) picked.current = []; }, [value]);
   useEffect(() => { if (autoFocus) input.current?.focus(); }, []);
+  // Fit the field to its text; the max-height in CSS decides when it scrolls instead.
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
 
   const at = disabled ? null : queryAt(value, caret);
   const open = !!at && closed !== at.start;
@@ -108,7 +116,7 @@ export function MentionField({ value, onInput, onSubmit, p, placeholder, label, 
       if ((e.key === 'Enter' || e.key === 'Tab') && cur) { e.preventDefault(); pick(cur); return; }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setClosed(at!.start); return; }
     }
-    if (e.key === 'Enter' && !e.shiftKey && value.trim()) { e.preventDefault(); onSubmit(encodeMentions(value.trim(), picked.current)); return; }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && value.trim()) { e.preventDefault(); onSubmit(encodeMentions(value.trim(), picked.current)); return; }
     onKeyDown?.(e);
   };
   const sync = () => setCaret(input.current?.selectionStart ?? 0);
@@ -116,11 +124,11 @@ export function MentionField({ value, onInput, onSubmit, p, placeholder, label, 
 
   return (
     <>
-      <input ref={input} type="text" placeholder={placeholder} aria-label={label} value={value} disabled={disabled}
+      <textarea ref={input} rows={1} placeholder={placeholder} aria-label={label} value={value} disabled={disabled}
         role="combobox" aria-expanded={open} aria-controls={open ? listId : undefined} aria-autocomplete="list"
         aria-activedescendant={open && cur ? `${listId}-${flat.indexOf(cur)}` : undefined}
         onInput={(e) => { onInput(e.currentTarget.value); setCaret(e.currentTarget.selectionStart ?? 0); setClosed(null); setActive(0); }}
-        onKeyDown={key} onKeyUp={(e) => { if (/^Arrow(Left|Right)|Home|End$/.test(e.key)) sync(); }} onClick={sync}
+        onKeyDown={key} onKeyUp={(e) => { if (/^(Arrow(Left|Right|Up|Down)|Home|End)$/.test(e.key)) sync(); }} onClick={sync}
         onBlur={() => setClosed(at?.start ?? null)} onFocus={() => { sync(); setClosed(null); }} />
       {open ? <MentionMenu id={listId} anchor={input} groups={groups} flat={flat} cur={cur} setActive={setActive} pick={pick}
         empty={at!.q ? { q: at!.q, invite: () => p.act.invite() } : null} /> : null}
@@ -129,7 +137,7 @@ export function MentionField({ value, onInput, onSubmit, p, placeholder, label, 
 }
 
 function MentionMenu({ id, anchor, groups, flat, cur, setActive, pick, empty }: {
-  id: string; anchor: { current: HTMLInputElement | null }; groups: { title: string; items: MentionItem[] }[]; flat: MentionItem[]; cur?: MentionItem;
+  id: string; anchor: { current: HTMLTextAreaElement | null }; groups: { title: string; items: MentionItem[] }[]; flat: MentionItem[]; cur?: MentionItem;
   setActive(i: number): void; pick(m: MentionItem): void; empty: { q: string; invite(): void } | null;
 }) {
   const box = useRef<HTMLDivElement>(null);

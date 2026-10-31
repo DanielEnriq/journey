@@ -58,6 +58,8 @@ export interface UiState {
   compare: number | null;
   /** Full screen: which section Focus shows (For you is Home's Inbox now). */
   fsec: Tab;
+  /** Full screen: the section whose composer fills the page (a new thread, decision or work), if one does. */
+  fwrite: Tab | null;
 }
 
 export const initialUi = (): UiState => ({
@@ -65,8 +67,18 @@ export const initialUi = (): UiState => ({
   vowe: 'listening', voweLine: 'Listening', said: [], cc: true, muted: false,
   deskOpen: true, tab: 'discuss', inspect: null, focusOn: true, thread: null,
   flash: null, since: false, sinceOpen: true, noticesOpen: false, draft: null, note: null,
-  insW: 760, toast: null, everywhere: false, depth: 'compact', prevDepth: null, lens: 'call', myView: null, compare: null, fsec: 'discuss',
+  insW: 760, toast: null, everywhere: false, depth: 'compact', prevDepth: null, lens: 'call', myView: null, compare: null, fsec: 'discuss', fwrite: null,
 });
 
-export const makeUi = () => new Store<UiState>(initialUi());
+// Moving anywhere else in the Desk puts down what you were writing in full screen, whichever path moved you
+// (a tab, a thread, an Inbox anchor, leaving full screen), unless the move itself opens the composer.
+const MOVES = ['tab', 'fsec', 'inspect', 'thread', 'depth'] as const;
+class UiStore extends Store<UiState> {
+  setState(p: Partial<UiState>) {
+    const moved = !('fwrite' in p) && this.state.fwrite && MOVES.some((k) => k in p && p[k] !== this.state[k]);
+    super.setState(moved ? { ...p, fwrite: null } : p);
+  }
+}
+
+export const makeUi = (): Ui => new UiStore(initialUi());
 export type Ui = Store<UiState>;

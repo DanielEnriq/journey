@@ -117,8 +117,8 @@ const api: JourneyApi = {
   record: {
     get: (roomId) => invoke('record:get', roomId),
     addThread: (roomId, thread) => invoke('record:addThread', roomId, thread),
-    reply: (roomId, threadId, body, authorKind) => invoke('record:reply', roomId, threadId, body, authorKind),
-    resolve: (roomId, threadId) => invoke('record:resolve', roomId, threadId),
+    reply: (roomId, threadId, body, authorKind, parentId) => invoke('record:reply', roomId, threadId, body, authorKind, parentId),
+    resolve: (roomId, threadId, reopen) => invoke('record:resolve', roomId, threadId, reopen),
     propose: (roomId, decision) => invoke('record:propose', roomId, decision),
     amend: (roomId, decisionId, change) => invoke('record:amend', roomId, decisionId, change),
     sign: (roomId, decisionId, version) => invoke('record:sign', roomId, decisionId, version),

@@ -649,6 +649,7 @@ export type Database = {
           offer_at: string | null
           offer_by: string | null
           offer_state: string | null
+          parent_id: string | null
           room_id: string
           thread_id: string
         }
@@ -662,6 +663,7 @@ export type Database = {
           offer_at?: string | null
           offer_by?: string | null
           offer_state?: string | null
+          parent_id?: string | null
           room_id: string
           thread_id: string
         }
@@ -675,6 +677,7 @@ export type Database = {
           offer_at?: string | null
           offer_by?: string | null
           offer_state?: string | null
+          parent_id?: string | null
           room_id?: string
           thread_id?: string
         }

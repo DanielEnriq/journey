@@ -16,6 +16,7 @@ type Json = unknown;
 export interface RawMember { user_id: string; role: RoomRole; name: string | null; email: string | null; avatar_url: string | null }
 export interface RawComment {
   id: string; thread_id: string; body: string; created_by: string; created_at: Iso; author_kind: 'human' | 'agent';
+  parent_id?: string | null;
   offer: { kind: 'decision' | 'work' | 'revision' | 'edit'; text: string; target?: string } | null;
   offer_state: 'open' | 'accepted' | 'dismissed' | null; offer_by: string | null;
 }
@@ -146,6 +147,7 @@ function threadOf(t: RawThread, me: string | null, seenAt: Iso | null, now: Date
   const replies: Reply[] = [first, ...t.replies.map((c) => {
     const r: Reply = { id: c.id, by: author(c.author_kind, c.created_by), body: c.body, ago: agoOf(c.created_at, now) };
     if (fresh(c.created_by, c.created_at)) r.fresh = true;
+    if (c.parent_id) r.parent = c.parent_id;
     if (c.offer && c.offer_state) {
       r.offer = { kind: c.offer.kind, text: c.offer.text, state: c.offer_state };
       if (c.offer_by) r.offer.by = c.offer_by;

@@ -52,7 +52,7 @@ export interface RoomScreenProps {
   /** The room's record (decisions, plans, threads, attention): the Desk's and the Inbox's services. */
   vowe: VoweServices;
   /** Records Vowe's answer to a comment as its reply in that thread. */
-  agentReply(roomId: string, threadId: string, body: string): Promise<void>;
+  agentReply(roomId: string, threadId: string, body: string, parentId?: string | null): Promise<void>;
   /** You, as the record names you. */
   self(): string;
   /** Why the room's repository couldn't be attached when it was made. */
@@ -362,10 +362,10 @@ function Room(props: InnerProps) {
   const speaking = Object.keys(ring)[0] ?? null;
   return (
     <RealRoom roomId={roomId} room={summary ?? { id: roomId, name: 'Room', repo: null }} rooms={rooms} services={props.vowe} client={board} asker={asker}
-      agentReply={(threadId, body) => act(props.agentReply(roomId, threadId, body))}
+      agentReply={(threadId, body, parentId) => act(props.agentReply(roomId, threadId, body, parentId))}
       access={ui.access} role={summary?.role ?? ui.access?.members.find((m) => m.userId === ui.access?.viewerId)?.role ?? null} me={props.self()}
       call={inCall ? call : null} callAction={callAction} onRename={rename} space={space ?? (summary?.repo ? repoName(summary.repo) : null)} people={inCall ? [me, ...others] : [me, ...looking]} sessions={sessions} speaking={speaking} inCall={summary?.inCall.length ?? 0} overlays={notices}
-      deskTop={summary ? <RoomCards room={sources.room} work={sources.work} roomId={roomId} attachError={props.attachError} onJoin={join}
+      deskTop={summary ? <RoomCards room={sources.room} work={sources.work} roomId={roomId} attachError={props.attachError} onJoin={join} access={ui.access}
         people={membership && ui.access ? <PeopleSection source={membership} access={ui.access} onInvite={ui.openShare} onLeft={() => {}} onNote={ui.note} /> : undefined} /> : null}
       share={ui.share} openShare={ui.openShare} light={light} windowOverlay={ui.toasts}
       peoplePanel={ui.people && membership && ui.access ? (

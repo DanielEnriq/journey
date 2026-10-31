@@ -34,6 +34,8 @@ export type About =
 
 export interface Reply {
   id: string;
+  /** The reply this one answers; none when it answers the thread (the first reply is the thread itself). */
+  parent?: string;
   by: PersonId;
   body: string;
   ago: string;
@@ -57,7 +59,9 @@ export interface Thread {
   linked?: About[];
   /** Who it's waiting on, if anyone. */
   waiting?: PersonId;
-  presence?: { personId: PersonId; mode: 'typing' | 'reading' };
+  /** `under`: the reply being answered, when it's one (an agent answering shows beneath it). `draft` and `doing`,
+   *  live from the asker's own turn: the agent's answer so far, and what it's doing in words. */
+  presence?: { personId: PersonId; mode: 'typing' | 'reading'; under?: string; draft?: string; doing?: string };
   /** The passage a comment is anchored to (plan steps, decision lines). */
   quote?: string;
   at?: { x: number; y: number };

@@ -9,43 +9,45 @@
 .win .avatar.p3{background:var(--ink-6)}
 .win .mav.p3{background:var(--ink-6)}
 
-/* ---------- The room's own cards, above the Desk in its side panel. ---------- */
+/* ---------- The room's own header, above the Desk in its side panel. ---------- */
 @scope (.room-screen) {
   .desk-panel{display:flex;flex-direction:column}
   .desk-panel > :last-child{flex:1;min-height:0;height:auto}
-  .desk-cards{flex:none;max-height:55%;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:12px 12px 4px;scrollbar-width:none}
-  .desk-cards::-webkit-scrollbar{display:none}
-  /* The Room card says who's here, so the Desk's own heading gives the band back to the call. */
+  /* The header says what the room is, so the Desk's own heading gives the band back to the call. */
   .desk-panel:has(> .desk-cards) .nx-desk2 > .rp-rhead{display:none}
-  .icard{flex:none;display:flex;flex-direction:column;border-radius:12px;background:var(--v-surface-raised);box-shadow:0 0 0 .5px var(--hairline),0 1px 2px rgba(0,0,0,.05),0 6px 20px -8px rgba(0,0,0,.14);}
-  .icard-h{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:4px;height:34px;padding:0 12px;cursor:default;border-radius:12px}
-  .icard-h:focus-visible{box-shadow:inset 0 0 0 2px var(--v-focus)}
-  .icard-t{font-size:12px;font-weight:600;color:var(--v-fg-2,var(--ink-5))}
-  .icard-h svg{width:12px;height:12px;color:var(--ink-8);transition:transform .15s ease;opacity:0}
-  .icard-h:hover svg,.icard-h:focus-visible svg{opacity:1}
-  .icard.is-open .icard-h svg{transform:rotate(90deg)}
-  .icard-s{margin-left:auto;padding-left:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ink-8);font-variant-numeric:tabular-nums}
-  .icard-s.is-needs{color:var(--attention-ink)}
-  .icard-b{display:flex;flex-direction:column;padding:0 12px 12px;min-width:0}
-  .icard-b > .rsec{border-top:0;padding:0}
-  .icard-b > .rsec + .rsec{border-top:1px solid var(--hairline);margin-top:10px;padding-top:10px}
-  .icard-b .rsec .rk{gap:4px;font-size:11px;font-weight:600;color:var(--ink-7)}
-  .icard-b .rsec .rk svg{width:12px;height:12px;color:var(--ink-8)}
-  /* What the room is for: one plain line, or the question that asks it. */
-  .icard-goal{margin:0 0 8px;font-size:12.5px;line-height:1.45;color:var(--ink-3);text-wrap:pretty}
-  .icard-goal.goal-field{display:block;width:100%;padding:0;resize:none;overflow:hidden;border:0;background:none;outline:none;font-family:inherit;color:var(--ink-bright)}
-  .icard-goal.goal-field::placeholder{color:var(--ink-8)}
-  .icard-goal.goal-field:disabled{opacity:.6}
+  /* The room's header: what it's for as the title, and one line of what it has. Each item on the line opens a
+     popover with the whole list (repositories, people, sessions). */
+  .desk-cards.rh{position:relative;z-index:5;flex:none;display:flex;flex-direction:column;gap:6px;padding:10px 16px 4px}
+  .rh-goal{margin:0;font:600 16px/1.3 var(--v-font-display);letter-spacing:-.012em;color:var(--v-fg);text-wrap:balance;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .rh-goal.goal-field{display:block;width:100%;padding:0;resize:none;overflow:hidden;border:0;background:none;outline:none;font:600 16px/1.3 var(--v-font-display)}
+  .rh-goal.goal-field::placeholder{color:var(--v-fg-4)}
+  .rh-goal.goal-field:disabled{opacity:.6}
+  .rh-meta{display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-left:-6px}
+  .rh-m{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 6px;border-radius:6px;font-size:12px;color:var(--v-fg-3);cursor:default;white-space:nowrap;transition:background var(--v-dur-1) var(--v-ease)}
+  .rh-m:hover,.rh-m.on{background:var(--v-surface-hover);color:var(--v-fg-2)}
+  .rh-m:focus-visible{box-shadow:var(--v-focus-ring)}
+  .rh-m svg{width:12px;height:12px;flex:none}
+  .rh-m b{font-weight:500;color:var(--v-fg-2)}
+  .rh-needs{display:inline-flex;align-items:center;gap:5px;margin-left:2px;font-style:normal;color:var(--v-signal-fg)}
+  .rh-needs::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--v-signal)}
+  .rh-faces{display:inline-flex;align-items:center}
+  .rh-face{position:relative;display:inline-flex;border-radius:50%;box-shadow:0 0 0 1.5px var(--v-bg-sunken,var(--v-bg))}
+  .rh-face + .rh-face{margin-left:-3px}
+  .rh-face.here::after{content:"";position:absolute;right:-1px;bottom:-1px;width:7px;height:7px;border-radius:50%;background:var(--v-success);box-shadow:0 0 0 1.5px var(--v-bg-sunken,var(--v-bg))}
+  .rh-more{margin-left:5px;font-size:11px;color:var(--v-fg-4)}
+  .rh-pop{position:absolute;left:10px;right:10px;top:calc(100% + 2px);max-height:min(60vh,520px);overflow-y:auto;padding:12px;border-radius:12px;background:var(--v-surface-raised);box-shadow:var(--v-shadow-2),0 12px 32px -8px rgba(0,0,0,.22);animation:rh-pop var(--v-dur-1) var(--v-ease-out) both}
+  .rh-pop > .rsec{border:0;padding:0}
+  @keyframes rh-pop{from{opacity:0;transform:translateY(-4px) scale(.985)}}
+  @media (prefers-reduced-motion:reduce){.rh-pop{animation:none}}
+  .rh-pop .wstream .top{display:flex;align-items:center;gap:6px;min-width:0}
+  .rh-pop .wstream .wt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rh-pop .wstream .top .who{margin-left:auto;flex:none;padding-left:6px;white-space:nowrap;font-size:11px;color:var(--ink-8)}
+  .rh-pop .wstream .top .wface{margin-left:auto;flex:none;width:16px;height:16px;font-size:8px;line-height:16px}
   .icard-repos{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:2px}
   .icard-repos li{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:var(--ink-6);line-height:20px}
   .icard-repos li svg{flex:none;width:13px;height:13px;color:var(--ink-8)}
   .icard-repos li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .icard-repos + .rsec{border-top:1px solid var(--hairline);margin-top:8px;padding-top:10px}
   /* A stream on one line in a card: its title gives way, the agent's name doesn't. */
-  .desk-cards .wstream .top{display:flex;align-items:center;gap:6px;min-width:0}
-  .desk-cards .wstream .wt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .desk-cards .wstream .top .who{margin-left:auto;flex:none;padding-left:6px;white-space:nowrap;font-size:11px;color:var(--ink-8)}
-  .desk-cards .wstream .top .wface{margin-left:auto;flex:none;width:16px;height:16px;font-size:8px;line-height:16px}
   /* Add Session: one quiet line under the room's sessions; what's on this Mac opens as a menu. */
   .wadd{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:6px;margin-top:4px;padding:5px 6px;border-radius:6px;font-size:12px;color:var(--ink-7);cursor:default}
   .wadd svg{width:12px;height:12px;color:var(--ink-8)}
@@ -119,7 +121,7 @@
 
   /* What waits on someone. */
   .needcard{display:flex;flex-direction:column;gap:7px;padding:11px 12px 12px;border-radius:10px;background:var(--attention-wash);box-shadow:inset 0 0 0 1px var(--attention-line)}
-  .needcard b{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--attention-text)}
+  .needcard b{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--attention-text)}
   .needcard p{margin:0;font-size:12px;line-height:1.5;color:var(--ink-4);text-wrap:pretty}
   .needcard .acts,.rsec .acts,.wq .acts{display:flex;gap:6px;flex-wrap:wrap}
 
@@ -131,12 +133,12 @@
   .wstream .line{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wstream.open .line{white-space:normal}
   .winspect{display:flex;flex-direction:column;gap:9px;padding:2px 8px 11px}
-  .winspect .mono{font-size:10.5px;color:var(--ink-8);word-break:break-all}
-  .wstate{font-size:11.5px;color:var(--ink-5)}
+  .winspect .mono{font-size:11px;color:var(--ink-8);word-break:break-all}
+  .wstate{font-size:12px;color:var(--ink-5)}
   .wq{display:flex;flex-direction:column;gap:8px;padding:9px 10px;border-radius:8px;background:var(--menu);box-shadow:0 0 0 1px var(--attention-line)}
   .wq p{margin:0;font-size:12px;line-height:1.5;color:var(--ink-2)}
   .wchecks{display:flex;flex-direction:column;gap:2px}
-  .wcheck{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:8px;height:24px;font-size:11.5px;color:var(--ink-3)}
+  .wcheck{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:8px;height:24px;font-size:12px;color:var(--ink-3)}
   .wcheck .vi{width:7px;height:7px;border-radius:50%;box-shadow:inset 0 0 0 1.2px var(--ink-8)}
   .wcheck .vs{font-size:11px;color:var(--ink-8)}
   .wcheck.pass .vi{background:var(--good);box-shadow:none}.wcheck.pass .vs{color:var(--good)}
@@ -144,7 +146,7 @@
   .wcheck.running .vi{box-shadow:inset 0 0 0 1.2px var(--ink-4)}
   .wlog{display:flex;flex-direction:column;gap:3px}
   .wlog ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px}
-  .wlog li{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;line-height:1.45;color:var(--ink-5)}
+  .wlog li{display:flex;justify-content:space-between;gap:10px;font-size:12px;line-height:1.45;color:var(--ink-5)}
   .wtranscript{max-height:260px;overflow-y:auto}
   .wtranscript li span:first-child{min-width:0;overflow-wrap:anywhere;white-space:pre-line}
   .wtranscript b{color:var(--ink-3);font-weight:600}
@@ -162,8 +164,8 @@
   .fresh-empty{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:380px;max-width:calc(100% - 140px);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;pointer-events:none}
   .fresh-empty .orb{width:26px;height:26px;flex-basis:26px;margin-bottom:6px}
   .fresh-empty b{font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--ink-bright)}
-  .fresh-empty span{font-size:12.5px;line-height:1.55;color:var(--ink-6)}
-  .fresh-empty .fine{font-size:11.5px;color:var(--ink-8)}
+  .fresh-empty span{font-size:13px;line-height:1.55;color:var(--ink-6)}
+  .fresh-empty .fine{font-size:12px;color:var(--ink-8)}
   .fresh-empty button{pointer-events:auto;margin-top:4px}
 }
 

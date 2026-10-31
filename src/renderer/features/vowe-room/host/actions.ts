@@ -1,6 +1,6 @@
 import type { PersonId, Store } from '../journey.js';
 import type { RoomFailure, RoomResult } from '../../../../shared/api.js';
-import type { About, Notice, VoweRecord, Work } from '../contracts/model.js';
+import type { About, Notice, Reply, Thread, VoweRecord, Work } from '../contracts/model.js';
 import type { VoweServices } from '../contracts/services.js';
 import type { DeskAct } from '../desk/Desk.js';
 import type { Attn } from '../state/attention.js';
@@ -83,15 +83,29 @@ export function createDeskActions(d: HostDeps): DeskAct {
     openExternal: (url) => { if (/^https:\/\//.test(url)) d.openExternal(url); },
 
     // Discuss
-    reply: (t, body) => {
+    // A message shows the moment it's sent; the write and the re-read follow, and a failure takes it back out.
+    reply: (t, body, parent) => {
       if (t.startsWith('line:')) { const [, dec, line] = t.split(':'); void thread({ kind: 'line', id: line, decision: dec, name: 'Decision line' }, body); return; }
-      void run(s.threads.reply(roomId, t, body));
+      const mine: Reply = { id: `local:${Date.now()}`, by: me, body, ago: 'now', ...(parent ? { parent } : {}) };
+      void optimistic((rec) => ({ threads: rec.threads.map((x) => (x.id === t ? { ...x, replies: [...x.replies, mine] } : x)) }), () => s.threads.reply(roomId, t, body, parent))
+        .then((ok) => { if (ok) void reload(); });
     },
     offer: (t, reply, accept) => void run(s.threads.answerOffer(roomId, t, reply, accept)),
+    resolveThread: (t, reopen) => void run(s.threads.resolve(roomId, t, reopen)),
+    // A new thread opens at once under a local id, which becomes the server's when it answers.
     newThread: (body) => {
       if (!body) return;
       const sel = d.selection();
-      void thread(sel ? { kind: 'part', id: sel.id, name: sel.name } : { kind: 'part', id: 'canvas', name: 'Canvas' }, body, { waiting: mentioned(body) });
+      const about: About = sel ? { kind: 'part', id: sel.id, name: sel.name } : { kind: 'part', id: 'canvas', name: 'Canvas' };
+      const waiting = mentioned(body), id = `local:${Date.now()}`;
+      const mine: Thread = { id, about, status: 'open', replies: [{ id: `${id}:0`, by: me, body, ago: 'now' }], ...(waiting ? { waiting } : {}) };
+      record.setState({ threads: [...r().threads, mine] });
+      nav.thread(id);
+      void s.threads.create(roomId, { about, body, ...(waiting ? { waiting } : {}) }).then(async (res) => {
+        if (!res.ok) { record.setState({ threads: r().threads.filter((x) => x.id !== id) }); if (ui.state.thread === id) nav.thread(null); fail(res.error); return; }
+        await reload();
+        if (ui.state.thread === id) ui.setState({ thread: res.value.id });
+      });
     },
 
     // Decide

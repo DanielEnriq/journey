@@ -10,13 +10,14 @@ import type { Anchor } from '../../inbox/model.js';
 // depth, history and keys. The same in production and in the prototype; none of it writes the record.
 
 export type UiActions = Pick<DeskAct,
-  'tab' | 'inspect' | 'depth' | 'wide' | 'light' | 'thread' | 'fsec' | 'everywhere' | 'compare' | 'passage' | 'lineThread' | 'focusAll' | 'sinceFold' | 'toast'>;
+  'tab' | 'inspect' | 'depth' | 'wide' | 'light' | 'show' | 'thread' | 'fsec' | 'fwrite' | 'everywhere' | 'compare' | 'passage' | 'lineThread' | 'focusAll' | 'sinceFold' | 'toast'>;
 
 /** Where Escape and the expand button return to from full screen. */
 export const exitDepth = (st: UiState): Depth => (st.prevDepth && st.prevDepth !== 'focus' ? st.prevDepth : 'compact');
 
 export function uiActions(ui: Ui, light: (parts: string[] | null) => void): UiActions {
   const set = (p: Partial<UiState>) => ui.setState(p);
+  let shown: ReturnType<typeof setTimeout> | undefined;
   const self: UiActions = {
     tab: (t) => set({ tab: t, fsec: t, inspect: null }),
     inspect: (i) => {
@@ -33,12 +34,21 @@ export function uiActions(ui: Ui, light: (parts: string[] | null) => void): UiAc
     },
     wide: (on) => self.depth(on ? 'expanded' : 'compact'),
     light,
+    // The canvas has to be in sight to show anything on it, so this leaves full screen or the wide Desk first.
+    show: (parts) => {
+      if (ui.state.depth !== 'compact') self.depth('compact');
+      light(parts);
+      clearTimeout(shown);
+      shown = setTimeout(() => light(null), 2600);
+    },
     thread: (id) => set({ thread: id, ...(id ? { tab: 'discuss' as Tab, fsec: 'discuss' as Tab, inspect: null } : {}) }),
     fsec: (sec) => {
       const cur = ui.state.inspect;
       const keep = cur && (sec === 'decide' || sec === 'work') && (cur.kind === 'decision') === (sec === 'decide');
       set({ fsec: sec, tab: sec, inspect: keep ? cur : null });
     },
+    // A new thread isn't about the one that was open, so the page and the crumbs let it go.
+    fwrite: (sec) => set({ fwrite: sec, ...(sec === 'discuss' ? { thread: null } : {}) }),
     everywhere: (on) => set({ everywhere: on }),
     compare: (v) => set({ compare: v }),
     passage: (w, step, quote, thread, close) => set({ inspect: close ? { kind: 'work', id: w, section: 'plan' } : thread ? { kind: 'work', id: w, section: 'plan', thread } : { kind: 'work', id: w, section: 'plan', step, quote } }),

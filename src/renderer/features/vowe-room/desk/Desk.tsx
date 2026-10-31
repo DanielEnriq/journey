@@ -1,4 +1,4 @@
-import { h, Fragment, useEffect, useRef, useState, Avatar } from '../journey.js';
+import { h, Fragment, useEffect, useMemo, useRef, useState, Avatar, type ComponentChildren } from '../journey.js';
 import { Icon, type IconName } from '../../../ui/icons.js';
 import { useEvidence } from '../state/semantics.js';
 import { BasisGlyph } from '../canvas/faces.js';
@@ -11,12 +11,16 @@ import { ObjectiveCard, WorkView, objectiveState } from './Work.js';
 import { DecisionDoc } from './DecisionDoc.js';
 import { Focus } from './Focus.js';
 import { MentionField, withTokens } from './Mention.js';
+import { Markdown } from './Markdown.js';
+import { countUnder, facesUnder, replyTree, type ReplyNode } from '../state/replies.js';
+import { preview, sections, type SectionKey } from '../state/threads.js';
 import type { Scene } from '../../../../shared/canvas/index.js';
 
 import type { Depth } from '../state/ui.js';
 import { useNames, type Names } from '../state/directory.js';
 import type { Capabilities } from '../contracts/services.js';
 import { mayWrite } from '../state/permissions.js';
+import { SceneGlimpse } from '../../canvas/SceneGlimpse.js';
 
 // The Desk, Direction A: Journey's "Where we are" column with three surfaces, Discuss, Decide and Work.
 // Each is a human surface first (threads, decisions, work items people own) that Vowe takes part in.
@@ -28,9 +32,14 @@ export interface DeskAct {
   inspect(i: Inspect): void;
   wide(on: boolean): void;
   light(parts: string[] | null): void;
+  /** Bring the canvas into view and light `parts` for a moment. */
+  show(parts: string[]): void;
   thread(id: string | null): void;
-  reply(thread: string, body: string): void;
+  /** `parent`: the reply this answers; none answers the thread. */
+  reply(thread: string, body: string, parent?: string): void;
   offer(thread: string, reply: string, accept: boolean): void;
+  /** Resolve a thread, or with `reopen` open it again. Nothing else follows from it yet. */
+  resolveThread(thread: string, reopen?: boolean): void;
   newThread(body: string): void;
   sign(decision: string): void;
   askReview(decision: string): void;
@@ -76,6 +85,8 @@ export interface DeskAct {
   draftFrom(thread: string): void;
   /** Full screen: which section Focus shows. */
   fsec(sec: Tab): void;
+  /** Full screen: open the composer for a section's new item, or put it down (null). */
+  fwrite(sec: Tab | null): void;
   markDone(ids: string[]): void;
   askFix(work: string, pr: string, check: string): void;
   stopRun(work: string): void;
@@ -110,6 +121,8 @@ export interface DeskProps {
   compare: number | null;
   /** Full screen: the section Focus shows, and whether we're inside the full-screen workspace. */
   fsec: Tab;
+  /** Full screen: the section whose composer is open, if one is. */
+  fwrite: Tab | null;
   shell?: boolean;
   /** The room, for Focus's list head. */
   room?: { name: string; repo: string | null };
@@ -123,10 +136,14 @@ export interface DeskProps {
 const partLabel = (id: string) => { const t = id.replace(/[-_]+/g, ' ').trim(); return t ? t[0].toUpperCase() + t.slice(1) : id; };
 
 const ABOUT_WORD: Record<About['kind'], string> = { part: '', edge: 'wire', scenario: 'failure', decision: 'decision', line: 'decision line', work: 'work', step: 'plan step', pr: 'PR', check: 'check' };
-export function AboutGlyph({ a }: { a: About['kind'] }) {
-  const d: Record<About['kind'], h.JSX.Element> = {
+
+/** What a thread can be about, as the canvas draws it. `region` (a group of parts), `flow` (a path through them)
+ *  and `view` (the whole canvas) have their glyphs ready for when the canvas can name them. */
+export type SubjectKind = About['kind'] | 'region' | 'flow' | 'view';
+export function AboutGlyph({ a }: { a: SubjectKind }) {
+  const d: Record<SubjectKind, h.JSX.Element> = {
     part: <rect x="2.5" y="3.5" width="11" height="9" rx="2.2" />,
-    edge: <path d="M2 8h12M10 5l3 3-3 3" />,
+    edge: <><circle cx="3.5" cy="8" r="2" /><circle cx="12.5" cy="8" r="2" /><path d="M5.5 8h5" /></>,
     scenario: <><path d="M8 2.5l6 11H2z" /><path d="M8 7v3" /></>,
     decision: <path d="M3.5 3.5h9v9h-9zM5.5 8l2 2 3-4" />,
     line: <path d="M3 5h10M3 8h10M3 11h6" />,
@@ -134,8 +151,18 @@ export function AboutGlyph({ a }: { a: About['kind'] }) {
     step: <path d="M3 4.5h2M7 4.5h6M3 8h2M7 8h6M3 11.5h2M7 11.5h6" />,
     pr: <><circle cx="4.5" cy="4" r="1.6" /><circle cx="4.5" cy="12" r="1.6" /><circle cx="11.5" cy="12" r="1.6" /><path d="M4.5 5.6v4.8M11.5 10.4V7.5c0-1.5-1-2.5-2.5-2.5H7" /></>,
     check: <><circle cx="8" cy="8" r="5.5" /><path d="M5.5 8l2 2 3-4" /></>,
+    region: <rect x="2" y="2" width="12" height="12" rx="3" stroke-dasharray="2.4 2" />,
+    flow: <><circle cx="3" cy="11.5" r="1.5" /><circle cx="8" cy="5" r="1.5" /><path d="M4 10.2l3-3.9M9 6.2l4 4.3M11 11h2.4V8.6" /></>,
+    view: <><rect x="2" y="3" width="12" height="10" rx="2" /><path d="M2 6.5h12M5.5 3v3.5" /></>,
   };
   return <svg class="nx-ag" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">{d[a]}</svg>;
+}
+
+/** A thread's subject as a chip: its glyph and name, "+N" when it's about more than one thing. A thread started
+ *  with nothing selected is about the whole canvas, drawn as the view. */
+export function Subject({ a, lit, more }: { a: About; lit?: boolean; more?: number }) {
+  const kind: SubjectKind = a.kind === 'part' && a.id === 'canvas' ? 'view' : a.kind;
+  return <span class={'nx-sub' + (lit ? ' lit' : '')}><AboutGlyph a={kind} /><span class="nx-sub-n">{a.name}</span>{more ? <em>+{more}</em> : null}</span>;
 }
 
 export function Who({ id, size = 18 }: { id: string; size?: 16 | 18 | 20 }) {
@@ -161,7 +188,7 @@ export function Words({ text, light, act }: { text: string; light(p: string[] | 
     out.push(t.slice(last));
     return out;
   };
-  return <>{withTokens(text, refs, act)}</>;
+  return <Markdown text={text} words={(t) => withTokens(t, refs, act)} />;
 }
 
 export const DEC_STATE: Record<Decision['state'], string> = { suggested: 'Suggested', draft: 'Draft', review: 'In review', agreed: 'Agreed', superseded: 'Superseded', dismissed: 'Dismissed' };
@@ -187,12 +214,9 @@ export const needsMe = (rec: VoweRecord, names: Names) => {
 export function Desk(p: DeskProps) {
   const { rec, tab, act } = p;
   const names = useNames();
-  const counts = {
-    discuss: rec.threads.filter((t) => t.status === 'open').length,
-    decide: rec.decisions.filter((d) => d.state !== 'dismissed' && d.state !== 'superseded').length,
-    work: rec.work.filter((w) => w.state !== 'closed' && w.state !== 'resolved').length,
-  };
+  const [making, setMaking] = useState<Tab | null>(null);
   const items = attention(rec, names);
+  const waiting = (t: Tab) => items.filter((x) => x.tab === t && actionable(x)).length;
   if (p.depth === 'focus') return <Focus {...p} />;
   if (p.inspect) return <Inspector {...p} />;
   return (
@@ -203,21 +227,34 @@ export function Desk(p: DeskProps) {
       </div>
       <div class="nx-tabs2" role="tablist" aria-label="Desk">
         {(['discuss', 'decide', 'work'] as Tab[]).map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={tab === t} class={'nx-tab2' + (tab === t ? ' on' : '')} onClick={() => act.tab(t)}>
+          <button key={t} type="button" role="tab" aria-selected={tab === t} class={'nx-tab2' + (tab === t ? ' on' : '')} onClick={() => { setMaking(null); act.tab(t); }}>
             {{ discuss: 'Discuss', decide: 'Decide', work: 'Work' }[t]}
-            {counts[t] ? <span class="nx-tabn">{counts[t]}</span> : null}
-            {tabMark(items, t) === 'needs' ? <i class="nx-tabdot" aria-label="something here needs you"></i> : tabMark(items, t) === 'new' ? <i class="nx-tabring" aria-label="something new to look at"></i> : null}
+            {waiting(t) ? <span class="nx-tabn" aria-label={`${waiting(t)} need you`}>{waiting(t)}</span> : tabMark(items, t) === 'new' ? <i class="nx-tabdot" aria-label="something new to look at"></i> : null}
           </button>
         ))}
+        <NewButton tab={tab} p={p} on={making === tab} make={() => { act.thread(null); setMaking(tab); }} />
       </div>
 
       <SinceLine items={items} p={p} />
-      {p.focus && p.focusOn ? (
+      {p.focus && p.focusOn && tab !== 'discuss' ? (
         <div class="nx-focus"><span class="nx-focus-dot"></span><span>Showing what’s about <b>{p.focus.name}</b></span><button type="button" onClick={act.focusAll}>Show all</button></div>
       ) : null}
 
-      {tab === 'discuss' ? <DiscussTab {...p} /> : tab === 'decide' ? <DecideTab {...p} /> : <WorkTab {...p} />}
+      {tab === 'discuss' ? <DiscussTab p={p} making={making === 'discuss'} done={() => setMaking(null)} make={() => setMaking('discuss')} />
+        : tab === 'decide' ? <DecideTab p={p} making={making === 'decide'} done={() => setMaking(null)} make={() => setMaking('decide')} />
+        : <WorkTab p={p} making={making === 'work'} done={() => setMaking(null)} make={() => setMaking('work')} />}
     </div>
+  );
+}
+
+export const NEW_WORD: Record<Tab, string> = { discuss: 'New thread', decide: 'New decision', work: 'New work' };
+
+/** The one way to start something from the Desk: the end of the tab row makes a thread, a decision or work,
+ *  whichever tab you're on. The Desk and full screen both carry it. */
+export function NewButton({ tab, p, on, make }: { tab: Tab; p: DeskProps; on: boolean; make(): void }) {
+  return (
+    <button type="button" class={'nx-tabnew' + (on ? ' on' : '')} aria-label={NEW_WORD[tab]} data-tip={NEW_WORD[tab]} aria-pressed={on}
+      disabled={!mayWrite(p.role)} onClick={make}><Icon name="pen" size={14} /></button>
   );
 }
 
@@ -326,26 +363,33 @@ export function AgentName({ p }: { p: DeskProps }) {
 export function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
   const { agentName } = useNames();
   const { rec, act } = p;
-  const parts = partsOf(t.about, rec);
+  const parts = threadParts(t, rec);
   const led = rec.decisions.filter((d) => d.from === t.id);
   return (
     <div class="nx-fthread">
       <div class="nx-fthread-main">
-        <span class="nx-eyebrow">Conversation · {ABOUT_WORD[t.about.kind] ? `on ${ABOUT_WORD[t.about.kind]}` : 'on the canvas'}</span>
-        <h2>{t.about.name}</h2>
-        <ThreadCard t={t} p={{ ...p, openThread: t.id }} inline />
+        <span class="tr-subs" onPointerEnter={() => parts.length && act.light(parts)} onPointerLeave={() => parts.length && act.light(null)}><Subject a={t.about} lit={parts.length > 0} />{t.linked?.map((l, i) => <Subject key={i} a={l} />)}</span>
+        {t.title ? <h2>{t.title}</h2> : null}
+        <ThreadCard t={t} p={{ ...p, openThread: t.id }} inline deep />
       </div>
       <aside class="nx-margin">
-        <div class="nx-rsec">
-          <span class="nx-rk2">About</span>
-          {parts.length ? <button type="button" class="nx-rc" onClick={() => act.light(parts)}><span><b>{t.about.name}</b></span><em>Show on the canvas</em></button> : <p class="nx-quiet">Not pinned to a part.</p>}
-          {t.linked?.map((l, i) => <span key={i} class="nx-quiet">Also about {l.name}</span>)}
-        </div>
-        <div class="nx-rsec">
-          <span class="nx-rk2">Led to</span>
-          {led.length ? led.map((d) => <button key={d.id} type="button" class="nx-rc" onClick={() => act.inspect({ kind: 'decision', id: d.id })}><span><b>{d.title}</b></span><em>Decision v{d.version} · {DEC_STATE[d.state].toLowerCase()}</em></button>)
-            : <><p class="nx-quiet">Nothing yet.</p><button type="button" class="nx-btn" disabled={!mayWrite(p.role)} onClick={() => act.draftFrom(t.id)}>Start a decision from this</button></>}
-        </div>
+        <button type="button" class={'tr-resolve' + (t.status === 'resolved' ? ' on' : '')} aria-pressed={t.status === 'resolved'} onClick={() => act.resolveThread(t.id, t.status === 'resolved')}><Icon name="check" size={14} />{t.status === 'resolved' ? 'Resolved' : 'Resolve'}</button>
+        {parts.length ? (
+          <div class="nx-rsec">
+            <span class="nx-rk2">On the canvas</span>
+            {p.scene?.nodes.length ? (
+              <button type="button" class="nx-fs-glimpse" aria-label="Show on the canvas" onPointerEnter={() => act.light(parts)} onPointerLeave={() => act.light(null)} onClick={() => act.light(parts)}>
+                <SceneGlimpse scene={p.scene} lit={parts} height={180} />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {led.length ? (
+          <div class="nx-rsec">
+            <span class="nx-rk2">Led to</span>
+            {led.map((d) => <button key={d.id} type="button" class="nx-rc" onClick={() => act.inspect({ kind: 'decision', id: d.id })}><span><AboutGlyph a="decision" /><b>{d.title}</b></span><em>v{d.version} · {DEC_STATE[d.state].toLowerCase()}</em></button>)}
+          </div>
+        ) : <button type="button" class="nx-btn nx-fs-draft" disabled={!mayWrite(p.role)} onClick={() => act.draftFrom(t.id)}><AboutGlyph a="decision" />Draft a decision</button>}
       </aside>
     </div>
   );
@@ -353,148 +397,189 @@ export function FsThread({ t, p }: { t: Thread; p: DeskProps }) {
 
 /* ---------------- Discuss ---------------- */
 
-function DiscussTab(p: DeskProps) {
+/**
+ * Discuss: a field to start a thread (its chip says what it'll be about), then the threads in sections: what needs
+ * you, what's about the selected part or in the canvas's view, everything else, and the resolved ones folded at the
+ * bottom. Opening one swaps the list for the thread.
+ */
+function DiscussTab({ p, making, done, make }: { p: DeskProps; making: boolean; done(): void; make(): void }) {
+  if (making) return <NewThread p={p} done={done} />;
+  const open = p.rec.threads.find((t) => t.id === p.openThread);
+  if (open) return <ThreadOpen key={open.id} t={open} p={p} />;
+  return <section class="rp-sec nx-tabbody"><DiscussList p={p} onNew={make} /></section>;
+}
+
+/**
+ * Starting a thread: it opens where a thread would, with its subject on top (the part selected on the canvas, else
+ * the whole canvas; pointing at it lights it) and the first message. Return or Post posts it, Esc goes back. In
+ * full screen it's the page; in the Desk it takes the list's place.
+ */
+export function NewThread({ p, done, page }: { p: DeskProps; done(): void; page?: boolean }) {
   const { agentName } = useNames();
-  const { rec, me, act, focus, focusOn } = p;
-  const [draft, setDraft] = useState('');
-  const sys = (t: Thread) => t.about.kind === 'part' || t.about.kind === 'edge' || t.about.kind === 'scenario';
-  const all = rec.threads.filter((t) => t.status === 'open');
-  const open = p.everywhere ? all : all.filter((t) => sys(t) || t.waiting === me);
-  const elsewhere = all.filter((t) => !sys(t)).length;
-  const rel = (t: Thread) => !focus || !focusOn || partsOf(t.about, rec).includes(focus.id);
-  const order = [...open].reverse().sort((a, b) => Number(b.id === p.openThread) - Number(a.id === p.openThread));
-  const shown = [...order.filter(rel), ...order.filter((t) => !rel(t))];
+  const { act, focus, rec } = p;
+  const [text, setText] = useState('');
+  const about: About = focus ? { kind: 'part', id: focus.id, name: focus.name } : { kind: 'part', id: 'canvas', name: 'Canvas' };
+  const post = (t: string) => { if (!t.trim()) return; act.newThread(t); done(); };
   return (
-    <section class="rp-sec nx-tabbody">
-      <NeedsYou p={p} tab="discuss" />
-      <label class="rp-cm-reply nx-compose">
-        <Who id={me} /><span class="rp-sr">New thread</span>
-        <MentionField p={p} placeholder={focus ? `Start a thread on ${focus.name}…` : 'Start a thread about the system…'} value={draft}
-          onInput={setDraft} onSubmit={(t) => { act.newThread(t); setDraft(''); }} />
-      </label>
-      <div class="nx-dfilter"><button type="button" class={!p.everywhere ? 'on' : ''} onClick={() => act.everywhere(false)}>About the system</button><button type="button" class={p.everywhere ? 'on' : ''} onClick={() => act.everywhere(true)}>Everywhere<em>{all.length}</em></button>{!p.everywhere && elsewhere ? <span>{elsewhere} on decisions, plans and PRs live there</span> : null}</div>
-      <span class="nx-hint2">{focus ? `It will be pinned to ${focus.name}.` : 'Select a part first to pin the thread to it.'}{rec.vowe ? ` ${agentName()} only joins if you @mention it.` : ''}</span>
-      {open.length === 0 ? <p class="nx-quiet">No conversations yet.</p> : <ThreadList threads={shown} rel={rel} p={p} />}
+    <section class={'rp-sec nx-tabbody tr-open tr-new' + (page ? ' page' : '')} aria-label="New thread">
+      <div class="tr-ohead">
+        <button type="button" class="tr-back" onClick={done}><Icon name="chevron-l" size={14} />{page ? 'Cancel' : 'Discuss'}</button>
+        <button type="button" class="nx-btn primary tr-post" disabled={!text.trim()} onClick={() => post(text)}>Post</button>
+      </div>
+      <div class="tr-card">
+        <span class="tr-subs" onPointerEnter={() => focus && act.light([focus.id])} onPointerLeave={() => focus && act.light(null)}><Subject a={about} lit={!!focus} /></span>
+        <label class="tr-newf">
+          <MentionField p={p} autoFocus label="First message" value={text} onInput={setText} onSubmit={post}
+            placeholder={rec.vowe ? `Say what you’re thinking, or @${agentName()} to ask it` : 'Say what you’re thinking'}
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); done(); } }} />
+        </label>
+      </div>
     </section>
   );
 }
 
-/** What a thread is about, as one key: threads with the same key share a group. */
-const aboutKey = (a: About) => `${a.kind}:${'decision' in a ? a.decision : 'work' in a ? a.work : 'pr' in a ? a.pr : ''}:${a.id}`;
+/** The field and the sectioned threads, the same in the Desk and in full screen (where the open one stays marked). */
+export function DiscussList({ p, onNew }: { p: DeskProps; onNew?(): void }) {
+  const { rec, me, focus } = p;
+  const [showDone, setShowDone] = useState(() => rec.threads.some((t) => t.id === p.openThread && t.status === 'resolved'));
+  const live = rec.threads.filter((t) => t.status === 'open');
+  const done = rec.threads.filter((t) => t.status === 'resolved').reverse();
+  const view = p.scene ? new Set(p.scene.nodes.map((n) => n.component)) : null;
+  const secs = sections(live, { me, parts: (t) => partsOf(t.about, rec), focus: focus?.id, view });
+  const words: Record<SectionKey, string> = { needs: 'Needs you', here: focus ? `On ${focus.name}` : view ? 'In this view' : 'On the canvas', rest: 'Everything else' };
+  return (
+    <>
+      {!live.length && !done.length ? (
+        <div class="nx-empty2 bare">
+          <p class="nx-empty3"><Icon name="comment" size={14} />No threads yet</p>
+          {onNew ? <button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={onNew}>New thread</button> : null}
+        </div>
+      ) : null}
+      <ThreadList secs={secs.map((x) => ({ label: secs.length > 1 || x.key !== 'rest' ? words[x.key] : null, key: x.key, threads: x.threads }))} p={p} />
+      {done.length ? (
+        <>
+          <button type="button" class="tr-fold" aria-expanded={showDone} onClick={() => setShowDone(!showDone)}><Icon name="chevron-r" size={14} />{done.length} resolved</button>
+          {showDone ? <ThreadList secs={[{ key: 'done', label: null, threads: done }]} p={p} /> : null}
+        </>
+      ) : null}
+    </>
+  );
+}
+
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 /** "2 replies · 4m": the time only when the record has one. */
 const repliesLine = (t: Thread) => { const n = t.replies.length - 1, ago = t.replies[n].ago; return `${n} ${n === 1 ? 'reply' : 'replies'}${ago ? ` · ${ago}` : ''}`; };
+/** Everything a thread touches on the canvas: its subject's parts and those of what it's also about. A thread on
+ *  the whole canvas points at no part. */
+const threadParts = (t: Thread, rec: VoweRecord) => [...new Set([...partsOf(t.about, rec), ...(t.linked ?? []).flatMap((l) => partsOf(l, rec))])].filter((x) => x !== 'canvas');
 
 /**
- * Discuss's conversations as a grouped list, the way macOS lists things: one rounded box for each part (or wire,
- * PR, decision) with its conversations as rows split by hairlines, under a heading whose chevron folds the box.
- * A click selects a row and opens its replies under it. With a row focused, ↑ and ↓ move, → and ← open and close
- * the replies (← again folds the group), Return toggles, Esc closes; right-click (or Shift-F10) gives its menu.
- * Groups the canvas focus doesn't touch start folded.
+ * Sections of threads. With a row focused, ↑ and ↓ move, → or Return opens it, and right-click (or Shift-F10)
+ * gives its menu.
  */
-function ThreadList({ threads, rel, p }: { threads: Thread[]; rel(t: Thread): boolean; p: DeskProps }) {
-  const { me, act, rec } = p;
-  const [folded, setFolded] = useState<Record<string, boolean>>({});
-  const [sel, setSel] = useState<string | null>(null);
+function ThreadList({ secs, p }: { secs: { key: string; label: string | null; threads: Thread[] }[]; p: DeskProps }) {
   const [menu, setMenu] = useState<{ t: Thread; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
-
-  const groups: { key: string; about: About; list: Thread[]; dim: boolean }[] = [];
-  for (const t of threads) {
-    const key = aboutKey(t.about);
-    let g = groups.find((x) => x.key === key);
-    if (!g) groups.push(g = { key, about: t.about, list: [], dim: !rel(t) });
-    g.list.push(t);
-  }
-  const isOpen = (g: typeof groups[number]) => !(folded[g.key] ?? (g.dim && !g.list.some((t) => t.id === p.openThread)));
-  const fold = (key: string, on: boolean) => setFolded((f) => ({ ...f, [key]: on }));
-  const rows = groups.flatMap((g) => isOpen(g) ? g.list : []);
-  const focusRow = (id: string) => box.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"] > .nx-dl-main`)?.focus();
-  const openMenu = (t: Thread, x: number, y: number) => { setSel(t.id); setMenu({ t, x, y }); };
-
+  const all = secs.flatMap((x) => x.threads);
   const key = (e: KeyboardEvent) => {
     if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey || menu) return;
-    const row = (e.target as HTMLElement).closest<HTMLElement>('.nx-dl-row');
-    const t = row ? rows.find((x) => x.id === row.dataset.id) : undefined;
-    if (!t) return;
-    const open = p.openThread === t.id;
-    const k = e.key;
-    if (k === 'ArrowDown' || k === 'ArrowUp') {
+    const rows = [...(box.current?.querySelectorAll<HTMLElement>('.tr-main') ?? [])];
+    const i = rows.indexOf(e.target as HTMLElement);
+    if (i < 0) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); rows[i + (e.key === 'ArrowDown' ? 1 : -1)]?.focus(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); rows[i].click(); }
+    else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
       e.preventDefault();
-      const next = rows[rows.indexOf(t) + (k === 'ArrowDown' ? 1 : -1)];
-      if (next) { setSel(next.id); focusRow(next.id); }
-    } else if (k === 'ArrowRight' && !open) { e.preventDefault(); act.thread(t.id); }
-    else if (k === 'ArrowLeft') {
-      e.preventDefault();
-      if (open) act.thread(null);
-      else { fold(aboutKey(t.about), true); setSel(null); box.current?.querySelector<HTMLElement>(`[data-group="${CSS.escape(aboutKey(t.about))}"]`)?.focus(); }
-    } else if (k === 'Escape' && open) { e.preventDefault(); act.thread(null); }
-    else if (k === 'F10' && e.shiftKey || k === 'ContextMenu') {
-      e.preventDefault();
-      const r = (e.target as HTMLElement).getBoundingClientRect();
-      openMenu(t, r.left + 24, r.top + 24);
+      const t = all.find((x) => x.id === rows[i].closest<HTMLElement>('.tr-row')?.dataset.id);
+      const r = rows[i].getBoundingClientRect();
+      if (t) setMenu({ t, x: r.left + 24, y: r.top + 24 });
     }
   };
-
   return (
-    <div class="nx-dlist" ref={box} onKeyDown={key}>
-      {groups.map((g) => {
-        const o = isOpen(g);
-        const parts = partsOf(g.about, rec);
-        return (
-          <div key={g.key} class={'nx-dl' + (g.dim ? ' nx-dim' : '')}>
-            <button type="button" class="nx-dl-head" data-group={g.key} aria-expanded={o} onClick={() => fold(g.key, o)}
-              onPointerEnter={() => act.light(parts)} onPointerLeave={() => act.light(null)}
-              onKeyDown={(e) => { if (e.key === 'ArrowRight' && !o) { e.preventDefault(); fold(g.key, false); } else if (e.key === 'ArrowLeft' && o) { e.preventDefault(); fold(g.key, true); } }}>
-              <span class="nx-dl-chev" aria-hidden="true"><Icon name="chevron-r" size={14} /></span>
-              <AboutGlyph a={g.about.kind} />
-              <span class="nx-dl-name">{g.about.name}</span>
-              {ABOUT_WORD[g.about.kind] ? <span class="nx-akind">on {ABOUT_WORD[g.about.kind]}</span> : null}
-              {g.list.some((t) => t.waiting === me) ? <span class="nx-waits">Waiting on you</span> : null}
-              {g.list.length > 1 || !o ? <span class="nx-dl-n">{g.list.length}</span> : null}
-            </button>
-            {o ? (
-              <div class="nx-dl-box" role="list" aria-label={g.about.name}>
-                {g.list.map((t) => (
-                  <ThreadRow key={t.id} t={t} p={p} selected={sel === t.id} onSelect={() => setSel(t.id)}
-                    onMenu={(e) => { e.preventDefault(); focusRow(t.id); openMenu(t, e.clientX, e.clientY); }} />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
+    <div class="tr-list" ref={box} onKeyDown={key}>
+      {secs.map((x) => (
+        <div key={x.key} class={'tr-sec ' + x.key} role="list" aria-label={x.label ?? 'Threads'}>
+          {x.label ? <span class="tr-h">{x.label}<em>{x.threads.length}</em></span> : null}
+          {x.threads.map((t) => <ThreadRow key={t.id} t={t} p={p} onMenu={(e) => { e.preventDefault(); setMenu({ t, x: e.clientX, y: e.clientY }); }} />)}
+        </div>
+      ))}
       {menu ? <ThreadMenu t={menu.t} p={p} at={menu} onClose={() => setMenu(null)} /> : null}
     </div>
   );
 }
 
-/** One conversation in the list: who started it, what they said, how far it got; its replies open under it. */
-function ThreadRow({ t, p, selected, onSelect, onMenu }: { t: Thread; p: DeskProps; selected: boolean; onSelect(): void; onMenu(e: MouseEvent): void }) {
+/** One thread as three lines: what it's about and when, who said what first, and who's in it and where it stands.
+ *  Pointing at it lights what it's about on the canvas. */
+function ThreadRow({ t, p, onMenu }: { t: Thread; p: DeskProps; onMenu(e: MouseEvent): void }) {
   const { nameOf, agentName } = useNames();
-  const { me, act } = p;
-  const expanded = p.openThread === t.id;
-  const root = t.replies[0];
+  const { me, act, rec } = p;
+  const root = t.replies[0], last = t.replies[t.replies.length - 1];
+  const n = t.replies.length - 1;
+  const faces = [...new Set(t.replies.map((r) => r.by))].slice(0, 4);
   const offer = t.replies.find((r) => r.offer?.state === 'open');
+  const led = rec.decisions.find((d) => d.from === t.id);
+  const parts = threadParts(t, rec);
+  const who = (id: string) => (id === me ? 'You' : nameOf(id));
+  const light = (on: boolean) => { if (parts.length) act.light(on ? parts : null); };
+  const status = t.presence?.personId === AGENT && t.presence.mode === 'typing' ? <span class="tr-st agent">{agentName()} {t.presence.doing ? `· ${t.presence.doing}` : 'is replying'}<span class="rp-dots"><i /><i /><i /></span></span>
+    : t.presence ? <span class="tr-st">{who(t.presence.personId)} {t.presence.mode === 'typing' ? 'is writing' : 'is reading'}</span>
+    : t.waiting === me && t.status === 'open' ? <span class="tr-st waiting">Waiting on you</span>
+    : t.status === 'resolved' ? <span class="tr-st done"><Icon name="check" size={14} />Resolved</span>
+    : led ? <span class="tr-st done"><AboutGlyph a="decision" />Led to decision v{led.version}</span> : null;
   return (
-    <div role="listitem" data-id={t.id} onContextMenu={onMenu}
-      class={'nx-dl-row' + (selected ? ' is-sel' : '') + (expanded ? ' is-open' : '') + (p.flash === `thread:${t.id}` ? ' nx-flash' : '')}>
-      <button type="button" class="nx-dl-main" aria-expanded={expanded} onFocus={onSelect} onClick={() => { onSelect(); act.thread(expanded ? null : t.id); }}>
-        <span class="rp-cm-head">
-          <Who id={root.by} /><b>{root.by === me ? 'You' : nameOf(root.by)}</b>
-          {t.title ? <span class="nx-dl-title">{t.title}</span> : null}
-          <span class="rp-cm-time">{root.ago}</span>
-        </span>
-        <span class="rp-cm-body"><Words text={root.body} light={act.light} act={act} /></span>
-        {root.evidence ? <Evidence ids={root.evidence} /> : null}
-        <span class="nx-dl-meta">
-          {t.replies.length > 1 ? <span class="rp-cm-replies"><span class="rp-avstack">{[...new Set(t.replies.slice(1).map((r) => r.by))].map((id) => <Who key={id} id={id} size={16} />)}</span>{repliesLine(t)}</span> : <span class="rp-cm-replies rp-quiet">No replies</span>}
-          {root.spoken ? <span class="nx-spoken">said in the call</span> : null}
-          {t.presence ? <span class="rp-pres rp-busy"><Who id={t.presence.personId} size={16} />{nameOf(t.presence.personId)} is {t.presence.mode === 'typing' ? 'writing' : 'reading'}</span> : offer && !expanded ? <span class="nx-offer-tag">{agentName()} suggests a decision</span> : null}
-        </span>
+    <div role="listitem" data-id={t.id} onContextMenu={onMenu} onPointerEnter={() => light(true)} onPointerLeave={() => light(false)}
+      aria-current={p.openThread === t.id ? 'true' : undefined}
+      class={'tr-row' + (t.replies.some((r) => r.fresh) ? ' unread' : '') + (t.status === 'resolved' ? ' done' : '') + (p.flash === `thread:${t.id}` ? ' nx-flash' : '')}>
+      <button type="button" class="tr-main" onClick={() => act.thread(t.id)} onFocus={() => light(true)} onBlur={() => light(false)}>
+        <span class="tr-top"><span class="tr-subs"><Subject a={t.about} more={t.linked?.length} /></span><span class="tr-time">{last.ago}</span></span>
+        <span class="tr-t">{offer ? <><b>{who(offer.by)}</b> suggests {offer.offer!.text}</> : <><b>{who(root.by)}</b> {t.title ?? preview(root.body)}</>}</span>
+        <span class="tr-bot"><span class="nx-faces">{faces.map((id) => <Who key={id} id={id} size={16} />)}</span><span>{n ? `${n} ${n === 1 ? 'reply' : 'replies'}` : 'No replies'}</span>{status}</span>
       </button>
-      {expanded ? <ThreadReplies t={t} p={p} /> : null}
+      {offer ? (
+        <span class="tr-offer">
+          <button type="button" class="nx-btn primary" onClick={() => act.offer(t.id, offer.id, true)}>{offer.offer!.kind === 'decision' ? 'Draft the decision' : offer.offer!.kind === 'work' ? 'Draft the plan' : offer.offer!.kind === 'revision' ? 'Draft v2' : 'Take the edit'}</button>
+          <button type="button" class="nx-btn" onClick={() => act.offer(t.id, offer.id, false)}>Not now</button>
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+/** An open thread in the column: back to the list, what it's about (pointing at it lights it), its first message
+ *  and the replies. Resolving keeps it here, marked, until you go back; Reopen undoes it. Esc or ← goes back. */
+function ThreadOpen({ t, p }: { t: Thread; p: DeskProps }) {
+  const { nameOf } = useNames();
+  const { act, me, rec } = p;
+  const root = t.replies[0];
+  const parts = threadParts(t, rec);
+  const box = useRef<HTMLElement>(null);
+  useEffect(() => { if (!box.current?.contains(document.activeElement)) box.current?.focus({ preventScroll: true }); }, []);
+  const key = (e: KeyboardEvent) => {
+    if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+    if (e.key === 'Escape' || (e.key === 'ArrowLeft' && e.target === box.current)) { e.preventDefault(); act.thread(null); }
+  };
+  const resolved = t.status === 'resolved';
+  return (
+    <section ref={box} tabIndex={-1} class={'rp-sec nx-tabbody tr-open' + (resolved ? ' is-done' : '')} aria-label={t.title ?? t.about.name} onKeyDown={key}>
+      <div class="tr-ohead">
+        <button type="button" class="tr-back" onClick={() => act.thread(null)}><Icon name="chevron-l" size={14} />Discuss</button>
+        <button type="button" class={'tr-resolve' + (resolved ? ' on' : '')} aria-pressed={resolved} title={resolved ? 'Open this thread again' : 'Mark this thread resolved'}
+          onClick={() => act.resolveThread(t.id, resolved)}><Icon name="check" size={14} />{resolved ? 'Resolved' : 'Resolve'}</button>
+      </div>
+      <div class="tr-card">
+        <span class="tr-subs" onPointerEnter={() => parts.length && act.light(parts)} onPointerLeave={() => parts.length && act.light(null)}>
+          <Subject a={t.about} lit={parts.length > 0} />{t.linked?.map((l, i) => <Subject key={i} a={l} />)}
+        </span>
+        {t.title ? <h3 class="tr-title">{t.title}</h3> : null}
+        <div class="rp-cm-r tr-root">
+          <span class="rp-cm-head"><Who id={root.by} /><b>{root.by === me ? 'You' : nameOf(root.by)}</b><span class="rp-cm-time">{root.ago}</span>{root.spoken ? <span class="nx-spoken">said in the call</span> : null}</span>
+          <span class="rp-cm-body"><Words text={root.body} light={act.light} act={act} /></span>
+          {root.evidence ? <Evidence ids={root.evidence} /> : null}
+        </div>
+        <ThreadReplies t={t} p={p} />
+        {resolved ? <p class="tr-donenote"><Icon name="check" size={14} />Resolved. <button type="button" class="nx-textbtn" onClick={() => act.resolveThread(t.id, true)}>Reopen</button></p> : null}
+      </div>
+    </section>
   );
 }
 
@@ -519,28 +604,29 @@ function ThreadMenu({ t, p, at, onClose }: { t: Thread; p: DeskProps; at: { x: n
     addEventListener('pointerdown', down, true);
     return () => { removeEventListener('keydown', key, true); removeEventListener('pointerdown', down, true); };
   }, []);
-  const parts = partsOf(t.about, rec);
+  const parts = threadParts(t, rec);
   const plain = t.replies[0].body.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1');
   const item = (icon: IconName, label: string, f: () => void, disabled = false) => (
     <button type="button" role="menuitem" class="v-menu-item" disabled={disabled} onClick={() => { onClose(); f(); }}><Icon name={icon} /><span>{label}</span></button>
   );
   const reply = () => {
     act.thread(t.id);
-    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-id="${CSS.escape(t.id)}"] .rp-cm-reply input`)?.focus());
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.tr-open .nx-tree > .rp-cm-reply textarea')?.focus());
   };
   return (
     <div ref={box} class="v-menu nx-dl-menu" role="menu" aria-label={t.about.name}
       style={`left:${Math.min(at.x, innerWidth - 236)}px;top:${Math.min(at.y, innerHeight - 170)}px`}>
       {item('comment', 'Reply', reply)}
-      {parts.length ? item('canvas', 'Show on canvas', () => act.light(parts)) : null}
+      {parts.length ? item('canvas', 'Show on canvas', () => act.show(parts)) : null}
       {item('copy', 'Copy text', () => { void navigator.clipboard.writeText(plain).then(() => act.toast('Copied')); })}
+      {item('check', t.status === 'resolved' ? 'Reopen' : 'Resolve', () => act.resolveThread(t.id, t.status === 'resolved'))}
       <div class="v-menu-sep" role="separator" />
       {item('decision', 'Start a decision from this', () => act.draftFrom(t.id), !mayWrite(p.role))}
     </div>
   );
 }
 
-export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim?: boolean; inline?: boolean }) {
+export function ThreadCard({ t, p, dim, inline, deep }: { t: Thread; p: DeskProps; dim?: boolean; inline?: boolean; deep?: boolean }) {
   const { nameOf, agentName } = useNames();
   const { rec, me, act } = p;
   const expanded = inline || p.openThread === t.id;
@@ -570,11 +656,11 @@ export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim
             <span class="rp-cm-body"><Words text={root.body} light={act.light} act={act} /></span>
             {root.evidence ? <Evidence ids={root.evidence} /> : null}
           </button>
-          <div class="rp-cm-foot">
+          {inline ? null : <div class="rp-cm-foot">
             {t.replies.length > 1 ? <span class="rp-cm-replies"><span class="rp-avstack">{[...new Set(t.replies.slice(1).map((r) => r.by))].map((id) => <Who key={id} id={id} size={16} />)}</span>{repliesLine(t)}</span> : <span class="rp-cm-replies rp-quiet">No replies</span>}
             {t.presence ? <span class="rp-pres rp-busy"><Who id={t.presence.personId} size={16} />{nameOf(t.presence.personId)} is {t.presence.mode === 'typing' ? 'writing' : 'reading'}</span> : offer && !expanded ? <span class="nx-offer-tag">{agentName()} suggests a decision</span> : null}
-          </div>
-          {expanded ? <ThreadReplies t={t} p={p} /> : null}
+          </div>}
+          {expanded ? <ThreadReplies t={t} p={p} deep={deep} /> : null}
         </div>
       </div>
     </div>
@@ -582,33 +668,148 @@ export function ThreadCard({ t, p, dim, inline }: { t: Thread; p: DeskProps; dim
 }
 
 /** An open conversation's replies, someone writing, the reply field and where it points. */
-function ThreadReplies({ t, p }: { t: Thread; p: DeskProps }) {
-  const { agentName } = useNames();
+/** How many levels of replies show before "N more replies": the sidebar keeps two, full screen five. */
+const DEPTH = { side: 2, full: 5 };
+
+function ThreadReplies({ t, p, deep }: { t: Thread; p: DeskProps; deep?: boolean }) {
+  const { agentName, nameOf } = useNames();
   const { rec, me, act } = p;
   const [text, setText] = useState('');
+  // The reply being answered, its draft, the branches folded away, and those opened past the depth.
+  const [to, setTo] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [folded, setFolded] = useState<string[]>([]);
+  const [opened, setOpened] = useState<string[]>([]);
   const parts = partsOf(t.about, rec);
+  const shows = threadParts(t, rec);
+  const tree = replyTree(t.replies);
+  const depth = deep ? DEPTH.full : DEPTH.side;
+  // Replies that came in while the thread was open rise in; someone else's also carry a wash that fades.
+  const first = useMemo(() => new Set(t.replies.map((r) => r.id)), [t.id]);
+  // Yours rises once, when you send it: the server's copy that replaces it arrives quietly.
+  const sent = useRef(new Set<string>());
+  const arrived = (r: Reply) => {
+    if (first.has(r.id)) return '';
+    if (r.by !== me) return 'theirs';
+    if (r.id.startsWith('local:')) { sent.current.add(r.body); return 'mine'; }
+    return sent.current.has(r.body) ? '' : 'mine';
+  };
+  // The agent writing shows under the message it's answering; anyone else writing, at the end.
+  const agentUnder = t.presence?.personId === AGENT && t.presence.mode === 'typing' ? t.presence.under ?? '' : null;
+  const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  const asked = agentUnder ? t.replies.find((r) => r.id === agentUnder)?.by : t.replies[0].by;
+  // Its answer as it's written, under a line that says what it's doing until the words come.
+  const live = t.presence?.personId === AGENT ? t.presence : null;
+  const thinking = (
+    <div class={'rp-cm-r nx-vowe-r nx-writing' + (live?.draft ? ' has-text' : '')}>
+      <span class="rp-cm-head nx-thinking" role="status"><Who id={AGENT} /><b>{agentName()}</b>
+        <span>{live?.doing ?? (live?.draft ? 'is writing' : `is answering ${asked === me ? 'you' : asked ? nameOf(asked) : 'the thread'}`)}</span>
+        {live?.draft && !live.doing ? null : <span class="nx-spin" aria-hidden="true" />}</span>
+      {live?.draft ? <span class="rp-cm-body"><Words text={live.draft} light={act.light} act={act} /></span> : null}
+    </div>
+  );
+  // With a message focused: J and K (or ↓ and ↑) move, R replies to it, ← folds what's under it (or goes to the
+  // message it answers) and → unfolds.
+  const keys = (e: KeyboardEvent) => {
+    if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const row = (e.target as HTMLElement).closest?.<HTMLElement>('.rp-cm-r[data-id]');
+    if (!row || row !== e.target) return;
+    const id = row.dataset.id!;
+    const rows = [...(row.closest('.nx-tree')?.querySelectorAll<HTMLElement>('.rp-cm-r[data-id]') ?? [])];
+    const i = rows.indexOf(row);
+    const k = e.key.toLowerCase();
+    const r = t.replies.find((x) => x.id === id);
+    if (k === 'j' || k === 'arrowdown' || k === 'k' || k === 'arrowup') { e.preventDefault(); rows[i + (k === 'j' || k === 'arrowdown' ? 1 : -1)]?.focus(); }
+    else if (k === 'r') { e.preventDefault(); setTo(id); setFolded(folded.filter((x) => x !== id)); }
+    else if (k === 'arrowright' && folded.includes(id)) { e.preventDefault(); setFolded(folded.filter((x) => x !== id)); }
+    else if (k === 'arrowleft') {
+      e.preventDefault();
+      const hasKids = t.replies.some((x) => x.parent === id);
+      if (hasKids && !folded.includes(id)) setFolded([...folded, id]);
+      else if (r?.parent) rows.find((x) => x.dataset.id === r.parent)?.focus();
+    }
+  };
+
+  const node = (n: ReplyNode, level: number): ComponentChildren => {
+    const id = n.r.id;
+    const under = countUnder(n);
+    const faces = facesUnder(n);
+    const answering = agentUnder === id;
+    let below: ComponentChildren = null;
+    if (folded.includes(id) && under) {
+      below = (
+        <div class="nx-kids">
+          <button type="button" class="nx-folded" onClick={() => setFolded(toggle(folded, id))}>
+            <span class="nx-plus" aria-hidden="true">+</span><span class="nx-faces">{faces.slice(0, 3).map((w) => <Who key={w} id={w} size={16} />)}</span>
+            <b>{under} {under === 1 ? 'reply' : 'replies'}</b><span>· {faces.slice(0, 2).map((w) => (w === me ? 'You' : nameOf(w))).join(' and ')}</span>
+          </button>
+        </div>
+      );
+    } else if (under && level >= depth && !opened.includes(id)) {
+      below = (
+        <div class="nx-kids">
+          <span class="nx-rail" aria-hidden="true" />
+          <button type="button" class="nx-more" onClick={() => setOpened(toggle(opened, id))}>
+            <span class="nx-faces">{faces.slice(0, 3).map((w) => <Who key={w} id={w} size={16} />)}</span>
+            <b>{under} more {under === 1 ? 'reply' : 'replies'}</b><Icon name="chevron-r" />
+          </button>
+        </div>
+      );
+    } else if (under || answering) {
+      // Opening a branch past the depth starts its count again, as a thread of its own.
+      const next = opened.includes(id) ? 1 : level + 1;
+      below = (
+        <div class="nx-kids">
+          {under ? <button type="button" class="nx-rail" aria-label={`Fold ${under} ${under === 1 ? 'reply' : 'replies'}`} onClick={() => setFolded(toggle(folded, id))} /> : <span class="nx-rail" aria-hidden="true" />}
+          {n.kids.map((k) => node(k, next))}
+          {answering ? thinking : null}
+        </div>
+      );
+    }
+    return (
+      <div key={id} class="nx-node">
+        <ReplyRow r={n.r} t={t} p={p} sel={to === id} arrived={arrived(n.r)} onReply={() => { setTo(to === id ? null : id); setFolded(folded.filter((x) => x !== id)); }} />
+        {to === id ? (
+          <div class="nx-inreply">
+            <span class="nx-replying">Replying to <b>{n.r.by === me ? 'yourself' : nameOf(n.r.by)}</b><kbd>esc</kbd></span>
+            <label class="rp-cm-reply">
+              <Who id={me} /><span class="rp-sr">Reply to {nameOf(n.r.by)}</span>
+              <MentionField p={p} autoFocus placeholder={rec.vowe ? `Reply, or @${agentName()} to ask it` : 'Reply'} value={draft}
+                onInput={setDraft} onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setTo(null); } }}
+                onSubmit={(b) => { act.reply(t.id, b, id); setDraft(''); setTo(null); }} />
+            </label>
+          </div>
+        ) : null}
+        {below}
+      </div>
+    );
+  };
+
   return (
-    <div class="rp-cm-thread">
-      {t.replies.slice(1).map((r) => <ReplyRow key={r.id} r={r} t={t} p={p} />)}
-      {t.presence?.mode === 'typing' ? <div class="rp-cm-typing"><Who id={t.presence.personId} /><span class="rp-bubble"><span class="rp-dots"><i /><i /><i /></span></span></div> : null}
+    <div class={'rp-cm-thread nx-tree' + (deep ? ' nx-deep' : '')} onKeyDown={keys}>
+      {tree.map((n) => node(n, 1))}
+      {agentUnder === '' ? thinking : null}
+      {t.presence?.mode === 'typing' && agentUnder === null ? <div class="rp-cm-typing"><Who id={t.presence.personId} /><span class="rp-bubble"><span class="rp-dots"><i /><i /><i /></span></span></div> : null}
       <label class="rp-cm-reply">
         <Who id={me} /><span class="rp-sr">Reply</span>
-        <MentionField p={p} placeholder={rec.vowe ? `Reply, @${agentName()} to ask it, or just say it on the call` : 'Reply, or @ someone in the room'} value={text}
+        <MentionField p={p} placeholder={rec.vowe ? `Reply, or @${agentName()} to ask it` : 'Reply, or @ someone in the room'} value={text}
           onInput={setText} onSubmit={(b) => { act.reply(t.id, b); setText(''); }} />
       </label>
       <span class="nx-thread-foot">
-        {parts.length ? <button class="rp-link" type="button" onClick={() => act.light(parts)}>Show on canvas</button> : null}
+        {shows.length ? <button class="rp-link" type="button" onClick={() => act.show(shows)}>Show on canvas</button> : null}
         {t.linked?.map((l, i) => <span key={i} class="nx-linked"><AboutGlyph a={l.kind} />also on {l.name}</span>)}
       </span>
     </div>
   );
 }
 
-function ReplyRow({ r, t, p }: { r: Reply; t: Thread; p: DeskProps }) {
+function ReplyRow({ r, t, p, sel, arrived, onReply }: { r: Reply; t: Thread; p: DeskProps; sel?: boolean; arrived?: '' | 'mine' | 'theirs'; onReply?(): void }) {
   const { nameOf } = useNames();
   const { me, act } = p;
   return (
-    <div class={`rp-cm-r${r.fresh ? ' rp-fresh' : ''}${r.by === AGENT ? ' nx-vowe-r' : ''}`}>
+    <div data-id={onReply ? r.id : undefined} tabIndex={onReply ? 0 : undefined}
+      class={`rp-cm-r${r.fresh ? ' rp-fresh' : ''}${r.by === AGENT ? ' nx-vowe-r' : ''}${sel ? ' nx-sel' : ''}${arrived ? ` nx-arrive ${arrived}` : ''}`}>
+      {onReply ? <span class="nx-acts"><button type="button" class="nx-act" aria-pressed={sel} tabIndex={-1} onClick={onReply}><Icon name="reply" />Reply<kbd>R</kbd></button></span> : null}
       <span class="rp-cm-head"><Who id={r.by} /><b>{r.by === me ? 'You' : nameOf(r.by)}</b><span class="rp-cm-time">{r.ago}</span>{r.spoken ? <span class="nx-spoken">said in the call</span> : null}</span>
       <span class="rp-cm-body" onPointerEnter={() => r.points && act.light(r.points)} onPointerLeave={() => r.points && act.light(null)}><Words text={r.body} light={act.light} act={act} /></span>
       {r.evidence ? <Evidence ids={r.evidence} /> : null}
@@ -630,11 +831,11 @@ function ReplyRow({ r, t, p }: { r: Reply; t: Thread; p: DeskProps }) {
 
 /* ---------------- Decide ---------------- */
 
-function DecideTab(p: DeskProps) {
+function DecideTab({ p, making, done, make }: { p: DeskProps; making: boolean; done(): void; make(): void }) {
   const { rec, focus, focusOn } = p;
   const live = rec.decisions.filter((d) => d.state !== 'dismissed' && d.state !== 'superseded' && d.state !== 'suggested');
   const old = rec.decisions.filter((d) => d.state === 'dismissed' || d.state === 'superseded');
-  const [composing, setComposing] = useState(false);
+  const composing = making, setComposing = (on: boolean) => (on ? make() : done());
   const [hist, setHist] = useState(false);
   const rel = (d: Decision) => !focus || !focusOn || d.parts.includes(focus.id);
   const order = [...live].sort((a, b) => Number(!rel(a)) - Number(!rel(b)) || ['review', 'draft', 'suggested', 'agreed'].indexOf(a.state) - ['review', 'draft', 'suggested', 'agreed'].indexOf(b.state));
@@ -645,7 +846,6 @@ function DecideTab(p: DeskProps) {
       {composing ? <NewDecision p={p} done={() => setComposing(false)} /> : null}
       {!live.length && !composing ? <DecideEmpty p={p} write={() => setComposing(true)} /> : null}
       {order.map((d) => <DecisionMini key={d.id} d={d} p={p} dim={!rel(d)} />)}
-      {live.length && !composing ? <button type="button" class="nx-textbtn add" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>+ Write a decision</button> : null}
       {old.length ? <button type="button" class="nx-textbtn" onClick={() => setHist(!hist)}>{hist ? 'Hide' : 'Show'} {old.length} earlier</button> : null}
       {hist ? old.map((d) => <DecisionMini key={d.id} d={d} p={p} dim />) : null}
     </section>
@@ -669,18 +869,17 @@ export function NewDecision({ p, done, from }: { p: DeskProps; done(): void; fro
 
 export function DecideEmpty({ p, write }: { p: DeskProps; write(): void }) {
   const { nameOf } = useNames();
-  const { rec, act } = p;
+  const { rec, act, me } = p;
   const threads = rec.threads.filter((t) => t.status === 'open' && (t.about.kind === 'part' || t.about.kind === 'scenario')).slice(0, 3);
   return (
     <div class="nx-empty2">
-      <b>No decisions yet</b>
-      <p>A decision is what the room agrees to do and why. It counts once the people asked have signed it.</p>
+      <p class="nx-empty3"><AboutGlyph a="decision" />No decisions yet</p>
       <button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={write}>Write a decision</button>
-      {threads.length ? <span class="nx-empty2-k">Or start from a conversation</span> : null}
+      {threads.length ? <span class="tr-h">From a thread</span> : null}
       {threads.map((t) => (
         <div key={t.id} class="nx-empty2-row">
-          <span><b>{t.about.name}</b> · {nameOf(t.replies[0].by)}: {t.replies[t.replies.length - 1].body.replace(/\[([^|\]]+)\|[^\]]+\]/g, '$1').slice(0, 64)}…</span>
-          <button type="button" class="nx-textbtn strong" onClick={() => act.draftFrom(t.id)}>Start a draft from this</button>
+          <span class="nx-empty2-t"><Subject a={t.about} /><span><b>{t.replies[0].by === me ? 'You' : nameOf(t.replies[0].by)}</b> {t.title ?? preview(t.replies[0].body)}</span></span>
+          <button type="button" class="nx-btn" disabled={!mayWrite(p.role)} onClick={() => act.draftFrom(t.id)}>Draft</button>
         </div>
       ))}
     </div>
@@ -715,10 +914,10 @@ export function DecisionMini({ d, p, dim }: { d: Decision; p: DeskProps; dim?: b
 
 /* ---------------- Work ---------------- */
 
-function WorkTab(p: DeskProps) {
+function WorkTab({ p, making, done, make }: { p: DeskProps; making: boolean; done(): void; make(): void }) {
   const { agentName } = useNames();
   const { rec, focus, focusOn, act } = p;
-  const [composing, setComposing] = useState(false);
+  const composing = making, setComposing = (on: boolean) => (on ? make() : done());
   const rel = (w: Work) => !focus || !focusOn || w.parts.includes(focus.id);
   const rank = (w: Work) => ({ waiting: 0, review: 1, proposed: 2, running: 3, resolved: 5, closed: 6 } as Record<string, number>)[objectiveState(w, rec, p.me).k] ?? 4;
   const list = [...rec.work].sort((a, b) => Number(!rel(a)) - Number(!rel(b)) || rank(a) - rank(b));
@@ -730,15 +929,13 @@ function WorkTab(p: DeskProps) {
       {composing ? <NewWork p={p} done={() => setComposing(false)} /> : null}
       {!list.length && !composing ? (
         <div class="nx-empty2">
-          <b>No work yet</b>
-          <p>Work is an objective with a plan. A person or a connected coding agent does it, and its PRs stay together here.{noAgent ? ' No coding agent is connected to this room, so a person would do it.' : ''}</p>
+          <p class="nx-empty3"><AboutGlyph a="work" />No work yet</p>
           <button type="button" class="nx-btn primary" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>New work</button>
-          {ready.length ? <span class="nx-empty2-k">Or start from a signed decision</span> : null}
-          {ready.map((d) => <div key={d.id} class="nx-empty2-row"><span><b>{d.title}</b> · v{d.version}</span><button type="button" class="nx-textbtn strong" onClick={() => act.prepareWork(d.id)}>Plan it</button></div>)}
+          {ready.length ? <span class="tr-h">From a signed decision</span> : null}
+          {ready.map((d) => <div key={d.id} class="nx-empty2-row"><span class="nx-empty2-t"><Subject a={{ kind: 'decision', id: d.id, name: d.title }} /></span><button type="button" class="nx-btn" onClick={() => act.prepareWork(d.id)}>Plan it</button></div>)}
         </div>
       ) : null}
       {list.map((w) => <ObjectiveCard key={w.id} w={w} p={p} dim={!rel(w)} />)}
-      {list.length && !composing ? <button type="button" class="nx-textbtn add" disabled={!mayWrite(p.role)} onClick={() => setComposing(true)}>+ New work</button> : null}
     </section>
   );
 }
@@ -806,7 +1003,7 @@ export function WorkCard({ w, p, dim, bare }: { w: Work; p: DeskProps; dim?: boo
           <span class="nx-q-h">{w.question.deferred ? 'Deferred' : `${w.doer?.name ?? 'The agent'} asks ${w.question.for === me ? 'you' : nameOf(w.question.for)}`} · about <button type="button" class="nx-inl" onClick={() => act.light([w.question!.about])}>{partLabel(w.question.about)}</button></span>
           <p>{w.question.text}</p>
           <span class="nx-qopts">{w.question.options.map((o) => <button key={o} type="button" class="rp-mini" onClick={() => act.answer(w.id, o)}>{o}</button>)}</span>
-          <label class="rp-cm-reply nx-q-in"><span class="rp-sr">Answer</span><input type="text" placeholder="Or answer in your own words…" value={ans} onInput={(e) => setAns(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ans.trim()) { act.answer(w.id, ans.trim()); setAns(''); } }} /></label>
+          <label class="rp-cm-reply nx-q-in"><span class="rp-sr">Answer</span><MentionField p={p} placeholder="Or answer in your own words…" value={ans} onInput={setAns} onSubmit={(t) => { act.answer(w.id, t); setAns(''); }} /></label>
           <span class="nx-q-more"><button type="button" class="rp-link" onClick={() => act.discussQuestion(w.id)}>Discuss in a thread</button>{!w.question.deferred ? <button type="button" class="rp-link" onClick={() => act.defer(w.id)}>Defer; it can keep going on other steps</button> : null}</span>
         </div>
       ) : w.question?.answer ? <span class="nx-q-a"><Who id={w.question.answer.by} size={16} />Answered: {w.question.answer.text}</span> : null}
@@ -867,7 +1064,7 @@ function Inspector(p: DeskProps) {
   return (
     <div class={'nx-inspector' + (p.narrow ? ' narrow' : '') + (p.depth === 'focus' ? ' focus' : '')} aria-label={d ? 'Decision' : 'Work'}>
       <div class="nx-ins-bar">
-        <button type="button" class="nx-back" title={`All of ${inspect.kind === 'decision' ? 'Decide' : 'Work'}`} onClick={() => act.inspect(null)}>{inspect.kind === 'decision' ? 'Decide' : 'Work'}</button><i class="nx-crumbsep">/</i>
+        <button type="button" class="nx-back tr-back" title={`All of ${inspect.kind === 'decision' ? 'Decide' : 'Work'}`} onClick={() => act.inspect(null)}><Icon name="chevron-l" size={14} />{inspect.kind === 'decision' ? 'Decide' : 'Work'}</button><i class="nx-crumbsep">/</i>
         <span class="nx-ins-crumb">{d ? d.title : w?.title}</span>
       </div>
       {d ? <DecisionDoc d={d} p={p} /> : w ? <WorkView w={w} p={p} /> : null}

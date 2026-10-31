@@ -224,7 +224,7 @@ function App() {
   const roomProps = (id: string) => ({
     sources: ws, roomId: id, session, light,
     canvas, vowe: realWorkspace.vowe, self: () => selfCloudId() ?? '',
-    agentReply: (roomId: string, threadId: string, body: string) => realWorkspace.record.reply(roomId, threadId, body, 'vowe'),
+    agentReply: (roomId: string, threadId: string, body: string, parentId?: string | null) => realWorkspace.record.reply(roomId, threadId, body, 'vowe', parentId),
     attachError: attachErrors.get(id), membership: realWorkspace.membership, voice: voice(),
     onOpenRoom: openRoom, onNewRoom, onHome: home,
     onJoin: (o?: { talk: boolean }) => askJoin(id, !!o?.talk), onLeave: leave,

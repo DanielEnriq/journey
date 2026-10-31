@@ -29,7 +29,7 @@ function services(over: { plan?: VoweServices['work']['plan']; authorize?: VoweS
   const calls: string[] = [];
   const s: VoweServices = {
     record: { load: async () => { calls.push('load'); return ok(rec()); }, subscribe: () => () => {} },
-    threads: { create: () => ok({ id: 't1' }), reply: () => ok(undefined), resolve: () => ok(undefined), answerOffer: () => ok(undefined) },
+    threads: { create: () => ok({ id: 't1' }), reply: () => ok({ id: 'r1' }), resolve: () => ok(undefined), answerOffer: () => ok(undefined) },
     decisions: {
       create: () => ok({ id: 'd1' }), editLine: () => ok(undefined), addLine: () => ok({ id: 'l1' }), editDoc: () => ok(undefined), takeSuggestion: () => ok(undefined), requestSignatures: () => ok(undefined),
       sign: () => ok(undefined), requestChanges: () => ok(undefined), amend: () => ok({ id: 'd2' }), setSuggested: () => ok(undefined),

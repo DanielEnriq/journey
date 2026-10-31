@@ -1,4 +1,4 @@
-import { h, Fragment, useState } from '../journey.js';
+import { h, Fragment, useEffect, useRef, useState } from '../journey.js';
 import { BasisGlyph } from '../canvas/faces.js';
 import { AGENT, type Decision, type Line } from '../contracts/model.js';
 import { wordDiff } from '../state/plan.js';
@@ -44,7 +44,7 @@ export function DecisionDoc({ d, p }: { d: Decision; p: DeskProps }) {
     <DocLayout p={p} outline={outline} docKey={'dec-' + d.id} rail={<DecisionRail d={d} p={p} lineId={lineId} from={from} />}>
       <div class="nx-pdoc nx-ddoc">
         <header class="nx-dhead">
-          <span class="nx-eyebrow">Decision{from ? <> · from <button type="button" class="nx-textbtn" onClick={() => { act.tab('discuss'); act.thread(from.id); act.inspect(null); }}>the {from.about.name} thread</button></> : null}</span>
+          <span class="nx-eyebrow">Decision{from ? <> · from <button type="button" class="nx-textbtn" onClick={() => { act.tab('discuss'); act.thread(from.id); act.inspect(null); }}>{/^the /i.test(from.about.name) ? '' : 'the '}{from.about.name} thread</button></> : null}</span>
           <h2>{d.title}</h2>
           <div class={'nx-stline ' + (d.state === 'agreed' ? 'ok' : d.state === 'review' ? 'prop' : 'draft')}>{stline}</div>
           {family.length > 1 ? (
@@ -127,6 +127,10 @@ function AddLine({ kinds, first, onAdd }: { kinds: Line['kind'][]; first?: boole
   const [kind, setKind] = useState<Line['kind'] | null>(first ? kinds[0] : null);
   const [text, setText] = useState('');
   const save = () => { const t = text.trim(); if (!t || !kind) return; onAdd(kind, t); setText(''); if (!first) setKind(null); };
+  // A line typed but not entered still goes into the draft when you leave the document.
+  const pending = useRef({ kind, text, onAdd });
+  pending.current = { kind, text, onAdd };
+  useEffect(() => () => { const { kind: k, text: t, onAdd: add } = pending.current; if (k && t.trim()) add(k, t.trim()); }, []);
   if (!kind) return <span class="nx-addline">{kinds.map((k) => <button key={k} type="button" class="nx-textbtn add" onClick={() => setKind(k)}>+ {ADD_LABEL[k].add}</button>)}</span>;
   return (
     <span class="nx-addline editing">
@@ -194,7 +198,7 @@ function Review({ d, p, mine }: { d: Decision; p: DeskProps; mine?: Decision['ap
       </ul>
       {rc !== null ? (
         <label class="rp-cm-reply nx-rcin"><Who id={me} /><span class="rp-sr">What should change</span>
-          <MentionField p={p} autoFocus placeholder="What should change before you sign? (Enter to send)" value={rc} onInput={setRc}
+          <MentionField p={p} autoFocus placeholder="What should change before you sign?" value={rc} onInput={setRc}
             onSubmit={(t) => { act.requestChanges(d.id, t); setRc(null); }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setRc(null); } }} />
         </label>
       ) : null}
