@@ -51,6 +51,7 @@ import type {
 import { createVoiceHost } from '../voice/index.js';
 import { canvas, executeAsPerson, loadRoomCanvas, sharePresence } from './canvas.js';
 import { roomCanvasEvents, withRoomCanvas } from './vowe-canvas.js';
+import { registerSystemIpc } from './system-canvas.js';
 import { isAppPage } from './window.js';
 
 function requireString(value: unknown, what: string): string {
@@ -497,6 +498,10 @@ export function registerIpc() {
   handle('canvas:load', (roomId) => roomResult(() => loadRoomCanvas(requireString(roomId, 'Room id'))));
   handle('canvas:execute', (roomId, command) => executeAsPerson(requireString(roomId, 'Room id'), command));
   handle('canvas:presence', (roomId, presence) => sharePresence(requireString(roomId, 'Room id'), presence));
+
+  // The system canvas (Developer ▸ System canvas): its own `system:*` channels, in main/system-canvas.ts.
+  registerSystemIpc();
+
   handle('rooms:join', (roomId) => connectRoom(requireString(roomId, 'Room id')));
   handle('rooms:leave', (roomId) => disconnectRoom(requireString(roomId, 'Room id')));
   // sendRoomEvent validates the type and payload against RoomEvents.

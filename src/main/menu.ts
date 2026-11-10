@@ -1,4 +1,5 @@
 import { app, Menu } from 'electron';
+import { openSystemWindow } from './system-canvas.js';
 
 // The menu bar names the app Vowe. Only the labels change: app.name stays the package's, since the data folder
 // (userData) and the Keychain key safeStorage seals sign-ins with are both derived from it. In development the
@@ -28,5 +29,6 @@ export function setAppMenu(): void {
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
+    { label: 'Developer', submenu: [{ label: 'System canvas', click: () => void openSystemWindow() }] },
   ]));
 }

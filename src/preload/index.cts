@@ -5,6 +5,7 @@
 // named functions only, so it can't reach a channel we didn't mean to give it.
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Channels, EventChannel, InvokeArgs, InvokeChannel, InvokeResult, JourneyApi } from '../shared/api.js';
+import type { SystemClient } from '../renderer/features/system-canvas/api-client.js';
 
 function invoke<K extends InvokeChannel>(channel: K, ...args: InvokeArgs<K>): Promise<InvokeResult<K>> {
   return ipcRenderer.invoke(channel, ...args);
@@ -208,4 +209,20 @@ const api: JourneyApi = {
   },
 };
 
-contextBridge.exposeInMainWorld('journey', api);
+// The system canvas page's channels (main/system-canvas.ts). They live outside `Channels` so the system
+// canvas stays a separate, developer-only surface; still named functions, never a generic invoke.
+const system: SystemClient = {
+  repos: () => ipcRenderer.invoke('system:repos'),
+  open: (repo, opts) => ipcRenderer.invoke('system:open', repo, opts),
+  freshness: (repo) => ipcRenderer.invoke('system:freshness', repo),
+  refresh: (repo) => ipcRenderer.invoke('system:refresh', repo),
+  source: (repo, file, start, end, context) => ipcRenderer.invoke('system:source', repo, file, start, end, context),
+  fixtures: () => ipcRenderer.invoke('system:fixtures'),
+  fixture: (id) => ipcRenderer.invoke('system:fixture', id),
+  views: (repo) => ipcRenderer.invoke('system:views', repo),
+  saveView: (repo, view) => ipcRenderer.invoke('system:saveView', repo, view),
+  traces: (repo) => ipcRenderer.invoke('system:traces', repo),
+  addInterpretation: (repo, interpretation) => ipcRenderer.invoke('system:addInterpretation', repo, interpretation),
+};
+
+contextBridge.exposeInMainWorld('journey', { ...api, system });
