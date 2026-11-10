@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'"
+    />
+    <meta name="color-scheme" content="dark light" />
+    <title>Vowe · System canvas</title>
+    <!-- Vowe's tokens and type, then the system canvas's own drawing language on top of them. -->
+    <link rel="stylesheet" href="ui/styles/fonts.css" />
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <link rel="stylesheet" href="ui/styles/tokens.css" />
+    <link rel="stylesheet" href="ui/styles/scrollbars.css" />
+    <link rel="stylesheet" href="features/system-canvas/system-canvas.css" />
+  </head>
+  <body>
+    <div id="app" class="v-root"></div>
+    <script type="module" src="system.js"></script>
+  </body>
+</html>

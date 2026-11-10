@@ -34,7 +34,10 @@ export interface StageProps {
   onPin(id: string, at: [number, number]): void;
   onFollow(id: string): void;
   onOverflow(ov: SceneOverflow): void;
+  controls?: { current: StageControls | null };
 }
+
+export interface StageControls { zoomIn(): void; zoomOut(): void; fit(): void; enter(id: string): void }
 
 const ANIM = 340;
 
@@ -209,8 +212,7 @@ export function Stage(p: StageProps) {
     else if (k === '0' || k === 'f') { e.preventDefault(); animateTo(home()); }
   };
 
-  // Imperative controls for the zoom buttons.
-  (Stage as unknown as { api?: unknown }).api = {
+  if (p.controls) p.controls.current = {
     zoomIn: () => animateTo(zoomAt(c, v, 1.25, { x: v.w / 2, y: v.h / 2 })),
     zoomOut: () => animateTo(zoomAt(c, v, 0.8, { x: v.w / 2, y: v.h / 2 })),
     fit: () => animateTo(home()),

@@ -220,8 +220,9 @@ export function createSystemService(opts: SystemServiceOptions = {}): SystemServ
   }
 
   async function record(r: Repo): Promise<Trace[]> {
-    const { registry, index } = await once(r.id, () => ensure(r));
-    const traces = await recordCanvasTraces(registry, index.revision.head ?? index.revision.fingerprint);
+    // Mapping events to entities only needs a registry, not a fresh one: use what's loaded if anything is.
+    const registry = r.registry ?? (await once(r.id, () => ensure(r))).registry;
+    const traces = await recordCanvasTraces(registry, registry.revision.fingerprint);
     for (const t of traces) await writeJsonAtomic(join(files(r).traces, `${slug(t.id)}.json`), t);
     return traces;
   }

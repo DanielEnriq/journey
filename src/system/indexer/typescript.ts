@@ -865,7 +865,7 @@ export function runTypeScriptPass(opts: TsPassOptions): TsPassOutput {
             if (lit && subj) {
               const negate = op === ts.SyntaxKind.ExclamationEqualsEqualsToken || op === ts.SyntaxKind.ExclamationEqualsToken;
               const branch = comparisonBranch(n, negate);
-              out.comparisons.push({ in: from(), file, range: rangeOf(n, sf), subject: normalizeCallee(subj), literal: lit.text, ...(branch ? { branch } : {}) });
+              out.comparisons.push({ in: from(), file, range: rangeOf(n, sf), subject: normalizeCallee(subj), literal: lit.text, ...(negate ? { negated: true } : {}), ...(branch ? { branch } : {}) });
             }
           }
           if (op === ts.SyntaxKind.AmpersandAmpersandToken || op === ts.SyntaxKind.BarBarToken || op === ts.SyntaxKind.QuestionQuestionToken) {

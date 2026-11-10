@@ -1,7 +1,8 @@
-import { h, Fragment } from '../../vendor/preact.js';
+import { h } from '../../vendor/preact.js';
 import { outlineFor } from '../../../shared/system/render/index.js';
+import type { Provenance } from '../../../shared/system/model.js';
 import type {
-  Part, Point, Provenance, SceneEdge, SceneGroup, SceneNode, SceneOverflow, ScenePortal, SceneSequence, SceneStub, SceneZone, SystemScene, Terminal,
+  Part, Point, SceneEdge, SceneGroup, SceneNode, SceneOverflow, ScenePortal, SceneSequence, SceneStub, SceneZone, SystemScene, Terminal,
 } from '../../../shared/system/render/index.js';
 
 // Drawing a scene: every shape comes from the scene (outlines, parts, routes); this file only decides
@@ -396,4 +397,3 @@ export function Patterns() {
   );
 }
 
-export const _unused = Fragment;

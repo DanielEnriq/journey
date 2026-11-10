@@ -1,4 +1,4 @@
-import { h } from '../../vendor/preact.js';
+import { Fragment, h } from '../../vendor/preact.js';
 import { useEffect, useRef, useState } from '../../vendor/preact-hooks.js';
 import type { SystemRegistry, ViewRequest } from '../../../shared/system/model.js';
 import {

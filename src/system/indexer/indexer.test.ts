@@ -61,6 +61,7 @@ export class Client {
       if (name === 'draw') {
         const out = await this.transport.execute(name);
         if (out) return out;
+        if (name !== 'erase') this.queue.push(name);
       }
     }
     try { helper('x'); } catch { this.queue.push('failed'); }
@@ -221,7 +222,11 @@ describe('indexRepository on a fixture', async () => {
     const cmp = ix.comparisons.find((c) => c.in === 'src/client.ts#Client.run' && c.literal === 'draw')!;
     assert.equal(cmp.subject, 'name');
     assert.equal(cmp.branch?.start.line, 25);
-    assert.equal(cmp.branch?.end.line, 28);
+    assert.equal(cmp.branch?.end.line, 29);
+    assert.equal(cmp.negated, undefined);
+    const neg = ix.comparisons.find((c) => c.in === 'src/client.ts#Client.run' && c.literal === 'erase')!;
+    assert.equal(neg.negated, true, '!== is marked negated');
+    assert.equal(neg.branch, undefined, 'no else branch to report');
     const sw = ix.comparisons.find((c) => c.in === 'src/use.ts#pick')!;
     assert.equal(sw.subject, 'tool');
     assert.equal(sw.literal, 'draw');
