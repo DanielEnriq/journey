@@ -231,6 +231,8 @@ export interface SystemScene {
   bounds: Rect;
   zones: SceneZone[];
   groups: SceneGroup[];
+  /** Inside an entered component: its compartments, as regions holding their parts. */
+  regions: { id: string; label: string; rect: Rect }[];
   nodes: SceneNode[];
   edges: SceneEdge[];
   portals: ScenePortal[];

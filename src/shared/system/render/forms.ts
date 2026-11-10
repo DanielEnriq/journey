@@ -124,6 +124,39 @@ function attrList(e: Entity, keys: string[] = []): string[] {
   return [];
 }
 
+function specFor(form: FormId): { w: number; comps: Compartment[] } {
+  const spec = SPECS[form] ?? SPECS.unknown!;
+  // Tests, validators and transports keep their own compartments in every form, ahead of the catch-all.
+  const extra: Compartment[] = ([
+    { role: 'checks', label: 'checks', col: 0, match: kindIs('validator') },
+    { role: 'tests', label: 'verified by', col: spec.comps.some((c) => c.col === 1) ? 1 : 0, match: kindIs('test') },
+  ] as Compartment[]).filter((x) => !spec.comps.some((c) => c.role === x.role));
+  const last = spec.comps[spec.comps.length - 1];
+  const catchAll = last && last.match === any ? [last] : [];
+  return { w: spec.w, comps: [...spec.comps.slice(0, spec.comps.length - catchAll.length), ...extra, ...catchAll] };
+}
+
+export interface CompartmentContent { role: string; label: string; col: 0 | 1; cols: number; slots?: number; kids: Entity[]; strings: string[] }
+
+/** Which of an entity's children go in which compartment of its form (all of them, most relevant first). */
+export function compartments(input: FormInput, lens?: Lens): CompartmentContent[] {
+  const form = formFor(input.entity.kind, lens);
+  if (CHIP_FORMS.has(form) || form === 'channel') return [];
+  const used = new Set<string>();
+  const out: CompartmentContent[] = [];
+  const rel = input.relevance;
+  for (const c of specFor(form).comps) {
+    // Unclaimed children that fit, the ones that matter to this view first (stable: then by id).
+    const kids = input.children.filter((k) => !used.has(k.id) && c.match(k))
+      .sort((a, b) => (rel ? rel(b.id) - rel(a.id) : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    kids.forEach((k) => used.add(k.id));
+    const strings = kids.length ? [] : attrList(input.entity, c.attrs);
+    if (!kids.length && !strings.length && !c.slots) continue;
+    out.push({ role: c.role, label: c.label, col: c.col, cols: c.cols ?? 1, slots: c.slots, kids, strings });
+  }
+  return out;
+}
+
 /** Lays a form out: its size, outline, and parts. Pure and deterministic. */
 export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
   const { entity } = input;
@@ -137,30 +170,22 @@ export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
       { key: `${entity.id}:bus`, role: 'bus', label: ev, rect: { x: 14, y: 52, w: w - 28, h: 8 }, lod: 'far' },
     ] };
   }
-  const spec = SPECS[form] ?? SPECS.unknown!;
+  const spec = specFor(form);
   const parts: Part[] = [];
   const twoCol = spec.comps.some((c) => c.col === 1);
   const inner = spec.w - PAD * 2;
   const colW = twoCol ? (inner - PAD) / 2 : inner;
   const colX = [PAD, PAD + colW + PAD];
   const colY = [HEAD, HEAD];
-  const used = new Set<string>();
   const relNote = notesFor(input);
 
-  for (const c of spec.comps) {
-    // Unclaimed children that fit, the ones that matter to this view first (stable: then by id).
-    const rel = input.relevance;
-    const kids = input.children.filter((k) => !used.has(k.id) && c.match(k))
-      .sort((a, b) => (rel ? rel(b.id) - rel(a.id) : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    kids.forEach((k) => used.add(k.id));
-    const strings = kids.length ? [] : attrList(entity, c.attrs);
-    if (!kids.length && !strings.length && !c.slots) continue;
+  for (const c of compartments(input, lens)) {
     const x = colX[c.col], y = colY[c.col];
-    const cols = c.cols ?? 1;
+    const cols = c.cols;
     const cw = (colW - 8 - (cols - 1) * CHIP_GAP) / cols;
     const items: { key: string; entity?: string; label: string; detail?: string; e?: Entity }[] = [
-      ...kids.map((k) => ({ key: k.id, entity: k.id, label: k.name, detail: k.kind, e: k })),
-      ...strings.map((s, i) => ({ key: `${entity.id}:${c.role}:${i}`, label: s })),
+      ...c.kids.map((k) => ({ key: k.id, entity: k.id, label: k.name, detail: k.kind, e: k })),
+      ...c.strings.map((str, i) => ({ key: `${entity.id}:${c.role}:${i}`, label: str })),
     ];
     const shown = items.slice(0, items.length > CAP * cols ? CAP * cols - 1 : CAP * cols);
     const more = items.length - shown.length;
@@ -192,6 +217,11 @@ export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
     parts.splice(parts.length - (shown.length + (more > 0 ? 1 : 0) + (c.slots ?? 0)), 0,
       { key: `${entity.id}:${c.role}`, role: `compartment:${c.role}`, label: c.label, rect: { x, y, w: colW, h }, lod: 'far' });
     colY[c.col] = y + h + 8;
+  }
+  if (!parts.length) {
+    // Nothing inside that the registry knows of: a compact form, not an empty box pretending to hold something.
+    const w = Math.min(spec.w, 230), h = form === 'bridge' ? 84 : 62;
+    return { form, w, h, head: h, outline: outlineFor(form, w, h), parts: [] };
   }
 
   let h = Math.max(colY[0], colY[1]) + PAD - 8;

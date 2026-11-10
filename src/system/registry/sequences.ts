@@ -134,7 +134,11 @@ class Walker {
 
   /** Tables a store function writes, from SQL relations already built. */
   writesAfter(entity: string): string[] {
-    return [...this.b.relations.values()].filter((r) => r.kind === 'writes' && r.from === entity).map((r) => r.to).sort(byString);
+    // In the order the statements appear in the function body, so a path reads the way the code runs;
+    // the table name breaks ties (and orders writes we have no line for).
+    const firstLine = (rel: { evidence: string[] }) => Math.min(...rel.evidence.map((e) => this.b.evidence.get(e)?.range?.start.line ?? Infinity));
+    return [...this.b.relations.values()].filter((r) => r.kind === 'writes' && r.from === entity)
+      .sort((a, b) => firstLine(a) - firstLine(b) || byString(a.to, b.to)).map((r) => r.to);
   }
 
   notable(t: IndexSymbol): boolean {
