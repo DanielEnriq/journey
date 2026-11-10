@@ -102,6 +102,8 @@ export interface CanvasSurfaceProps {
   inCall?: boolean;
   /** Draw the canvas's own empty, loading and failed states (callers that draw their own pass false). */
   states?: boolean;
+  /** More view tabs after the document's own, drawn the same way (the room's System view). */
+  viewTabs?: ComponentChildren;
   children?: ComponentChildren;
 }
 
@@ -619,6 +621,7 @@ export function CanvasSurface(p: CanvasSurfaceProps) {
         <div class="surface-head">
           <div class="seg" role="group" aria-label="Views">
             {tabs.map((t) => <button key={t.id} class={t.cls} type="button" title={t.title} aria-pressed={t.on} onClick={() => show(t.id)}>{t.name}</button>)}
+            {p.viewTabs}
           </div>
           {from ? <button class="nx-lineage" type="button" title="Go to the view this one grew from" onClick={() => show(from.id)}>from {from.name}</button> : null}
           {scene.type === 'failure-flow' && stepsTotal > 0 ? (

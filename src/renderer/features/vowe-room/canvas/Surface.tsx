@@ -30,17 +30,19 @@ export interface SurfaceProps {
   reserve?: number;
   /** A call is on: the view can follow the call or be just yours. */
   inCall?: boolean;
+  /** More view tabs after the canvas's own (the room's System view). */
+  viewTabs?: ComponentChildren;
   children?: ComponentChildren;
 }
 
-export function Surface({ client, ui, marks, lit, onAsk, onScenario, onCopies, onComment, onMarks, anchored, reserve, inCall, children }: SurfaceProps) {
+export function Surface({ client, ui, marks, lit, onAsk, onScenario, onCopies, onComment, onMarks, anchored, reserve, inCall, viewTabs, children }: SurfaceProps) {
   const { agentName, person } = useNames();
   const semantics = useSemantics();
   const { since } = useStore(ui);
   return (
     <CanvasSurface client={client} ui={ui} marks={marks} lit={lit} semantics={semantics} agentName={agentName()} since={since}
       onAsk={onAsk ? ({ components, names }) => onAsk({ components, names }) : undefined}
-      onScenario={onScenario} onCopies={onCopies} onComment={onComment} onMarks={onMarks} anchored={anchored} toneOf={(id) => { const t = person(id).tone; return t && t !== 'me' ? t : undefined; }} reserve={reserve} inCall={inCall}>
+      onScenario={onScenario} onCopies={onCopies} onComment={onComment} onMarks={onMarks} anchored={anchored} toneOf={(id) => { const t = person(id).tone; return t && t !== 'me' ? t : undefined; }} reserve={reserve} inCall={inCall} viewTabs={viewTabs}>
       {children}
     </CanvasSurface>
   );

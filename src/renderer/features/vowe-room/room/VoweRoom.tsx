@@ -19,6 +19,7 @@ import { DirectoryContext, names, type Directory } from '../state/directory.js';
 import { SemanticsContext } from '../state/semantics.js';
 import { exitDepth, type DeskNav } from './navigation.js';
 import type { Depth, Ui } from '../state/ui.js';
+import type { RoomSystemSlot } from '../../system-canvas/RoomSystem.js';
 
 // The room as Journey's call lays it out (FreshCall in RoomScreen.tsx): the band, the shared sidebar, the
 // room's name and who's here, the canvas with its tool rail and the call under it, and the Desk.
@@ -95,6 +96,12 @@ export interface VoweRoomProps {
   deskStatus?: DeskStatus;
   /** The agent while it works: the thread it's answering (null for the Ask panel) and the tool call it's in. */
   agent?: AgentNow | null;
+  /**
+   * The room's repository as the system canvas draws it (features/system-canvas/RoomSystem.tsx): a System
+   * tab among the views; while it's on, its pane stands in for the canvas and, with a part selected, its
+   * panel for the Desk. Absent: the room as it was.
+   */
+  system?: RoomSystemSlot | null;
 }
 
 export interface AgentNow { thread: string | null; doing: { tool: string; input: unknown } | null }
@@ -210,11 +217,13 @@ export function VoweRoom(p: VoweRoomProps) {
               <RoomTitle name={p.room.name} space={p.space ?? p.room.repo} onRename={p.onRename} />
               <div class="presence"><Who people={p.people} vowe={!!p.call && rec.vowe && u.vowe !== 'off'} ring={p.speaking ? { [p.speaking]: 'speaking' } : {}} /></div>
             </div>
+            {p.system?.on ? p.system.pane(<>{p.overlays}{p.call ? <CallBar c={p.call} /> : null}</>) : (
             <Surface client={p.client} ui={p.ui} marks={p.marks} lit={p.lit} onAsk={rec.vowe ? p.onAsk : undefined} onScenario={p.onScenario} onCopies={p.onCopies}
-              onComment={p.onComment} onMarks={p.onMarks} anchored={p.pins} reserve={p.call && u.cc ? 58 : 0} inCall={!!p.call}>
+              onComment={p.onComment} onMarks={p.onMarks} anchored={p.pins} reserve={p.call && u.cc ? 58 : 0} inCall={!!p.call} viewTabs={p.system?.tab}>
               {p.overlays}
               {p.call ? <CallBar c={p.call} /> : null}
             </Surface>
+            )}
           </main>
           {wide && sheet ? <button type="button" class="nx-sheet-edge" aria-label="Back to the canvas" title="Back to the canvas · Esc" onClick={() => p.act.depth('compact')}><span>‹ Canvas</span></button> : null}
           {crumbs ? <FocusCrumbs room={p.room.name} crumbs={crumbs} rec={rec} act={p.act} back={() => p.act.depth(exitDepth(u))}
@@ -222,8 +231,8 @@ export function VoweRoom(p: VoweRoomProps) {
           <aside class="desk" aria-label="Where the room is" aria-hidden={!u.deskOpen}>
             {u.deskOpen && !sheet && !focusMode ? <div class="nx-split" role="separator" aria-orientation="vertical" aria-label="Resize the Desk" title="Drag to widen or narrow · double-click to switch" onPointerDown={startDrag} onDblClick={() => p.act.depth(depth === 'expanded' ? 'compact' : 'expanded')}><i></i></div> : null}
             <div class="desk-panel">
-              {p.deskTop && !p.deskOverride && !focusMode ? p.deskTop : null}
-              {p.deskOverride ? p.deskOverride : !p.deskStatus || p.deskStatus.state === 'ready' ? <Desk {...deskProps} /> : <DeskPending status={p.deskStatus} />}
+              {p.deskTop && !p.deskOverride && !p.system?.panel && !focusMode ? p.deskTop : null}
+              {p.system?.panel ? p.system.panel : p.deskOverride ? p.deskOverride : !p.deskStatus || p.deskStatus.state === 'ready' ? <Desk {...deskProps} /> : <DeskPending status={p.deskStatus} />}
             </div>
           </aside>
           {u.toast ? <div class="nx-toast" role="status"><span>{u.toast.text}</span>{u.toast.undo ? <button type="button" onClick={() => { u.toast!.undo!(); p.ui.setState({ toast: null }); }}>Undo</button> : null}</div> : null}

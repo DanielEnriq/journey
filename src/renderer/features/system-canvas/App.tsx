@@ -234,7 +234,7 @@ export function App() {
   const sequenceTraces = request.lens === 'path' || request.lens === 'failure' ? traces : [];
 
   return (
-    <div class={`sc-app ${panel.inspector ? 'has-insp' : ''} ${panel.outline || panel.harness ? 'has-left' : ''}`}>
+    <div class={`sc-root sc-app ${panel.inspector ? 'has-insp' : ''} ${panel.outline || panel.harness ? 'has-left' : ''}`}>
       <header class="sc-top">
         <button type="button" class="brand" onClick={() => { setRegistry(null); setRequest(null); setVs(null); LS.set('vowe.system.source', null); }} title="Choose another system">
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4h6v4H2zM10 10h6v4h-6zM8 6h3v6h-1" class="brand-mark" /></svg>
@@ -357,7 +357,7 @@ function ago(iso: string) {
 
 function Chooser({ repos, fixtures, busy, error, onOpen }: { repos: RepoChoice[] | null; fixtures: { id: string; label: string }[]; busy: string | null; error: string | null; onOpen(s: Source): void }) {
   return (
-    <div class="chooser">
+    <div class="sc-root chooser">
       <div class="chooser-card">
         <h1>System canvas</h1>
         <p class="lede">A drawing of a real system you can enter: its parts, how they connect, and the code each one rests on.</p>

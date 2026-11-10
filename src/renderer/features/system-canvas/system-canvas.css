@@ -9,9 +9,12 @@
  *   walls        runtime boundaries: two hairlines across the canvas
  *   relations    weight, pattern and ends say what a line means (grammar.ts); never colour alone
  *   paths        slate; dashed while possible (from code), solid once observed (a recording)
+ *
+ * Everything is scoped to .sc-root, so the same sheet can sit in the Vowe room (RoomSystem.tsx) beside the
+ * room's own stylesheets without either reaching into the other; the page-level rules live in page.css.
  */
 
-:root {
+.sc-root {
   --sc-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
   --sc-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter Display', 'Inter', system-ui, sans-serif;
   --sc-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
@@ -27,11 +30,10 @@
   --sc-left: 320px;
 }
 
-* { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--v-bg); color: var(--v-fg); }
-body { font: 13px/1.45 var(--sc-font); -webkit-font-smoothing: antialiased; overflow: hidden; }
-#app { height: 100%; }
-button { font: inherit; color: inherit; }
+@scope (.sc-root) {
+:scope { box-sizing: border-box; font: 13px/1.45 var(--sc-font); color: var(--v-fg); -webkit-font-smoothing: antialiased; }
+:scope *, :scope *::before, :scope *::after { box-sizing: border-box; }
+:scope button { font: inherit; color: inherit; }
 code, pre, .mono { font-family: var(--sc-mono); font-size: 11.5px; }
 .muted { color: var(--v-fg-3); }
 .warn { color: var(--v-fault-fg); }
@@ -235,7 +237,7 @@ code, pre, .mono { font-family: var(--sc-mono); font-size: 11.5px; }
 .k-publishes, .k-consumes { --rel: var(--v-person-2); }
 .k-produces, .k-renders { --rel: var(--v-person-3); }
 .k-depends_on, .k-implements, .k-verified_by { --rel: var(--sc-ink-3); }
-[data-theme='dark'] .k-writes, [data-theme='dark'] .k-reads { --rel: var(--sage-400); }
+[data-theme='dark'] :scope .k-writes, [data-theme='dark'] :scope .k-reads { --rel: var(--sage-400); }
 .edge { cursor: pointer; --relc: color-mix(in srgb, var(--rel) 80%, var(--sc-ink-2)); }
 .edge .e-line, .edge .e-double-under { stroke: var(--relc); }
 .edge .t-fill { fill: var(--relc); }
@@ -309,7 +311,7 @@ code, pre, .mono { font-family: var(--sc-mono); font-size: 11.5px; }
 .stn.cur .stn-n { fill: var(--v-canvas) !important; }
 .stn-halo { fill: color-mix(in srgb, var(--sc-path) 16%, transparent); animation: sc-halo 1.6s var(--v-ease) infinite; }
 @keyframes sc-halo { 0%, 100% { opacity: .9; } 50% { opacity: .35; } }
-.reduce-motion .stn-halo, .still .stn-halo { animation: none; }
+.reduce-motion :scope .stn-halo, .still .stn-halo { animation: none; }
 .stn-n { font-family: var(--sc-mono) !important; font-weight: 600; fill: var(--sc-path) !important; }
 .stn-fail { stroke: var(--v-fault-fg); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
 .stn.off .stn-dot { stroke-dasharray: 2 2; }
@@ -495,4 +497,25 @@ p.claim { display: block; height: auto; padding: 6px 10px; border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) {
   .level { animation-duration: 1ms; }
   .n { transition: none; }
+}
+
+/* ------------------------------------------------------------------ inside a Vowe room (RoomSystem.tsx) */
+/* The pane fills the room's canvas area under its view tabs; the room's tool rail drives the camera. The
+   room's own stylesheet names some of the same classes (.stage, .tag, .row…) for its canvas; the resets
+   here keep its geometry off ours. */
+:scope.sc-room { position: absolute; inset: 0; display: flex; flex-direction: column; background: transparent; }
+:scope.sc-room .stage { position: relative; left: auto; top: auto; width: auto; height: auto; transform: none; flex: 1; }
+:scope.sc-room .zoombar { display: none; }
+:scope.sc-room .grid { fill: transparent; }
+:scope.sc-room .player-wrap { bottom: 16px; }
+.sc-room-crumbs { position: absolute; z-index: 7; top: 56px; left: 16px; display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--v-fg-3); }
+.sc-room-crumbs button { height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--v-surface); box-shadow: var(--v-shadow-1); color: var(--v-fg-2); cursor: pointer; }
+.sc-room-crumbs button[aria-current] { color: var(--v-fg); font-weight: 600; }
+.sc-room-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 360px; text-align: center; font-size: 13px; color: var(--v-fg-3); }
+.sc-room-empty b { color: var(--v-fg); font-weight: 600; }
+/* The room panel's part: the inspector, under a line that says where it comes from. */
+:scope.sc-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: auto; padding: 4px 4px 24px; }
+.sc-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 2px 10px; font-size: 11.5px; color: var(--v-fg-3); }
+:scope.sc-panel .insp { padding: 0 2px; }
+:scope.sc-panel .insp-close { display: none; }
 }

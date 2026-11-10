@@ -1,0 +1,6 @@
+/* The system canvas page on its own (system.html): the document itself. In a room, the room owns these. */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--v-bg); color: var(--v-fg); }
+body { font: 13px/1.45 var(--v-font-sans); -webkit-font-smoothing: antialiased; overflow: hidden; }
+#app { height: 100%; }
+button { font: inherit; color: inherit; }

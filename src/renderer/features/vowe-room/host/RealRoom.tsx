@@ -16,6 +16,7 @@ import { anchorPatch, useDeskHistory, useDeskKeys, useToastTimeout } from '../ro
 import { pendingAnchor, takeAnchor } from '../../../shared/nav.js';
 import { VoweRoom, type DeskStatus } from '../room/VoweRoom.js';
 import { createDeskActions } from './actions.js';
+import { useRoomSystem } from '../../system-canvas/RoomSystem.js';
 
 // The Pass 3 room on a real Journey room: the record comes from VoweServices (load + record:changed), the
 // canvas is the room's CanvasClient, the call is RoomScreen's LiveKit call, and people come from the room's
@@ -239,6 +240,8 @@ export function RealRoom(p: RealRoomProps) {
     </>
   );
 
+  // The room's repository as the system canvas draws it, when this window has SystemApi.
+  const system = useRoomSystem({ api: window.journey?.system, repository: p.room.repo, client: p.client, ui });
   const n = names(directory);
   const speaker = p.speaking;
   const here = p.access ? p.access.members.filter((m) => m.presence !== 'away').length : p.people.length;
@@ -260,6 +263,7 @@ export function RealRoom(p: RealRoomProps) {
       onScenario={(component, s) => { void p.client.run('show_view', s.view === 'concurrency' ? { view: 'concurrency', focus: component, instances: 2 } : { view: s.view, focus: component }); }}
       onComment={(x, y, on) => setDraft({ x, y, on })}
       onMarks={one}
+      system={system}
     />
   );
 }
