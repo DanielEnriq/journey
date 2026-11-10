@@ -74,8 +74,13 @@ interface Meta { revision: RepoRevision; summary: IndexSummary; interpretations:
 const MAX_VIEW_BYTES = 512 * 1024;
 const MAX_VIEWS = 200;
 
-/** The Journey checkout this module was built from (dist/ or an outDir under it), else the working directory's. */
+/** The repository offered by default: `VOWE_SYSTEM_REPO`, else the Journey checkout (below). */
 export function journeyRoot(): string {
+  return process.env.VOWE_SYSTEM_REPO ? resolve(process.env.VOWE_SYSTEM_REPO) : checkoutRoot();
+}
+
+/** The Journey checkout this module was built in or is run from, else the working directory. Traces run its code. */
+function checkoutRoot(): string {
   const isJourney = (dir: string) => {
     try { return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name === 'journey' && existsSync(join(dir, 'src', 'shared', 'canvas', 'store.ts')); }
     catch { return false; }
@@ -92,7 +97,7 @@ export function journeyRoot(): string {
 export function createSystemService(opts: SystemServiceOptions = {}): SystemService {
   const home = resolve(opts.home ?? defaultHome());
   const defaults = (opts.repos ?? [journeyRoot()]).map((r) => resolve(r));
-  const hostRoot = journeyRoot();
+  const hostRoot = checkoutRoot();
   const once = serial();
   const repos = new Map<string, Repo>();
   let loaded: Promise<void> | null = null;

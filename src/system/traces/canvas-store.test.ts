@@ -18,6 +18,8 @@ const registry: SystemRegistry = {
     entity('element:execute', 'element', [{ file: 'src/shared/canvas/store.ts', symbol: 'src/shared/canvas/store.ts#execute' }]),
     entity('code:execute', 'code', [{ file: 'src/shared/canvas/store.ts', symbol: 'src/shared/canvas/store.ts#execute' }]),
     entity('interface:canvas-store', 'element', [{ file: 'src/shared/canvas/store.ts', symbol: 'src/shared/canvas/store.ts#CanvasStore' }]),
+    entity('store:memory', 'component', [{ file: 'src/shared/canvas/store.ts', symbol: 'src/shared/canvas/store.ts#memoryStore' }]),
+    entity('method:memory-commit', 'element', [{ file: 'src/shared/canvas/store.ts', symbol: 'src/shared/canvas/store.ts#memoryStore.commit' }]),
     entity('engine:apply', 'element', [{ file: 'src/shared/canvas/engine.ts', symbol: 'src/shared/canvas/engine.ts#applyCommand' }]),
   ].map((e) => [e.id, e])),
 };
@@ -26,7 +28,8 @@ describe('canvas store traces', () => {
   test('entities are found by the symbols they are anchored at, most specific first', () => {
     assert.equal(entityForSymbol(registry, 'src/shared/canvas/store.ts#execute'), 'code:execute');
     assert.equal(entityForSymbol(registry, 'src/shared/canvas/store.ts#CanvasStore.commit'), 'interface:canvas-store', 'falls back to the container');
-    assert.equal(entityForSymbol(registry, 'src/shared/canvas/store.ts#memoryStore'), 'component:canvas-store', 'falls back to the file');
+    assert.equal(entityForSymbol(registry, 'src/shared/canvas/store.ts#memoryStore.load'), 'store:memory', 'falls back to the container');
+    assert.equal(entityForSymbol(registry, 'src/shared/canvas/store.ts#MAX_ATTEMPTS'), 'component:canvas-store', 'falls back to the file');
     assert.equal(entityForSymbol(registry, 'src/nowhere.ts#x'), null);
     assert.equal(entityForSymbol(null, 'src/shared/canvas/store.ts#execute'), null);
   });
@@ -37,9 +40,9 @@ describe('canvas store traces', () => {
     assert.match(trace.recorded.where, /in-memory store/);
     assert.match(trace.recorded.where, /not production or Supabase/);
     const ada = trace.events.filter((e) => e.data?.actor === 'Ada (harness)');
-    const commits = ada.filter((e) => e.data?.symbol === 'src/shared/canvas/store.ts#CanvasStore.commit' && 'conflict' in (e.data ?? {}));
+    const commits = ada.filter((e) => e.data?.via === 'src/shared/canvas/store.ts#CanvasStore.commit' && 'conflict' in (e.data ?? {}));
     assert.deepEqual(commits.map((e) => [e.data?.base, e.data?.conflict, e.data?.revision ?? null]), [[1, true, null], [2, false, 3]]);
-    assert.deepEqual(ada.filter((e) => e.data?.symbol?.toString().endsWith('#CanvasStore.load')).map((e) => e.data?.revision), [1, 2], 'reloaded after the lost race');
+    assert.deepEqual(ada.filter((e) => e.data?.symbol === 'src/shared/canvas/store.ts#memoryStore.load').map((e) => e.data?.revision), [1, 2], 'reloaded after the lost race');
     assert.deepEqual(ada.filter((e) => e.label.includes('applyCommand')).map((e) => e.data?.attempt), [1, 2]);
     const done = ada[ada.length - 1];
     assert.equal(done.data?.ok, true);
@@ -55,6 +58,8 @@ describe('canvas store traces', () => {
     // Events are mapped to registry entities where it has them, and say so where it doesn't.
     assert.equal(trace.events[0].entity, 'code:execute');
     assert.ok(trace.events.some((e) => e.entity === 'engine:apply'));
+    assert.ok(trace.events.some((e) => e.entity === 'method:memory-commit'), 'commits are the in-memory store that ran');
+    assert.ok(trace.events.some((e) => e.entity === 'store:memory'), 'loads fall back to the in-memory store');
     assert.ok(trace.events.filter((e) => e.data?.unmapped).every((e) => e.entity === e.data?.symbol));
   });
 

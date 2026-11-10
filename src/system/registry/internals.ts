@@ -94,7 +94,10 @@ function interactions(b: Builder, c: Component, out: Internals) {
     const keys = F.strings(v, 'keys'), values = F.strings(v, 'values');
     if (v.kind === 'variable' && keys.length && keys.length === values.length) keys.forEach((k, i) => { if (!keyFor.has(values[i])) keyFor.set(values[i], { key: k, sym: v }); });
   }
-  for (const cand of candidates.sort((a, b2) => b2.score - a.score || byString(a.t.id, b2.t.id)).filter((x) => x.score >= 3).slice(0, 2)) {
+  // A union with a declared list of its tools wins; without one, only the strongest union counts.
+  const ranked = candidates.sort((a, b2) => b2.score - a.score || byString(a.t.id, b2.t.id)).filter((x) => x.score >= 3);
+  const chosen = ranked.some((x) => x.list) ? ranked.filter((x) => x.list).slice(0, 2) : ranked.slice(0, 1);
+  for (const cand of chosen) {
     const rule = b.rule('interface.interactions', `${INTERNAL_RULES['interface.interactions']} Here: \`${cand.t.name}\` (${cand.members.length} members, ${cand.hits.size} compared${cand.list ? `, listed in \`${cand.list.name}\`` : ''}).`, cand.t.id);
     cand.members.forEach((m, order) => {
       const id = `interaction:${cslug(c.id)}/${slug(m)}`;
@@ -131,6 +134,8 @@ function client(b: Builder, d: Discovery, c: Component, out: Internals) {
     const tid = transport(b, iface, c.id, out, `\`${cls.name}\` calls through it`);
     const ifaceMembers = new Set(F.memberSymbols(iface.id).map((m) => m.id));
     const subscribeMembers = new Set(F.memberSymbols(iface.id).filter((m) => /^on[A-Z]/.test(m.name)).map((m) => m.id));
+    // Outgoing: members that go somewhere (async, or named for sending), not local accessors like `me()`.
+    const sendingMembers = new Set(F.memberSymbols(iface.id).filter((m) => !subscribeMembers.has(m.id) && (/Promise</.test(m.signature ?? '') || /^(send|post|publish|execute|request|invoke|emit|save|commit|load|fetch)/.test(m.name))).map((m) => m.id));
     const stateIds = new Set((claim.extra.state as string[] | undefined) ?? []);
     const stateRule = b.rule('client.state', INTERNAL_RULES['client.state'], cls.id);
     for (const sid of [...stateIds].sort(byString)) {
@@ -159,7 +164,7 @@ function client(b: Builder, d: Discovery, c: Component, out: Internals) {
     for (const m of methods) {
       const refs = F.refsWithin(m.id);
       const roles: string[] = [];
-      if (refs.some((r) => r.kind === 'call' && ifaceMembers.has(r.to) && !subscribeMembers.has(r.to))) roles.push('outgoing');
+      if (refs.some((r) => r.kind === 'call' && sendingMembers.has(r.to))) roles.push('outgoing');
       if (refs.some((r) => r.kind === 'call' && subscribeMembers.has(r.to))) roles.push('subscribe');
       if (refs.some((r) => queueFields.has(r.to))) roles.push('pending');
       if (reconcilers.has(m.id)) roles.push('reconcile');

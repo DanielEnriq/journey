@@ -382,14 +382,12 @@ export function runSqlPass(inputs: SqlFileInput[]): SqlPassOutput {
       if ((m = new RegExp(String.raw`^create\s+(?:or\s+replace\s+)?(?:constraint\s+)?trigger\s+(${IDENT})\s+([\s\S]*?)\bon\s+${QN}[\s\S]*?\bexecute\s+(?:function|procedure)\s+${QN}\s*\(`, 'i').exec(t))) {
         const q = qualify(m[3]);
         const tid = tables.get(q);
-        const timing = oneLine(m[2], 80).toLowerCase();
         if (tid) {
           const tab = syms.get(tid)!;
           tab.attrs = { ...tab.attrs, triggers: [...((tab.attrs?.triggers as string[]) ?? []), unq(m[1])] };
         }
         const fStart = t.toLowerCase().lastIndexOf(m[4].toLowerCase());
         raw.push({ from: tid ?? fileId, kind: 'sql-call', name: m[4], file, start: at + fStart, end: at + fStart + m[4].length, call: true });
-        void timing;
         continue;
       }
 

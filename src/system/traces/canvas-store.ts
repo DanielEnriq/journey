@@ -19,13 +19,15 @@ import { TRACE_SCHEMA, type SystemRegistry, type Trace } from '../../shared/syst
 const WHERE = 'Dev harness (src/system/traces/canvas-store.ts): Journey\'s shared canvas code run in Node against an in-memory store (memoryStore), not production or Supabase.';
 
 /** The code each event is about, by index symbol id; mapped to registry entities when there is a registry. */
+// Loads and commits are mapped to the in-memory store's methods, since that is the code that ran; the
+// interface method `execute` called them through is kept on each event as `via`.
 const SYMBOLS = {
   execute: 'src/shared/canvas/store.ts#execute',
-  load: 'src/shared/canvas/store.ts#CanvasStore.load',
-  commit: 'src/shared/canvas/store.ts#CanvasStore.commit',
+  load: 'src/shared/canvas/store.ts#memoryStore.load',
+  commit: 'src/shared/canvas/store.ts#memoryStore.commit',
   apply: 'src/shared/canvas/engine.ts#applyCommand',
-  memory: 'src/shared/canvas/store.ts#memoryStore',
 } as const;
+const VIA = { [SYMBOLS.load]: 'src/shared/canvas/store.ts#CanvasStore.load', [SYMBOLS.commit]: 'src/shared/canvas/store.ts#CanvasStore.commit' } as Record<string, string>;
 
 type Event = Trace['events'][number];
 
@@ -64,7 +66,7 @@ function recorder(registry: SystemRegistry | null): Recorder {
     note(symbol, label, data = {}) {
       const at = Math.round((performance.now() - t0) * 1000) / 1000;
       const entity = entityForSymbol(registry, symbol);
-      events.push({ at, entity: entity ?? symbol, label, data: { symbol, ...(entity ? {} : { unmapped: true }), ...data } });
+      events.push({ at, entity: entity ?? symbol, label, data: { symbol, ...(VIA[symbol] ? { via: VIA[symbol] } : {}), ...(entity ? {} : { unmapped: true }), ...data } });
     },
   };
 }

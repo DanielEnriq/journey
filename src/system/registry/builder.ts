@@ -46,6 +46,8 @@ export class Builder {
   readonly diagnostics: Diagnostic[] = [];
   /** Which entity stands for an index symbol, most specific first wins (set by the rules). */
   readonly entityForSymbol = new Map<string, string>();
+  /** Every label a merged relation has carried, so its summary label is stable. */
+  private readonly labels = new Map<string, Set<string>>();
 
   constructor(readonly facts: Facts) {}
 
@@ -104,8 +106,12 @@ export class Builder {
     if (prev) {
       for (const ev of r.evidence) if (!prev.evidence.includes(ev)) prev.evidence.push(ev);
       for (const v of r.via ?? []) if (!(prev.via ??= []).includes(v)) prev.via.push(v);
-      if (r.label && prev.label && prev.label !== r.label && !prev.label.split(', ').includes(r.label)) prev.label = [...prev.label.split(', '), r.label].sort(byString).join(', ');
-      else if (r.label && !prev.label) prev.label = r.label;
+      if (r.label) {
+        const set = this.labels.get(id) ?? this.labels.set(id, new Set(prev.label ? [prev.label] : [])).get(id)!;
+        set.add(r.label);
+        const all = [...set].sort(byString);
+        prev.label = all.length <= 3 ? all.join(', ') : `${all.slice(0, 2).join(', ')} and ${all.length - 2} more`;
+      }
       if (r.provenance === 'code' && prev.provenance === 'inferred') { prev.provenance = 'code'; delete prev.confidence; }
       else if (prev.confidence !== undefined && r.confidence !== undefined) prev.confidence = round(Math.max(prev.confidence, r.confidence));
       return prev;

@@ -462,10 +462,7 @@ export function runTypeScriptPass(opts: TsPassOptions): TsPassOutput {
         const mods = modifiersOf(m).filter((x) => x !== 'public');
         const opt = (m as ts.PropertySignature).questionToken ? '?' : '';
         const type = (m as ts.PropertySignature).type;
-        let t = type ? oneLine(type.getText(), 160) : '';
-        const init = (m as ts.PropertyDeclaration).initializer;
-        if (!t) t = typeText(m.name ?? m);
-        void init;
+        const t = type ? oneLine(type.getText(), 160) : typeText(m.name ?? m);
         return oneLine(`${mods.length ? mods.join(' ') + ' ' : ''}${name}${opt}${t ? `: ${t}` : ''}`);
       };
 
