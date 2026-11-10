@@ -53,7 +53,9 @@ export class Builder {
 
   ev(kind: EvidenceKind, summary: string, at: { range?: SourceRange; symbol?: string; rule?: string } = {}): string {
     const r = at.range;
-    const key = [kind, at.symbol ?? '', at.rule ?? '', r ? `${r.file}:${r.start.line}:${r.start.col}:${r.end.line}:${r.end.col}` : '', r ? '' : summary].join('|');
+    // The summary is part of the identity: several entities can rest on one range (every member of a
+    // `TOOLS` list cites the same declaration) and each must keep its own sentence.
+    const key = [kind, at.symbol ?? '', at.rule ?? '', r ? `${r.file}:${r.start.line}:${r.start.col}:${r.end.line}:${r.end.col}` : '', summary].join('|');
     const id = `ev:${kind}:${shortHash(key)}`;
     if (!this.evidence.has(id)) {
       const fileHash = r ? this.facts.fileHash(r.file) : at.symbol ? this.facts.fileHash(at.symbol.split('#')[0]) : undefined;

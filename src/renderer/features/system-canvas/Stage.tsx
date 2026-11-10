@@ -237,12 +237,18 @@ export function Stage(p: StageProps) {
     const cur = p.sel?.kind === 'entity' ? p.sel.id : null;
     const k = e.key;
     const zoom = (f: number) => animateTo(zoomAt(c, v, f, { x: v.w / 2, y: v.h / 2 }));
-    if (k === 'Tab') { e.preventDefault(); selectId(tabOrder(s, cur, e.shiftKey)); }
+    if (k === 'Tab') {
+      // Past the last part (or before the first) the key goes through and focus leaves the canvas.
+      const next = tabOrder(s, cur, e.shiftKey);
+      if (next) { e.preventDefault(); selectId(next); }
+    }
     else if (k.startsWith('Arrow')) { e.preventDefault(); selectId(spatial(s, cur, k.slice(5).toLowerCase() as Dir)); }
     else if (k === 'Enter' && cur) {
       e.preventDefault();
       if (s.portals.some((x) => x.id === cur)) p.onFollow(cur); else enter(cur);
     } else if (k === 'Escape' || k === 'Backspace') {
+      // Only swallowed when it does something here; at the top with nothing selected it goes through.
+      if (!p.sel && !s.level.root) return;
       e.preventDefault();
       if (p.sel && k === 'Escape' && !s.level.root) p.onSelect(null); else if (s.level.root) p.onExit(); else p.onSelect(null);
     } else if (k === '+' || k === '=') { e.preventDefault(); zoom(1.25); }

@@ -102,6 +102,17 @@ describe('components are found by what code does', () => {
     assert.ok(!kids(reg, 'component:board-view').includes('interaction:board-view/move'));
   });
 
+  test('interactions that share a declaration each keep their own evidence sentence', () => {
+    // Regression: evidence ids once ignored the summary when a range existed, so every member of the
+    // union reused the first member's sentence ("includes 'pick'" on Sketch and Wipe too).
+    for (const [m, key] of [['pick', 'v'], ['sketch', 'p'], ['wipe', 'e']] as const) {
+      const said = E[`interaction:board-view/${m}`].evidence.map((id) => reg.evidence[id].summary);
+      assert.ok(said.some((s) => s.includes(`includes '${m}'`)), `${m}: ${said.join(' / ')}`);
+      assert.ok(said.some((s) => s.includes(`maps key '${key}' to '${m}'`)), m);
+      assert.ok(!said.some((s) => /includes '|maps key /.test(s) && !s.includes(`'${m}'`)), `${m} borrows another member's evidence`);
+    }
+  });
+
   test('a file split between roles feeds several components; the feature word groups them across areas', () => {
     assert.ok(E['component:db-board-store'] && E['component:db-board-hub']);
     assert.equal(E['subsystem:board']?.kind, 'subsystem');

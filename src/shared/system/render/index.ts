@@ -192,7 +192,10 @@ function layoutLevel(ctx: Ctx, entered: string[]): LevelLayout {
   const degree = new Map<string, number>();
   for (const r of ctx.relations) { degree.set(r.from, (degree.get(r.from) ?? 0) + 1); degree.set(r.to, (degree.get(r.to) ?? 0) + 1); }
   const touchesSeq = (id: string) => seqIds.has(id) || [...seqIds].some((s) => isUnder(ctx, s, id));
-  const priority = (id: string) => (focus.has(id) ? 1000 : 0) + (touchesSeq(id) ? 500 : 0) + (degree.get(id) ?? 0);
+  // Inside a component, its parts rank as its casing ranked them from outside (ties to what the view shows,
+  // the sequence, the focus) before raw busyness, so entering never hides what the casing put first.
+  const related = root ? relevance(ctx, root) : () => 0;
+  const priority = (id: string) => (focus.has(id) ? 1000 : 0) + (touchesSeq(id) ? 500 : 0) + related(id) * 10 + (degree.get(id) ?? 0);
 
   // Dense systems: keep the most relevant, say how many more there are, per zone.
   const cap = ctx.inputs.maxNodes ?? 36;
@@ -283,6 +286,16 @@ function relevance(ctx: Ctx, parent: string): (id: string) => number {
     const a = top(r.from), b = top(r.to);
     if (a && !b && inView(r.to)) bump(a, 12);
     if (b && !a && inView(r.from)) bump(b, 12);
+  }
+  // One hop inward: a part that only a relevant sibling reaches (the ops table `commit_canvas` writes)
+  // belongs with it, a little below the parts the view reaches directly.
+  const direct = new Map(score);
+  for (const r of ctx.relations) {
+    if (r.kind === 'contains') continue;
+    const a = top(r.from), b = top(r.to);
+    if (!a || !b || a === b) continue;
+    if (direct.has(a) && !direct.has(b)) bump(b, 4);
+    if (direct.has(b) && !direct.has(a)) bump(a, 4);
   }
   for (const s of seq) { const t = top(s); if (t) bump(t, 100); }
   for (const f of ctx.resolved.request.focus) { const t = top(f); if (t) bump(t, 200); }

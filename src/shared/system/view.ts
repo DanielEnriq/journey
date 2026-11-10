@@ -269,17 +269,26 @@ export function presetViews(reg: SystemRegistry, opts: PresetOptions = {}): View
     { focus: orgFocus, ...(channels.length ? { include: channels } : {}), depth: 0 },
     `${sub.name} is ${how}. Shown: ${pathComps.length ? `the components its main code path (${path!.id}) runs through` : 'its best-connected components'}${channels.length ? ', and the event channels between them' : ''}.`));
 
+  // A fixture describes its paths by hand; only an index can say a path was derived from code.
+  const from = reg.fixture ? 'described in the fixture' : 'derived from code';
   if (path) {
     out.push(view('path', path.subject ?? path.id, path.title, `What happens, step by step, when ${E[path.steps[0].entity]?.name ?? 'it'} issues '${E[path.subject ?? '']?.name ?? path.id}'?`,
       { focus: path.subject && E[path.subject] ? [path.subject] : [path.steps[0].entity], sequence: path.id, depth: 0 },
-      `The command path through ${sub.name} with the most steps inside it: ${path.steps.length} steps, derived from code (a possible path, not a recorded run).`));
+      `The command path through ${sub.name} with the most steps inside it: ${path.steps.length} steps, ${from} (a possible path, not a recorded run).`));
   }
   if (retry) {
-    const failAt = retry.steps.find((st) => st.next?.some((n) => retry.steps.findIndex((x) => x.id === n) < retry.steps.findIndex((x) => x.id === st.id)));
+    const at = (id: string) => retry.steps.findIndex((x) => x.id === id);
+    const failAt = retry.steps.find((st) => st.next?.some((n) => at(n) < at(st.id)));
+    const back = failAt && retry.steps[Math.min(...failAt.next!.map(at).filter((i) => i >= 0 && i < at(failAt.id)))];
     const branch = retry.steps.find((st) => (st.next?.length ?? 0) > 1);
-    out.push(view('failure', retry.id, retry.title, 'What happens when a save loses the race to someone else\'s?',
+    // The question names this sequence's own subject and loop, so it fits whatever system it came from.
+    const who = E[retry.subject ?? '']?.name ?? E[retry.steps[0].entity]?.name ?? retry.title;
+    const question = failAt
+      ? `What happens when ${who} goes round again (${failAt.label}${back ? ` → ${back.label}` : ''}), and how does it end?`
+      : `What happens in “${retry.title}” when a step goes wrong?`;
+    out.push(view('failure', retry.id, retry.title, question,
       { focus: [...new Set([branch?.entity, failAt?.entity].filter((x): x is string => !!x))], sequence: retry.id, ...(failAt ? { failureAt: failAt.id } : {}), depth: 0 },
-      `A loop in the code that retries a save which can return null${path ? `, on the same path as ${path.id}` : ''}.`));
+      `A loop ${reg.fixture ? 'described in the fixture' : 'in the code'} that goes back to an earlier step${failAt && back ? ` (${failAt.label} → ${back.label})` : ''}${path ? `, on the same path as ${path.id}` : ''}.`));
   }
 
   // Dataflow: where the subject's data is stored and what carries it there.

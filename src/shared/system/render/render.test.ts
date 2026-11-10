@@ -295,3 +295,22 @@ test('compartments name what the view touches first and count the rest', () => {
   const commands = node(path, 'component:engine')!.parts.find((p) => p.role === 'compartment:commands')!;
   assert.equal(commands.named?.[0], 'draw');
 });
+
+test('entering a busy database keeps the tables the view reaches, ranked as its casing ranked them', () => {
+  // Regression: entering ranked internals by raw degree only, so busy tables unrelated to the view
+  // pushed out the ones the canvas writes (and the ops table its commit function fills).
+  const reg = testRegistry();
+  const rel = (from: string, kind: string, to: string): Relation => ({ id: relationKey(from, kind, to), kind, from, to, provenance: 'code', evidence: [], status: 'current' });
+  const busy = Array.from({ length: 8 }, (_, i) => `table:busy-${i}`);
+  for (const id of busy) reg.entities[id] = { id, kind: 'table', name: id.slice(6), level: 'element', parent: 'store:db', anchors: [], attrs: {}, provenance: 'code', evidence: [], status: 'current' };
+  for (const a of busy) for (const b of busy) if (a < b) { const r = rel(a, 'reads', b); reg.relations[r.id] = r; }
+  const calls = rel('function:execute', 'calls', 'fn:commit-canvas');
+  reg.relations[calls.id] = calls;
+  const inside = scene(reg, 'organization', {}, { ...emptyState(), entered: ['store:db'] }, { maxNodes: 4 });
+  const ids = inside.nodes.map((n) => n.id);
+  for (const id of ['table:room-canvases', 'fn:commit-canvas', 'table:room-canvas-ops']) assert.ok(ids.includes(id), `${id} in ${ids.join(', ')}`);
+  // And the casing, from outside, lists the same ones first.
+  const db = node(scene(reg), 'store:db')!;
+  const first = db.parts.map((p) => p.entity).filter((id) => id?.startsWith('table:'))[0];
+  assert.equal(first, 'table:room-canvases');
+});

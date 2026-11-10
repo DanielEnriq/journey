@@ -17,12 +17,17 @@ export function targets(scene: SystemScene): Target[] {
   ];
 }
 
+/**
+ * The next target for Tab (or Shift+Tab). Null past the last (or before the first) one: the canvas lets
+ * the key through then, so focus moves on to the zoom bar, the player and the inspector instead of
+ * circling inside the canvas for ever.
+ */
 export function tabOrder(scene: SystemScene, current: string | null, back = false): string | null {
   const t = targets(scene);
   if (!t.length) return null;
   const i = current ? t.findIndex((x) => x.id === current) : -1;
   if (i < 0) return back ? t[t.length - 1].id : t[0].id;
-  return t[(i + (back ? -1 : 1) + t.length) % t.length].id;
+  return t[i + (back ? -1 : 1)]?.id ?? null;
 }
 
 /** The nearest target in a direction: distance along it, with sideways drift costing double. */

@@ -68,3 +68,17 @@ test('keyboard order follows the reading order and arrows move spatially', () =>
   assert.ok(rn.rect.x + rn.rect.w / 2 > surface.rect.x + surface.rect.w / 2);
   assert.equal(spatial(s, surface.id, 'left'), null);
 });
+
+test('Tab leaves the canvas after the last part and Shift+Tab before the first (no keyboard trap)', () => {
+  const reg = testRegistry();
+  const s = buildScene(reg, resolveAll(reg, request('organization')), emptyState(), {});
+  const order: string[] = [];
+  for (let id = tabOrder(s, null); id; id = tabOrder(s, id)) {
+    assert.ok(!order.includes(id), 'Tab never comes back round');
+    order.push(id);
+  }
+  assert.equal(order.length, s.outline.length + s.portals.length, 'every part is reached once');
+  assert.equal(tabOrder(s, order[order.length - 1]), null, 'after the last part the key goes through');
+  assert.equal(tabOrder(s, order[0], true), null, 'before the first part Shift+Tab goes through');
+  assert.equal(tabOrder(s, null, true), order[order.length - 1], 'coming back in with Shift+Tab lands on the last part');
+});
