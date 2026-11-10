@@ -4,7 +4,7 @@ import type {
 import { drawForm, formFor } from './forms.js';
 import { LENS_RELATIONS } from '../view.js';
 import { grammarFor, LENS_FLOW, PROVENANCE_ORDER } from './grammar.js';
-import { GAP_CROSS, GAP_MAIN, labelPoint, layeredLayout, pad, route, union, type LayoutEdge, type Side } from './layout.js';
+import { GAP_CROSS, GAP_MAIN, labelPoint, layeredLayout, pad, route, routeAvoiding, union, type LayoutEdge, type Side } from './layout.js';
 import {
   SCENE_SCHEMA, type Emphasis, type FormId, type OutlineItem, type Part, type Point, type Rect, type SceneEdge, type SceneGroup,
   type SceneNode, type SceneOverflow, type ScenePortal, type SceneSegment, type SceneSequence, type SceneStep, type SceneStub,
@@ -613,7 +613,8 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
       const horizontal = (p.sa === 'left' || p.sa === 'right') && (p.sb === 'left' || p.sb === 'right');
       const k = (lane++ % 7) - 3;
       const bend = vertical ? (p.pa!.y + p.pb!.y) / 2 + k * 9 : horizontal ? (p.pa!.x + p.pb!.x) / 2 + k * 9 : undefined;
-      pts = route(p.pa!, p.sa, p.pb!, p.sb, bend);
+      const obstacles = nodes.filter((n) => n.id !== a.from && n.id !== a.to && !n.ghost).map((n) => n.rect);
+      pts = routeAvoiding(p.pa!, p.sa, p.pb!, p.sb, obstacles, bend);
     }
     const mix: Partial<Record<Provenance, number>> = {};
     for (const r of a.rels) mix[r.provenance] = (mix[r.provenance] ?? 0) + 1;

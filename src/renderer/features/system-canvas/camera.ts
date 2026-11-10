@@ -8,8 +8,10 @@ export interface Viewport { w: number; h: number }
 
 export const MIN_ZOOM = 0.12;
 export const MAX_ZOOM = 3;
-/** Below this zoom a component draws as its silhouette; at or above it, its labelled internals. */
-export const NEAR_ZOOM = 0.62;
+/** Detail by zoom: below MID a component is its silhouette and its name; from MID its head and the words on
+ *  its relations read; from NEAR the labels of its parts. Nothing depends on an exact zoom: Enter shows it all. */
+export const MID_ZOOM = 0.42;
+export const NEAR_ZOOM = 0.8;
 
 export const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 
@@ -68,4 +70,4 @@ export function matchFrame(cam: Camera, v: Viewport, from: Rect, to: Rect): Came
   return { x: to.x - (s.x - v.w / 2) / z, y: to.y - (s.y - v.h / 2) / z, z };
 }
 
-export const lodFor = (z: number): 'far' | 'near' => (z < NEAR_ZOOM ? 'far' : 'near');
+export const lodFor = (z: number): 'far' | 'mid' | 'near' => (z < MID_ZOOM ? 'far' : z < NEAR_ZOOM ? 'mid' : 'near');

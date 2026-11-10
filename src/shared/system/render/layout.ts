@@ -329,6 +329,42 @@ export function route(a: Point, sa: Side, b: Point, sb: Side, bend?: number): Po
   return simplify(pts);
 }
 
+const segHits = (a: Point, b: Point, r: Rect) => {
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+  return x0 < r.x + r.w && x1 > r.x && y0 < r.y + r.h && y1 > r.y;
+};
+const clearPath = (pts: Point[], obs: Rect[]) => pts.every((p, i) => i === 0 || !obs.some((r) => segHits(pts[i - 1], p, r)));
+
+/**
+ * An orthogonal route that goes around parts instead of through them: if the plain route crosses
+ * another part, the long middle run moves to the nearest free corridor (a gap between parts).
+ */
+export function routeAvoiding(a: Point, sa: Side, b: Point, sb: Side, obstacles: Rect[], bend?: number): Point[] {
+  const obs = obstacles.map((r) => ({ x: r.x - 8, y: r.y - 8, w: r.w + 16, h: r.h + 16 }));
+  const plain = route(a, sa, b, sb, bend);
+  if (clearPath(plain, obs)) return plain;
+  const vert = (s: Side) => s === 'top' || s === 'bottom';
+  if (vert(sa) && vert(sb)) {
+    const y1 = a.y + (sa === 'bottom' ? 18 : -18) + (bend !== undefined ? (bend - (a.y + b.y) / 2) * 0.3 : 0);
+    const y2 = b.y + (sb === 'top' ? -18 : 18);
+    const xs = new Set<number>([a.x, b.x]);
+    for (const r of obs) { xs.add(r.x - 10); xs.add(r.x + r.w + 10); }
+    const best = [...xs].map((x) => ({ x, pts: simplify([a, { x: a.x, y: y1 }, { x, y: y1 }, { x, y: y2 }, { x: b.x, y: y2 }, b]) }))
+      .filter((c) => clearPath(c.pts, obs))
+      .sort((p, q) => Math.abs(p.x - a.x) + Math.abs(p.x - b.x) - (Math.abs(q.x - a.x) + Math.abs(q.x - b.x)) || p.x - q.x)[0];
+    if (best) return best.pts;
+  } else if (!vert(sa) && !vert(sb)) {
+    const x1 = a.x + (sa === 'right' ? 18 : -18), x2 = b.x + (sb === 'left' ? -18 : 18);
+    const ys = new Set<number>([a.y, b.y]);
+    for (const r of obs) { ys.add(r.y - 10); ys.add(r.y + r.h + 10); }
+    const best = [...ys].map((y) => ({ y, pts: simplify([a, { x: x1, y: a.y }, { x: x1, y }, { x: x2, y }, { x: x2, y: b.y }, b]) }))
+      .filter((c) => clearPath(c.pts, obs))
+      .sort((p, q) => Math.abs(p.y - a.y) + Math.abs(p.y - b.y) - (Math.abs(q.y - a.y) + Math.abs(q.y - b.y)) || p.y - q.y)[0];
+    if (best) return best.pts;
+  }
+  return plain;
+}
+
 /** Drops repeated and collinear points. */
 export function simplify(pts: Point[]): Point[] {
   const r = (p: Point) => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 });

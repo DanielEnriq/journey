@@ -84,7 +84,7 @@ export const areaOf = (file: string) => { const p = file.split('/'); return p[0]
 const GENERIC = new Set([
   'src', 'index', 'lib', 'libs', 'util', 'utils', 'shared', 'common', 'features', 'feature', 'components', 'component', 'main', 'renderer',
   'integrations', 'types', 'type', 'model', 'models', 'test', 'tests', 'app', 'core', 'internal', 'public', 'private', 'migrations', 'scripts',
-  'preload', 'server', 'client', 'api', 'config', 'store', 'views', 'view', 'helpers', 'supabase', 'system', 'd',
+  'preload', 'server', 'client', 'api', 'config', 'store', 'views', 'view', 'helpers', 'system', 'd',
 ]);
 
 const isUi = (s: IndexSymbol) => s.kind === 'ui-component';

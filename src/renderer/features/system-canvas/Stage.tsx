@@ -143,14 +143,13 @@ export function Stage(p: StageProps) {
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     stop();
     drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, moved: false, start: c };
   };
   const nodeDown = (id: string, e: PointerEvent) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    (host.current?.querySelector('svg') as Element | null)?.setPointerCapture?.(e.pointerId);
+    // No pointer capture yet: a click (or double-click to enter) must still reach the part.
     stop();
     const n = s.nodes.find((x) => x.id === id);
     drag.current = { kind: 'node', id, sx: e.clientX, sy: e.clientY, moved: false, start: c, origin: n ? [n.rect.x, n.rect.y] : undefined };
@@ -160,6 +159,7 @@ export function Stage(p: StageProps) {
     if (!d) return;
     const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
     if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    if (!d.moved) (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     d.moved = true;
     if (d.kind === 'pan') setCam(panBy(d.start, dx, dy));
     else if (d.id && d.origin) p.onPin(d.id, [Math.round(d.origin[0] + dx / c.z), Math.round(d.origin[1] + dy / c.z)]);
@@ -247,7 +247,7 @@ export function Stage(p: StageProps) {
         <span class="zoom-pct" aria-live="off">{pct}%</span>
         <button type="button" onClick={() => animateTo(zoomAt(c, v, 1.25, { x: v.w / 2, y: v.h / 2 }))} aria-label="Zoom in" title="Zoom in (+)">+</button>
         <button type="button" onClick={() => animateTo(home())} title="Fit (0)" aria-label="Fit to screen">Fit</button>
-        <span class="lod-word" title="How much each part shows at this zoom">{lod === 'far' ? 'outline' : 'detail'}</span>
+        <span class="lod-word" title="How much each part shows at this zoom">{lod === 'far' ? 'outline' : lod === 'mid' ? 'names' : 'detail'}</span>
       </div>
     </div>
   );

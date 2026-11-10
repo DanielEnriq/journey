@@ -10,7 +10,7 @@ import type {
 // outline and the shapes of its parts — with its name held at a readable size; "near" adds the labels of
 // its parts, its ports and the words on its relations.
 
-export type Lod = 'far' | 'near';
+export type Lod = 'far' | 'mid' | 'near';
 
 export interface DrawOpts {
   lod: Lod;
@@ -122,14 +122,15 @@ export interface NodeHandlers {
 export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers }) {
   const { x, y, w, h: ht } = n.rect;
   const near = o.lod === 'near' || o.expanded.has(n.id);
+  const far = o.lod === 'far' && !near;
   const sel = o.selected === n.id;
   const recede = o.selected && !sel && !o.related.has(n.id);
   const cls = ['n', `f-${n.form}`, `p-${n.provenance}`, `s-${n.status}`, `e-${n.emphasis}`, sel && 'sel', recede && 'recede', n.ghost && 'ghost', o.hover === n.id && 'hov', n.affected && 'affected'].filter(Boolean).join(' ');
   const chip = n.head === ht;
   // At far, the name is held at a readable size on screen and fitted to the silhouette's width.
-  const nameSize = near ? Math.max(14, sc(11, o.z)) : sc(13, o.z);
+  const nameSize = far ? sc(12.5, o.z) : Math.max(14, sc(11.5, o.z));
   const nameChars = Math.floor((w - 28) / (nameSize * 0.56));
-  const kindSize = near ? Math.max(10, sc(9, o.z)) : sc(10, o.z);
+  const kindSize = far ? sc(10, o.z) : Math.max(10, sc(9, o.z));
   const statusWord = STATUS_WORD[n.status];
   return (
     <g
@@ -147,8 +148,10 @@ export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers
       {n.form === 'external' && <path class="n-inner" d={outlineFor('external', w - 10, ht - 10)} transform="translate(5 5)" />}
       {n.parts.map((p) => <PartShape key={p.key} p={p} near={near} z={o.z} sel={o.selected} on={on} />)}
       {/* The head: name, then what it is and how we know. */}
-      <text class={`n-name ${near ? '' : 'far'}`} x={14} y={chip ? 24 : 22} style={{ fontSize: `${nameSize}px` }}>{near ? trunc(n.name, nameChars) : n.name}</text>
-      {(near || o.z > 0.3) && (
+      {!far
+        ? <text class="n-name" x={14} y={chip ? 24 : 22} style={{ fontSize: `${nameSize}px` }}>{trunc(n.name, nameChars)}</text>
+        : <FarName name={n.name} size={nameSize} w={w} />}
+      {!far && (
         <g class="n-kind" style={{ fontSize: `${kindSize}px` }}>
           <ProvMark p={n.provenance} x={14} y={(chip ? 24 : 22) + kindSize * 1.35 - kindSize * 0.35} s={kindSize * 0.7} />
           <text x={14 + kindSize * 1.1} y={(chip ? 24 : 22) + kindSize * 1.35}>
@@ -178,6 +181,25 @@ export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers
   );
 }
 
+/** At a distance the name is the landmark: held at a readable size above the silhouette, wrapped onto two lines, never cut. */
+function FarName({ name, size, w }: { name: string; size: number; w: number }) {
+  const per = Math.max(6, Math.floor((w - 20) / (size * 0.55)));
+  const words = name.split(' ');
+  const lines: string[] = [];
+  for (const word of words) {
+    const l = lines[lines.length - 1];
+    if (l !== undefined && (l + ' ' + word).length <= per) lines[lines.length - 1] = l + ' ' + word;
+    else lines.push(word);
+  }
+  const shown = lines.length > 2 ? [lines[0], lines.slice(1).join(' ')] : lines;
+  const y = -size * 0.45 - (shown.length - 1) * size * 1.08;
+  return (
+    <text class="n-name far" x={2} y={y} style={{ fontSize: `${size}px` }}>
+      {shown.map((l, i) => <tspan key={i} x={2} dy={i ? size * 1.08 : 0}>{l}</tspan>)}
+    </text>
+  );
+}
+
 function PartShape({ p, near, z, sel, on }: { p: Part; near: boolean; z: number; sel: string | null; on: NodeHandlers }) {
   const r = p.rect;
   const isSel = !!p.entity && sel === p.entity;
@@ -200,18 +222,35 @@ function PartShape({ p, near, z, sel, on }: { p: Part; near: boolean; z: number;
       return <rect class="pt-wall" x={r.x} y={r.y + 4} width={r.w} height={r.h - 8} rx={2} />;
     case 'more':
       return near ? <text class="pt-more" x={r.x + 4} y={r.y + 11}>{p.label}</text> : null;
+    case 'bus':
+      // An event bus: the line events travel along, with taps where publishers and subscribers attach.
+      return (
+        <g class="pt-bus">
+          <path d={`M${r.x} ${r.y + r.h / 2} H${r.x + r.w}`} />
+          {[0.2, 0.4, 0.6, 0.8].map((t) => <circle key={t} cx={r.x + r.w * t} cy={r.y + r.h / 2} r={3.2} />)}
+          {near && p.label && <text x={r.x} y={r.y - 6}>{p.label}</text>}
+        </g>
+      );
     case 'signature':
       return near ? <text class="pt-sig" x={r.x} y={r.y + 10}>{trunc(p.label ?? '', Math.floor(r.w / 6.2))}</text> : null;
     default: {
       const table = p.role === 'table';
-      const chars = Math.floor((r.w - (table ? 18 : 10)) / 6.4);
+      const pin = p.role === 'endpoint';
+      const ticket = p.role === 'command';
+      const chars = Math.floor((r.w - (table ? 18 : pin ? 16 : 10)) / 6.4);
+      const tk = 5;
+      // Commands are tickets (notched), endpoints are sockets on the service's wall, tables are drawers.
+      const shape = ticket
+        ? <path d={`M${r.x} ${r.y} H${r.x + r.w} V${r.y + r.h / 2 - tk} A${tk} ${tk} 0 0 0 ${r.x + r.w} ${r.y + r.h / 2 + tk} V${r.y + r.h} H${r.x} V${r.y + r.h / 2 + tk} A${tk} ${tk} 0 0 0 ${r.x} ${r.y + r.h / 2 - tk} Z`} />
+        : <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={table ? 2 : pin ? 9 : 4} />;
       return (
-        <g class={`pt-chip ${table ? 'pt-table' : ''} ${p.provenance && p.provenance !== 'code' ? `p-${p.provenance}` : ''} ${p.status && p.status !== 'current' ? `s-${p.status}` : ''} ${isSel ? 'sel' : ''}`} onClick={click} data-part={p.entity}>
+        <g class={`pt-chip pt-${p.role} ${table ? 'pt-table' : ''} ${p.provenance && p.provenance !== 'code' ? `p-${p.provenance}` : ''} ${p.status && p.status !== 'current' ? `s-${p.status}` : ''} ${isSel ? 'sel' : ''}`} onClick={click} data-part={p.entity}>
           <title>{`${p.label ?? ''}${p.detail ? ` — ${p.detail}` : ''}${p.note ? `\n${p.note}` : ''}`}</title>
-          <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={table ? 2 : 4} />
+          {shape}
           {table && <path class="pt-handle" d={`M${r.x + 6} ${r.y + r.h / 2 - 3} v6`} />}
+          {pin && <g class="pt-socket"><path d={`M${r.x - 4} ${r.y + r.h / 2} H${r.x + 4}`} /><circle cx={r.x + 9} cy={r.y + r.h / 2} r={3.4} /></g>}
           {near
-            ? <text x={r.x + (table ? 14 : 6)} y={r.y + r.h / 2 + 3.6}>{trunc(p.label ?? '', chars)}</text>
+            ? <text x={r.x + (table ? 14 : pin ? 17 : 6)} y={r.y + r.h / 2 + 3.6}>{trunc(p.label ?? '', chars)}</text>
             : <rect class="pt-ghostline" x={r.x + 6} y={r.y + r.h / 2 - 1.5} width={Math.min(r.w - 12, (p.label?.length ?? 6) * 5)} height={3} rx={1.5} />}
           {near && p.status && p.status !== 'current' && <text class="pt-st" x={r.x + r.w - 4} y={r.y + r.h / 2 + 3.4} text-anchor="end">{p.status === 'changed' ? 'Δ' : p.status === 'new' ? 'new' : p.status === 'missing' ? '×' : p.status === 'stale' ? '~' : '?'}</text>}
           {z > 1.4 && p.note && <text class="pt-note" x={r.x + 6} y={r.y + r.h + 9}>{trunc(p.note, Math.floor(r.w / 5))}</text>}
@@ -252,9 +291,9 @@ export function Edge({ e, o, onSelect, onHover }: { e: SceneEdge; o: DrawOpts; o
   const recede = o.selected && !sel && !o.related.has(e.id);
   const n = e.points.length;
   const cls = ['edge', `l-${g.line}`, `k-${e.kind}`, `p-${e.provenance}`, `s-${e.status}`, `e-${e.emphasis}`, sel && 'sel', recede && 'recede', o.hover === e.id && 'hov', e.back && 'back'].filter(Boolean).join(' ');
-  const showLabel = (o.lod === 'near' || sel || o.hover === e.id) && (e.label || e.count > 1);
+  const showLabel = (o.lod !== 'far' || sel || o.hover === e.id) && (e.label || e.count > 1);
   const lbl = `${e.label ?? ''}${e.count > 1 ? `${e.label ? ' · ' : ''}${e.count} relations` : ''}`;
-  const fs = o.lod === 'near' ? Math.max(10.5, sc(9, o.z)) : sc(11, o.z);
+  const fs = Math.max(10.5, sc(9.5, o.z));
   return (
     <g class={cls} data-id={e.id} onClick={(ev: MouseEvent) => { ev.stopPropagation(); onSelect(e.id); }} onPointerEnter={() => onHover(e.id)} onPointerLeave={() => onHover(null)}>
       <title>{`${g.says}${e.label ? ` · ${e.label}` : ''}${e.count > 1 ? ` · rolled up from ${e.count} relations` : ''} (${PROV_WORD[e.provenance]})`}</title>
@@ -270,9 +309,9 @@ export function Edge({ e, o, onSelect, onHover }: { e: SceneEdge; o: DrawOpts; o
         const deg = seg >= 0 ? angle(e.points[seg], e.points[seg + 1]) : 0;
         return <g key={i} class="e-gate" transform={`translate(${c.at.x} ${c.at.y}) rotate(${deg})`}><path d="M-3 -7 V7 M3 -7 V7" /></g>;
       })}
-      {e.provenance === 'inferred' && e.labelAt && !showLabel && (
+      {e.provenance === 'inferred' && e.labelAt && !showLabel && o.lod !== 'far' && (
         // Inferred: a small ≈ seal on the line (the legend and inspector say which rule).
-        <g class="e-inferred" transform={`translate(${e.labelAt.x} ${e.labelAt.y})`}><circle r={o.lod === 'near' ? 7 : sc(6, o.z)} /><text y={(o.lod === 'near' ? 7 : sc(6, o.z)) * 0.45} text-anchor="middle" style={{ fontSize: `${(o.lod === 'near' ? 11 : sc(10, o.z))}px` }}>≈</text></g>
+        <g class="e-inferred" transform={`translate(${e.labelAt.x} ${e.labelAt.y})`}><circle r={Math.max(7, sc(6, o.z))} /><text y={Math.max(7, sc(6, o.z)) * 0.45} text-anchor="middle" style={{ fontSize: `${Math.max(11, sc(10, o.z))}px` }}>≈</text></g>
       )}
       {e.provenance === 'inferred' && showLabel && e.labelAt && <text class="e-inferred-w" x={e.labelAt.x} y={e.labelAt.y + fs * 1.7} text-anchor="middle" style={{ fontSize: `${fs * 0.9}px` }}>≈ inferred</text>}
       {showLabel && e.labelAt && (
@@ -291,7 +330,8 @@ function between(p: Point, a: Point, b: Point) {
 }
 
 export function Stub({ s, o, onSelect }: { s: SceneStub; o: DrawOpts; onSelect(id: string): void }) {
-  const fs = o.lod === 'near' ? 10.5 : sc(10.5, o.z);
+  if (o.lod === 'far' && o.selected !== s.node) return null;
+  const fs = Math.max(10.5, sc(9.5, o.z));
   const word = s.reason === 'not-indexed' ? `${s.count} not indexed` : `${s.count} outside the view`;
   const end = s.direction === 'out' ? s.points[1] : s.points[0];
   const left = s.direction === 'in';
@@ -300,7 +340,7 @@ export function Stub({ s, o, onSelect }: { s: SceneStub; o: DrawOpts; onSelect(i
       <title>{`${word}: ${s.kinds.join(', ')} — ${s.others.slice(0, 6).join(', ')}${s.others.length > 6 ? '…' : ''}`}</title>
       <path d={`M${s.points[0].x} ${s.points[0].y} L${s.points[1].x} ${s.points[1].y}`} />
       {s.reason === 'not-indexed' && <path class="stub-break" d={`M${end.x} ${end.y - 6} l4 3 l-4 3 l4 3`} />}
-      {(o.lod === 'near' || o.selected === s.node) && (
+      {(o.lod !== 'far' || o.selected === s.node) && (
         <text x={end.x + (left ? -6 : 6)} y={end.y + fs * 0.35} text-anchor={left ? 'end' : 'start'} style={{ fontSize: `${fs}px` }}>{word}</text>
       )}
     </g>
@@ -350,8 +390,8 @@ export function Frame({ scene, z, name, kind }: { scene: SystemScene; z: number;
 export function SequenceLayer({ seq, o, onSelect }: { seq: SceneSequence; o: DrawOpts; onSelect(stepId: string): void }) {
   const cur = o.step;
   const observed = seq.kind === 'trace';
-  const fs = o.lod === 'near' ? Math.max(11, sc(10, o.z)) : sc(11.5, o.z);
-  const R = o.lod === 'near' ? 10 : sc(9, o.z);
+  const fs = Math.max(11, sc(11, o.z));
+  const R = Math.max(10, sc(9, o.z));
   const byId = new Map(seq.steps.map((s) => [s.id, s]));
   return (
     <g class={`seq ${observed ? 'seq-observed' : 'seq-possible'}`}>
@@ -364,7 +404,7 @@ export function SequenceLayer({ seq, o, onSelect }: { seq: SceneSequence; o: Dra
           <g key={i} class={`seg seg-${sg.kind} ${travelled ? 'done' : ''} ${cur !== null && a.index === cur - 1 && b.index === cur ? 'now' : ''}`}>
             <path class="seg-under" d={d} />
             <path class="seg-line" d={d} />
-            {sg.kind !== 'next' && (o.lod === 'near' || sg.kind === 'loop') && (
+            {sg.kind !== 'next' && (o.lod !== 'far' || sg.kind === 'loop') && (
               <text class="seg-guard" x={mid.x} y={mid.y + (sg.kind === 'loop' ? fs * 1.4 : -fs * 0.6)} text-anchor="middle" style={{ fontSize: `${fs * 0.95}px` }}>
                 {sg.kind === 'loop' ? '↺ ' : '⑂ '}{sg.guard ?? (sg.kind === 'loop' ? 'repeats' : 'branches')}
               </text>
