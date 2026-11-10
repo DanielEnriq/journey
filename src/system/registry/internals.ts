@@ -56,6 +56,7 @@ export function buildInternals(b: Builder, d: Discovery): Internals {
     if (c.role === 'client') client(b, d, c, out);
     if (c.role === 'interface') interactions(b, c, out);
     if (c.role === 'service') service(b, d, c, out);
+    if (c.role === 'bridge') bridge(b, d, c);
     if (c.role === 'hub' || c.role === 'adapter' || c.role === 'store-adapter' || (c.role === 'service' && c.claims.some((x) => x.rule === 'role.service.served'))) members(b, c);
   }
   if (d.database) database(b, d, out);
@@ -251,6 +252,7 @@ function engine(b: Builder, d: Discovery, c: Component, out: Internals) {
       if (dm) stand(b, dm.id, id);
       commands.set(k, id);
       if (!out.commandByKey.has(k)) out.commandByKey.set(k, id);
+      if (t.apply) b.relate({ kind: 'calls', from: `function:${cslug(c.id)}/${slug(t.apply.name)}`, to: id, label: 'dispatch', provenance: 'inferred', confidence: 0.85, evidence: [rule, ...(h ? [b.def(h)] : [])] });
     });
   }
   // Validators.
@@ -309,6 +311,25 @@ function service(b: Builder, d: Discovery, c: Component, out: Internals) {
       provenance: 'code', evidence: [rule, ...mine.map((s) => b.ev('literal', `\`${s.callee}('${lit}', …)\` registers a handler`, { range: s.range, symbol: s.in }))],
     });
     if (!out.endpointByChannel.has(lit)) out.endpointByChannel.set(lit, id);
+  }
+}
+
+/* ---------- bridge: the API members that invoke each channel ---------- */
+
+function bridge(b: Builder, d: Discovery, c: Component) {
+  const F = b.facts;
+  const rule = b.rule('members.elements', INTERNAL_RULES['members.elements'], c.id);
+  for (const [lit, sites] of [...d.channels.invoked].sort(([a], [x]) => byString(a, x))) for (const s of sites) {
+    if (!c.files.includes(s.file) || s.in === topOf(s.in)) continue;
+    const m = F.symbols.get(s.in);
+    if (!m) continue;
+    const path = s.in.split('#')[1].split('.').slice(1).join('.');
+    const id = `method:${cslug(c.id)}/${path}`;
+    b.entity({
+      id, kind: 'method', name: path, level: 'element', parent: c.id, anchors: [b.anchor(m)], attrs: { channel: lit, ...(m.signature ? { signature: m.signature } : {}) },
+      provenance: 'code', evidence: [rule, b.ev('literal', `\`${path}\` invokes '${lit}'`, { range: s.range, symbol: s.in })],
+    });
+    stand(b, m.id, id);
   }
 }
 

@@ -187,10 +187,11 @@ class Walker {
       } else if (m.type === 'bridge' || m.type === 'channel') {
         const handlers = this.handlersOf(m.lit);
         if (!opts.all && !handlers.some((h) => this.reachesWrite(h.id))) continue;
-        if (m.type === 'bridge') push({ entity: m.comp, label: `${m.callee}(…)`, detail: `the bridge invokes '${m.lit}'`, ctx: m.ctx, evidence: [this.callEv(sym, m.callee, m.range), this.b.rule('relation.bridge-api', 'A call named like a channel goes through the bridge that invokes it.')] });
+        const member = m.type === 'bridge' ? this.d.channels.invoked.get(m.lit)?.map((l) => this.ent(l.in)).find((e) => e && this.b.entities.get(e)?.parent === m.comp) : undefined;
+        if (m.type === 'bridge') push({ entity: member ?? m.comp, label: `${m.callee}(…)`, detail: `the bridge invokes '${m.lit}'`, ctx: m.ctx, evidence: [this.callEv(sym, m.callee, m.range), this.b.rule('relation.bridge-api', 'A call named like a channel goes through the bridge that invokes it.')] });
         const ep = this.ins.endpointByChannel.get(m.lit);
         const site = this.d.channels.handled.get(m.lit)?.[0];
-        if (ep && site) push({ entity: ep, ...(m.type === 'bridge' ? { from: m.comp } : {}), label: `'${m.lit}'`, detail: `handled by \`${site.callee}\``, ctx: [], evidence: [this.b.ev('literal', `\`${site.callee}('${m.lit}', …)\` registers a handler`, { range: site.range, symbol: site.in })] });
+        if (ep && site) push({ entity: ep, ...(m.type === 'bridge' ? { from: member ?? m.comp } : {}), label: `'${m.lit}'`, detail: `handled by \`${site.callee}\``, ctx: [], evidence: [this.b.ev('literal', `\`${site.callee}('${m.lit}', …)\` registers a handler`, { range: site.range, symbol: site.in })] });
         for (const h of handlers.slice(0, 1)) {
           const he = this.ent(h.id);
           if (he) push({ ...(ep ? { from: ep } : {}), entity: he, label: `${h.name}(…)`, detail: `serves '${m.lit}'`, ctx: [], evidence: [this.b.def(h)], key: h.id });

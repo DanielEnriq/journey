@@ -46,7 +46,7 @@ export function App() {
   const [step, setStep] = useState<number | null>(null);
   const [travel, setTravel] = useState<{ id: string; n: number } | null>(null);
   const [panel, setPanel] = useState<{ inspector: boolean; legend: boolean; outline: boolean; harness: boolean; coverage: boolean }>(() => ({
-    inspector: true, legend: LS.get('vowe.system.legend', true), outline: false, harness: false, coverage: false,
+    inspector: true, legend: LS.get('vowe.system.legend', false), outline: false, harness: false, coverage: false,
   }));
   const [mode, setMode] = useState<Mode>(() => LS.get('vowe.system.theme', 'system'));
   const [motion, setMotion] = useState<Motion>(() => LS.get('vowe.system.motion', 'system'));

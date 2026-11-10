@@ -89,7 +89,8 @@ export function buildRelations(b: Builder, d: Discovery, ins: Internals) {
       if (!hit) continue;
       const fe = ent(flow.symbol);
       if (!fe || compOf(fe) === hit.comp) continue;
-      rolled('calls', fe, hit.comp, [bridgeRule, b.ev('flow', `\`${st.callee}(…)\` reaches the bridge's '${hit.lit}'`, { range: st.range, symbol: flow.symbol })], 'inferred', 0.7, hit.lit);
+      const member = d.channels.invoked.get(hit.lit)?.map((l) => ent(l.in)).find((e) => e && E.get(e)?.parent === hit.comp) ?? hit.comp;
+      rolled('calls', fe, member, [bridgeRule, b.ev('flow', `\`${st.callee}(…)\` reaches the bridge's '${hit.lit}'`, { range: st.range, symbol: flow.symbol })], 'inferred', 0.7, hit.lit);
     }
   }
 

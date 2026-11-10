@@ -232,7 +232,8 @@ export function Stage(p: StageProps) {
         <g transform={T} key={`lvl-${key}-${fade}`} class="level">
           <Zones zones={s.zones} flow={s.flow} z={c.z} />
           {s.level.frame && <Frame scene={s} z={c.z} name={p.rootName} kind={p.rootKind} />}
-          <Groups groups={s.groups} z={c.z} />
+          {/* Subsystem hulls only where no runtime walls already say where things are. */}
+          {s.zones.length < 2 && <Groups groups={s.groups} z={c.z} />}
           <g class="edges">{s.edges.map((e) => <Edge key={e.id} e={e} o={o} onSelect={(id) => p.onSelect({ kind: 'edge', id })} onHover={setHover} />)}</g>
           <g class="stubs">{s.stubs.map((x) => <Stub key={x.id} s={x} o={o} onSelect={(id) => p.onSelect({ kind: 'stub', id })} />)}</g>
           <g class="portals">{s.portals.map((x) => <Portal key={x.id} p={x} o={o} on={{ select: (id) => p.onSelect({ kind: 'entity', id }), follow: p.onFollow }} />)}</g>

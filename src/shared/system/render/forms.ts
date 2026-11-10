@@ -34,16 +34,18 @@ export interface FormInput {
   registry: SystemRegistry;
   /** Relations touching the entity or any child, by id order. */
   relations: Relation[];
+  /** How much each child matters to the view (higher first): the parts on the path or wired to what's drawn. */
+  relevance?: (id: string) => number;
 }
 
 export interface DrawnForm { form: FormId; w: number; h: number; head: number; outline: string; parts: Part[] }
 
 const HEAD = 44;
 const PAD = 12;
-const CHIP_H = 20;
+const CHIP_H = 18;
 const CHIP_GAP = 4;
-/** Chips shown per compartment before "+N more". */
-const CAP = 8;
+/** Chips shown per compartment before "+N more": enough to show what it holds, few enough to stay a shape. */
+const CAP = 6;
 
 /* ---------- compartment specs per form ---------- */
 
@@ -80,14 +82,14 @@ const SPECS: Partial<Record<FormId, { w: number; comps: Compartment[] }>> = {
     { role: 'commands', label: 'command set', col: 0, match: kindIs('command'), cols: 2, attrs: ['commands'] },
     { role: 'apply', label: 'apply path', col: 0, match: any },
   ] },
-  store: { w: 300, comps: [
-    { role: 'tables', label: 'tables', col: 0, match: kindIs('table'), attrs: ['tables'] },
-    { role: 'functions', label: 'functions', col: 0, match: kindIs('store-function', 'query'), attrs: ['functions'] },
+  store: { w: 340, comps: [
+    { role: 'tables', label: 'tables', col: 0, match: kindIs('table'), cols: 2, attrs: ['tables'] },
+    { role: 'functions', label: 'functions', col: 0, match: kindIs('store-function', 'query'), cols: 2, attrs: ['functions'] },
     { role: 'other', label: 'also', col: 0, match: any },
   ] },
   table: { w: 260, comps: [{ role: 'columns', label: 'columns', col: 0, match: kindIs('column'), attrs: ['columns'] }, { role: 'other', label: 'also', col: 0, match: any }] },
   service: { w: 300, comps: [
-    { role: 'endpoints', label: 'endpoints', col: 0, match: kindIs('endpoint'), attrs: ['endpoints', 'channels'] },
+    { role: 'endpoints', label: 'endpoints', col: 0, match: kindIs('endpoint'), attrs: ['endpoints'] },
     { role: 'inside', label: 'inside', col: 1, match: any },
   ] },
   bridge: { w: 200, comps: [{ role: 'channels', label: 'channels', col: 0, match: any, attrs: ['channels', 'exposes'] }] },
@@ -109,6 +111,9 @@ const SPECS: Partial<Record<FormId, { w: number; comps: Compartment[] }>> = {
   unknown: { w: 260, comps: [{ role: 'parts', label: 'parts', col: 0, match: any }] },
 };
 
+/** What a chip is, by the compartment it sits in: the canvas draws each differently (drawers, pins, tickets). */
+const CHIP_ROLE: Record<string, string> = { tables: 'table', endpoints: 'endpoint', regions: 'region', commands: 'command', channels: 'channel', events: 'channel' };
+
 /** Strings from an attr, if it is a list (or a single string). */
 function attrList(e: Entity, keys: string[] = []): string[] {
   for (const k of keys) {
@@ -124,6 +129,14 @@ export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
   const { entity } = input;
   const form = formFor(entity.kind, lens);
   if (CHIP_FORMS.has(form)) return chipForm(form, input);
+  if (form === 'channel') {
+    // A bus: one line that events travel along, with whoever publishes and subscribes tapping it.
+    const w = 280, h = 74;
+    const ev = typeof entity.attrs.event === 'string' ? entity.attrs.event : undefined;
+    return { form, w, h, head: HEAD, outline: outlineFor(form, w, h), parts: [
+      { key: `${entity.id}:bus`, role: 'bus', label: ev, rect: { x: 14, y: 52, w: w - 28, h: 8 }, lod: 'far' },
+    ] };
+  }
   const spec = SPECS[form] ?? SPECS.unknown!;
   const parts: Part[] = [];
   const twoCol = spec.comps.some((c) => c.col === 1);
@@ -135,7 +148,10 @@ export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
   const relNote = notesFor(input);
 
   for (const c of spec.comps) {
-    const kids = input.children.filter((k) => !used.has(k.id) && c.match(k));
+    // Unclaimed children that fit, the ones that matter to this view first (stable: then by id).
+    const rel = input.relevance;
+    const kids = input.children.filter((k) => !used.has(k.id) && c.match(k))
+      .sort((a, b) => (rel ? rel(b.id) - rel(a.id) : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     kids.forEach((k) => used.add(k.id));
     const strings = kids.length ? [] : attrList(entity, c.attrs);
     if (!kids.length && !strings.length && !c.slots) continue;
@@ -161,7 +177,7 @@ export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
       const r = Math.floor(i / cols), col = i % cols;
       const e = it.e;
       parts.push({
-        key: it.key, entity: it.entity, role: c.role === 'tables' ? 'table' : 'element', label: it.label, detail: it.detail,
+        key: it.key, entity: it.entity, role: CHIP_ROLE[c.role] ?? 'element', label: it.label, detail: it.detail,
         rect: { x: x + 4 + col * (cw + CHIP_GAP), y: cy + r * (CHIP_H + CHIP_GAP), w: cw, h: CHIP_H }, lod: 'far',
         note: it.entity ? relNote.get(it.entity) : undefined, provenance: e?.provenance, status: e?.status,
       });

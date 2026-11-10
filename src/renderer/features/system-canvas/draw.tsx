@@ -69,16 +69,31 @@ export function Zones({ zones, flow, z }: { zones: SceneZone[]; flow: 'right' | 
         <g key={zo.id} class={`zone zone-${i % 2 ? 'b' : 'a'}`}>
           <rect x={zo.rect.x} y={zo.rect.y} width={zo.rect.w} height={zo.rect.h} class="zone-band" />
           {/* A runtime boundary is a wall: two hairlines. */}
-          {flow === 'right'
+          {zo.orient === 'row'
             ? <path class="zone-wall" d={`M${zo.rect.x} ${zo.rect.y} H${zo.rect.x + zo.rect.w} M${zo.rect.x} ${zo.rect.y + sc(3, z)} H${zo.rect.x + zo.rect.w}`} />
             : <path class="zone-wall" d={`M${zo.rect.x} ${zo.rect.y} V${zo.rect.y + zo.rect.h} M${zo.rect.x + sc(3, z)} ${zo.rect.y} V${zo.rect.y + zo.rect.h}`} />}
-          <text class="zone-label" x={zo.rect.x + sc(14, z)} y={zo.rect.y + sc(20, z)} style={{ fontSize: `${sc(10.5, z)}px` }}>
-            {zo.label.toUpperCase()}
-            {zo.basis === 'file-path' && <tspan class="zone-basis" dx={sc(8, z)}>from file paths</tspan>}
-          </text>
+          <ZoneLabel zo={zo} z={z} />
         </g>
       ))}
     </g>
+  );
+}
+
+/** A zone's name, wrapped to its gutter (rows) or across its top (a side column). */
+function ZoneLabel({ zo, z }: { zo: SceneZone; z: number }) {
+  const fs = Math.min(sc(10.5, z), 22);
+  const words = zo.label.toUpperCase().split(' ');
+  const width = zo.orient === 'row' ? 190 : zo.rect.w - 28;
+  const lines: string[] = [];
+  for (const w of words) {
+    const l = lines[lines.length - 1];
+    if (l && (l + ' ' + w).length * fs * 0.68 < width) lines[lines.length - 1] = l + ' ' + w; else lines.push(w);
+  }
+  return (
+    <text class="zone-label" x={zo.rect.x + 14} y={zo.rect.y + fs * 1.9} style={{ fontSize: `${fs}px` }}>
+      {lines.map((l, i) => <tspan key={i} x={zo.rect.x + 14} dy={i ? fs * 1.3 : 0}>{l}</tspan>)}
+      {zo.basis === 'file-path' && <tspan class="zone-basis" x={zo.rect.x + 14} dy={fs * 1.5}>from file paths</tspan>}
+    </text>
   );
 }
 
@@ -132,7 +147,7 @@ export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers
       {n.form === 'external' && <path class="n-inner" d={outlineFor('external', w - 10, ht - 10)} transform="translate(5 5)" />}
       {n.parts.map((p) => <PartShape key={p.key} p={p} near={near} z={o.z} sel={o.selected} on={on} />)}
       {/* The head: name, then what it is and how we know. */}
-      <text class="n-name" x={14} y={chip ? 24 : 22} style={{ fontSize: `${nameSize}px` }}>{trunc(n.name, nameChars)}</text>
+      <text class={`n-name ${near ? '' : 'far'}`} x={14} y={chip ? 24 : 22} style={{ fontSize: `${nameSize}px` }}>{near ? trunc(n.name, nameChars) : n.name}</text>
       {(near || o.z > 0.3) && (
         <g class="n-kind" style={{ fontSize: `${kindSize}px` }}>
           <ProvMark p={n.provenance} x={14} y={(chip ? 24 : 22) + kindSize * 1.35 - kindSize * 0.35} s={kindSize * 0.7} />
@@ -255,7 +270,11 @@ export function Edge({ e, o, onSelect, onHover }: { e: SceneEdge; o: DrawOpts; o
         const deg = seg >= 0 ? angle(e.points[seg], e.points[seg + 1]) : 0;
         return <g key={i} class="e-gate" transform={`translate(${c.at.x} ${c.at.y}) rotate(${deg})`}><path d="M-3 -7 V7 M3 -7 V7" /></g>;
       })}
-      {e.provenance === 'inferred' && e.labelAt && <text class="e-inferred" x={e.labelAt.x} y={e.labelAt.y + fs * 1.6} text-anchor="middle" style={{ fontSize: `${fs * 0.9}px` }}>≈ inferred</text>}
+      {e.provenance === 'inferred' && e.labelAt && !showLabel && (
+        // Inferred: a small ≈ seal on the line (the legend and inspector say which rule).
+        <g class="e-inferred" transform={`translate(${e.labelAt.x} ${e.labelAt.y})`}><circle r={o.lod === 'near' ? 7 : sc(6, o.z)} /><text y={(o.lod === 'near' ? 7 : sc(6, o.z)) * 0.45} text-anchor="middle" style={{ fontSize: `${(o.lod === 'near' ? 11 : sc(10, o.z))}px` }}>≈</text></g>
+      )}
+      {e.provenance === 'inferred' && showLabel && e.labelAt && <text class="e-inferred-w" x={e.labelAt.x} y={e.labelAt.y + fs * 1.7} text-anchor="middle" style={{ fontSize: `${fs * 0.9}px` }}>≈ inferred</text>}
       {showLabel && e.labelAt && (
         <g class="e-label" transform={`translate(${e.labelAt.x} ${e.labelAt.y})`}>
           <rect x={-(lbl.length * fs * 0.31) - 6} y={-fs * 0.85} width={lbl.length * fs * 0.62 + 12} height={fs * 1.6} rx={fs * 0.4} />

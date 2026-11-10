@@ -61,7 +61,7 @@ export function parseViewRequest(raw: unknown): ViewRequest {
   if (o.changed !== undefined) out.changed = list(o.changed, 'view.changed', 500).map((c, i) => str(c, `view.changed[${i}]`, 400));
   if (o.rationale !== undefined) out.rationale = str(o.rationale, 'view.rationale', 1000);
   if (o.proposals !== undefined) out.proposals = proposals(o.proposals, 'view.proposals');
-  if (!out.focus.length && !out.sequence && !out.changed?.length && !out.include?.length && !out.proposals) throw new SystemInputError('name at least one entity to focus on (or a sequence, changed files or proposals)', 'view.focus');
+  if (!out.focus.length && !out.sequence && !out.changed?.length && !out.include?.length && !out.proposals && !out.enter) throw new SystemInputError('name at least one entity to focus on (or a sequence, changed files or proposals)', 'view.focus');
   return out;
 }
 

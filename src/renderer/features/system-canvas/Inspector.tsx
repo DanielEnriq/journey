@@ -3,6 +3,7 @@ import { useEffect, useState } from '../../vendor/preact-hooks.js';
 import type { SourceExcerpt } from '../../../shared/system/api.js';
 import type { Entity, EntityKind, Evidence, Interpretation, Relation, SystemRegistry } from '../../../shared/system/model.js';
 import { grammarFor, PROVENANCE_SAYS, STATUS_SAYS, type SceneEdge, type SceneStub, type SystemScene } from '../../../shared/system/render/index.js';
+import { Legend } from './Panels.js';
 import type { Sel } from './Stage.js';
 
 // The inspector: what the selected thing is, how we know (provenance, rule, confidence, evidence with the
@@ -50,9 +51,10 @@ export function Inspector(p: InspectorProps) {
 function Empty({ scene }: { scene: SystemScene }) {
   return (
     <div class="insp insp-empty">
-      <h2>Nothing selected</h2>
-      <p>Click a part, a line or a step — or press Tab — to see what it is and the code it rests on.</p>
-      <p class="muted">{scene.nodes.length} parts and {scene.edges.length} connections on this level.</p>
+      <p class="insp-kicker">Nothing selected</p>
+      <p>Click a part, a line or a step — or press Tab — to see what it is and the code it rests on. Double-click or Enter goes inside a part; Esc comes back out.</p>
+      <p class="muted">{scene.nodes.length} parts and {scene.edges.length} connections on this level{scene.stubs.length ? `; ${scene.stubs.reduce((n, s) => n + s.count, 0)} more lead outside the view` : ''}.</p>
+      <Legend scene={scene} docked />
     </div>
   );
 }

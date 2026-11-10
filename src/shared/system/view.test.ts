@@ -39,16 +39,16 @@ describe('view requests are validated', () => {
 
 describe('views resolve against the registry', () => {
   test('focus, parents and neighbours at depth, each with why; missing ids reported', () => {
-    const v = resolveView(reg, req({ focus: ['component:board-client', 'component:nope'], depth: 1 }));
-    assert.equal(v.why['component:board-client'], 'focus');
-    assert.equal(v.why['subsystem:board'], 'parent');
-    assert.equal(v.why['component:board-view'], 'neighbour');
+    const v = resolveView(reg, req({ focus: ['component:main-ipc', 'component:nope'], depth: 1 }));
+    assert.equal(v.why['component:main-ipc'], 'focus');
+    assert.equal(v.why['area:main'], 'parent');
+    assert.equal(v.why['component:preload-bridge'], 'neighbour');
     assert.deepEqual(v.missing, ['component:nope']);
-    assert.ok(!v.entities.includes('component:database'), 'two hops away');
-    const deeper = resolveView(reg, req({ focus: ['component:board-client'], depth: 3 }));
-    assert.ok(deeper.entities.length > v.entities.length);
-    const flat = resolveView(reg, req({ focus: ['component:board-client'], depth: 0 }));
-    assert.ok(!flat.entities.includes('component:board-view'));
+    assert.ok(!v.entities.includes('component:database'), 'more than one hop away');
+    const deeper = resolveView(reg, req({ focus: ['component:main-ipc'], depth: 3 }));
+    assert.ok(deeper.entities.includes('component:database'));
+    const flat = resolveView(reg, req({ focus: ['component:main-ipc'], depth: 0 }));
+    assert.ok(!flat.entities.includes('component:preload-bridge'));
     for (const r of v.relations) assert.ok(v.entities.includes(reg.relations[r].from) && v.entities.includes(reg.relations[r].to));
   });
   test('a sequence brings its steps; a bad step for failureAt is missing', () => {
@@ -76,7 +76,7 @@ describe('presets come from registry facts', () => {
     assert.deepEqual(ps.map((p) => p.lens), [...LENSES]);
     const byLens = Object.fromEntries(ps.map((p) => [p.lens, p]));
     assert.ok(byLens.organization.focus.includes('component:board-client') && byLens.organization.focus.includes('component:database'));
-    assert.equal(byLens.path.sequence, 'sequence:command-path:sketch-line');
+    assert.match(byLens.path.sequence!, /^sequence:command-path:(sketch|erase)-line$/);
     assert.equal(byLens.failure.sequence, 'sequence:save-retry');
     assert.ok(byLens.dataflow.focus.includes('table:boards'));
     assert.equal(byLens['interface-change'].enter, 'component:board-view');

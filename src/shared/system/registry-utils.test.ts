@@ -70,14 +70,15 @@ describe('interpretations', () => {
 describe('revisions', () => {
   test('a diff names added, removed and changed entities and relations', () => {
     const idx = boardIndex();
-    const s = idx.symbols.find((x) => x.id.endsWith('#BoardClient.run'))!;
-    s.hash = 'changed';
-    idx.symbols = idx.symbols.filter((x) => !x.id.includes('#HANDLERS.move'));
+    idx.symbols.find((x) => x.id.endsWith('#BoardClient.run'))!.hash = 'changed';
+    idx.literals = idx.literals.filter((l) => !(l.literal === 'board:load' && l.method === 'handle'));
+    idx.literals.push({ ...idx.literals.find((l) => l.literal === 'board:send' && l.method === 'handle')!, literal: 'board:clear' });
     const after = buildRegistry(idx);
     const d = diffRegistries(reg, after);
     assert.ok(d.entities.changed.includes('method:board-client/run'));
-    assert.ok(!d.entities.removed.includes('command:board-engine/move'), 'the key is still declared, so the command stays');
-    assert.ok(d.entities.changed.includes('command:board-engine/move'), 'but its handler anchor is gone');
+    assert.ok(d.entities.removed.includes('endpoint:board-load'));
+    assert.ok(d.entities.added.includes('endpoint:board-clear'));
+    assert.ok(d.relations.removed.includes('component:preload-bridge--sends--endpoint:board-load'));
     assert.deepEqual(diffRegistries(reg, reg), { from: reg.revision.fingerprint, to: reg.revision.fingerprint, entities: { added: [], removed: [], changed: [] }, relations: { added: [], removed: [], changed: [] } });
   });
 

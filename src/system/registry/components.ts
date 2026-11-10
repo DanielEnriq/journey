@@ -461,7 +461,7 @@ function componentName(lead: Claim, all: Claim[]): string {
   const fileWord = baseOf(lead.file) === 'index' ? dirWord : baseOf(lead.file);
   const withDir = (n: string) => {
     const h = humanName(n);
-    return dirWord && !NAME_GENERIC.has(dirWord) && !/^(pass\d+|v\d+)$/.test(dirWord) && !nameSlug(h).split('-').map(singular).includes(singular(slug(dirWord))) ? `${humanName(dirWord)} ${h[0].toLowerCase()}${h.slice(1)}` : h;
+    return dirWord && !NAME_GENERIC.has(dirWord) && !/^(pass\d+|v\d+)$/.test(dirWord) && !nameSlug(h).split('-').map(singular).includes(singular(slug(dirWord))) ? `${humanName(dirWord)} ${/^[A-Z][a-z]/.test(h) ? h[0].toLowerCase() + h.slice(1) : h}` : h;
   };
   switch (lead.role) {
     case 'engine': return `${humanName(dirWord || fileWord)} engine`;

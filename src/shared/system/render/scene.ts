@@ -166,6 +166,8 @@ export interface SceneZone {
   /** How the zone was decided: the entity's own attribute, or its file location. */
   basis: 'attribute' | 'file-path' | 'none';
   rect: Rect;
+  /** A row of the stack, or a column beside it. */
+  orient: 'row' | 'column';
 }
 
 export interface SceneGroup { id: string; name: string; kind: EntityKind; members: string[]; rect: Rect }

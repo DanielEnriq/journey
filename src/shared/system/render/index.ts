@@ -40,7 +40,9 @@ const PATH_ZONES: [RegExp, string, string][] = [
   [/^src\/renderer\//, 'renderer', 'Renderer process'],
   [/^src\/preload\//, 'preload', 'Preload bridge'],
   [/^src\/main\//, 'main', 'Main process'],
-  [/^(src\/integrations\/supabase\/|supabase\/)/, 'cloud', 'Cloud · Supabase'],
+  // Integrations are the main process's clients of outside services; the cloud is what they reach.
+  [/^src\/integrations\//, 'main', 'Main process'],
+  [/^supabase\//, 'cloud', 'Cloud · Supabase (Postgres)'],
   [/^server\//, 'server', 'API server'],
   [/^src\/system\//, 'node', 'Node service'],
   [/^src\/shared\//, 'shared', 'Shared code — built into more than one process'],
@@ -78,6 +80,7 @@ interface LevelLayout {
   rank: Record<string, number>;
   back: Set<string>;
   hidden: Map<string, string[]>;
+  side: string[];
 }
 
 export function buildScene(registry: SystemRegistry, resolved: ResolvedView, state: ViewState, inputs: LayoutInputs = {}): SystemScene {
@@ -210,7 +213,7 @@ function layoutLevel(ctx: Ctx, entered: string[]): LevelLayout {
     const children = ctx.children(id);
     const ids = new Set([id, ...children.map((c) => c.id)]);
     const rels = ctx.relations.filter((r) => ids.has(r.from) || ids.has(r.to));
-    return [id, drawForm({ entity: e, children, registry: ctx.registry, relations: rels }, ctx.resolved.request.lens)] as const;
+    return [id, drawForm({ entity: e, children, registry: ctx.registry, relations: rels, relevance: relevance(ctx, id) }, ctx.resolved.request.lens)] as const;
   }));
 
   // Ranking edges: relations that carry the flow, plus the order of the path being shown.
@@ -243,13 +246,33 @@ function layoutLevel(ctx: Ctx, entered: string[]): LevelLayout {
     members.map((id) => ({ id, w: drawn.get(id)!.w, h: drawn.get(id)!.h, zone: zone.get(id)!.id, group: groupOf.get(id), priority: priority(id) })),
     edges,
     {
-      flow: ctx.flow, memory, pinned,
+      flow: ctx.flow, memory, pinned, mode: root ? 'columns' : 'rows',
       zoneOrder: (zs, mean) => [...zs].sort((a, b) => Number(ZONE_LAST.includes(a)) - Number(ZONE_LAST.includes(b)) || ZONE_LAST.indexOf(a) - ZONE_LAST.indexOf(b) || mean[a] - mean[b] || cmp(a, b)),
     },
   );
-  const out: LevelLayout = { key, root, members, groupOf, drawn, pos: lay.pos, placed: lay.placed, zone, zoneOrder: lay.zoneOrder, rank: lay.rank, back: lay.back, hidden };
+  const out: LevelLayout = { key, root, members, groupOf, drawn, pos: lay.pos, placed: lay.placed, zone, zoneOrder: lay.zoneOrder, rank: lay.rank, back: lay.back, hidden, side: lay.side };
   ctx.layouts.set(key, out);
   return out;
+}
+
+/**
+ * Which of a component's parts matter to this view: on the sequence, wired to something outside the
+ * component that the view draws, or wired at all. A component with 134 endpoints shows the ones in play.
+ */
+function relevance(ctx: Ctx, parent: string): (id: string) => number {
+  const seq = new Set((ctx.sequence?.steps ?? []).map((s) => s.entity));
+  const score = new Map<string, number>();
+  const bump = (id: string, n: number) => score.set(id, (score.get(id) ?? 0) + n);
+  const top = (id: string) => { let e = ctx.ent(id); const seen = new Set<string>(); while (e?.parent && e.parent !== parent && !seen.has(e.id)) { seen.add(e.id); e = ctx.ent(e.parent); } return e?.parent === parent ? e.id : null; };
+  for (const r of ctx.relations) {
+    if (r.kind === 'contains') continue;
+    const a = top(r.from), b = top(r.to);
+    if (a && !b) bump(a, ctx.pool.has(r.to) || ctx.pool.has(ctx.ent(r.to)?.parent ?? '') ? 12 : 1);
+    if (b && !a) bump(b, ctx.pool.has(r.from) || ctx.pool.has(ctx.ent(r.from)?.parent ?? '') ? 12 : 1);
+  }
+  for (const s of seq) { const t = top(s); if (t) bump(t, 100); }
+  for (const f of ctx.resolved.request.focus) { const t = top(f); if (t) bump(t, 200); }
+  return (id) => score.get(id) ?? 0;
 }
 
 /** Positions for an entered level from where each child sat as a part of the component at the level above. */
@@ -258,7 +281,7 @@ function arrangementFromParts(ctx: Ctx, entered: string[], members: string[]): R
   const e = ctx.ent(root)!;
   const children = ctx.children(root);
   const ids = new Set([root, ...children.map((c) => c.id)]);
-  const form = drawForm({ entity: e, children, registry: ctx.registry, relations: ctx.relations.filter((r) => ids.has(r.from) || ids.has(r.to)) });
+  const form = drawForm({ entity: e, children, registry: ctx.registry, relations: ctx.relations.filter((r) => ids.has(r.from) || ids.has(r.to)), relevance: relevance(ctx, root) });
   const parts = form.parts.filter((p) => p.entity && members.includes(p.entity));
   if (!parts.length) return undefined;
   const xs = [...new Set(parts.map((p) => p.rect.x))].sort((a, b) => a - b);
@@ -394,16 +417,19 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
   /* zones */
   const zones: SceneZone[] = [];
   const all = union(nodes.map((n) => n.rect));
+  const stack = union(nodes.filter((n) => !L.side.includes(n.zone)).map((n) => n.rect));
   for (const z of L.zoneOrder) {
     const ms = nodes.filter((n) => n.zone === z && !n.ghost);
     if (!ms.length) continue;
     const info = L.zone.get(ms[0].id)!;
     if (info.basis === 'none' && L.zoneOrder.length === 1) continue;
     const u = union(ms.map((n) => n.rect));
-    const rect = down
-      ? { x: u.x - 28, y: all.y - 56, w: u.w + 56, h: all.h + 96 }
-      : { x: all.x - 64, y: u.y - 40, w: all.w + 128, h: u.h + 64 };
-    zones.push({ id: z, label: info.label || 'Unplaced', basis: info.basis, rect });
+    // Rows run the width of the stack (with a gutter for their names); a side zone stands beside it, full height.
+    const column = L.side.includes(z);
+    const rect = column
+      ? { x: u.x - 40, y: all.y - 56, w: u.w + 80, h: all.h + 96 }
+      : { x: stack.x - 220, y: u.y - 40, w: stack.w + 284, h: u.h + 64 };
+    zones.push({ id: z, label: info.label || 'Unplaced', basis: info.basis, rect, orient: column ? 'column' : 'row' });
   }
 
   /* groups (subsystems the level flattened) */
@@ -506,9 +532,17 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
   type Pending = { a: Agg; sa: Side; sb: Side; pa?: Point; pb?: Point; partA?: string; partB?: string; back: boolean };
   const pend: Pending[] = [];
   const sideCount = new Map<string, Pending[]>();
+  const rows = !root && L.zoneOrder.length > 1;
   for (const a of aggs) {
     const ra = rectOf(a.from)!, rb = rectOf(a.to)!;
     let sa: Side, sb: Side;
+    if (rows) {
+      // A section through the stack: connections run down (or back up) between rows, sideways within one.
+      const below = rb.y >= ra.y + ra.h, above = rb.y + rb.h <= ra.y;
+      [sa, sb] = below ? ['bottom', 'top'] : above ? ['top', 'bottom'] : rb.x >= ra.x + ra.w ? ['right', 'left'] : rb.x + rb.w <= ra.x ? ['left', 'right'] : ['bottom', 'top'];
+      pend.push(withParts({ a, sa, sb, back: false }));
+      continue;
+    }
     const before = down ? rb.y + rb.h <= ra.y : rb.x + rb.w <= ra.x;
     const after = down ? rb.y >= ra.y + ra.h : rb.x >= ra.x + ra.w;
     if (after) [sa, sb] = down ? ['bottom', 'top'] : ['right', 'left'];
@@ -517,7 +551,10 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
       const below = down ? rb.x >= ra.x : rb.y >= ra.y;
       [sa, sb] = down ? (below ? ['right', 'left'] : ['left', 'right']) : (below ? ['bottom', 'top'] : ['top', 'bottom']);
     }
-    const p: Pending = { a, sa, sb, back: before };
+    pend.push(withParts({ a, sa, sb, back: before }));
+  }
+  function withParts(p: Pending): Pending {
+    const { a, sa, sb } = p;
     // Form-appropriate connection points: a relation that reaches a part (a table, an endpoint) lands on it.
     const partFor = (nodeId: string, side: Side, ids: string[]) => {
       const n = byId.get(nodeId);
@@ -535,13 +572,13 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
     const fa = partFor(a.from, sa, a.rels.map((r) => r.from)), fb = partFor(a.to, sb, a.rels.map((r) => r.to));
     if (fa) { p.pa = fa.at; p.partA = fa.key; }
     if (fb) { p.pb = fb.at; p.partB = fb.key; }
-    pend.push(p);
     for (const [id, s, has] of [[a.from, sa, !!fa], [a.to, sb, !!fb]] as const) {
       if (has) continue;
       const k = `${id}|${s}`;
       if (!sideCount.has(k)) sideCount.set(k, []);
       sideCount.get(k)!.push(p);
     }
+    return p;
   }
   // Spread free ports along each side, ordered by where the other end is, so lines don't cross at the node.
   for (const [k, list] of [...sideCount].sort((x, y) => cmp(x[0], y[0]))) {
@@ -561,6 +598,7 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
   const maxBottom = Math.max(0, ...nodes.map((n) => n.rect.y + n.rect.h));
   const maxRight = Math.max(0, ...nodes.map((n) => n.rect.x + n.rect.w));
   let backLane = 0;
+  let lane = 0;
   const edges: SceneEdge[] = pend.map((p) => {
     const a = p.a;
     let pts: Point[];
@@ -569,7 +607,14 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
       backLane++;
       const lane = (down ? maxRight : maxBottom) + 36 + backLane * 14;
       pts = down ? route(p.pa!, 'right', p.pb!, 'right', lane) : route(p.pa!, 'bottom', p.pb!, 'bottom', lane);
-    } else pts = route(p.pa!, p.sa, p.pb!, p.sb);
+    } else {
+      // Stagger the turn of parallel routes so lines sharing a gap don't lie on top of one another.
+      const vertical = (p.sa === 'bottom' || p.sa === 'top') && (p.sb === 'top' || p.sb === 'bottom');
+      const horizontal = (p.sa === 'left' || p.sa === 'right') && (p.sb === 'left' || p.sb === 'right');
+      const k = (lane++ % 7) - 3;
+      const bend = vertical ? (p.pa!.y + p.pb!.y) / 2 + k * 9 : horizontal ? (p.pa!.x + p.pb!.x) / 2 + k * 9 : undefined;
+      pts = route(p.pa!, p.sa, p.pb!, p.sb, bend);
+    }
     const mix: Partial<Record<Provenance, number>> = {};
     for (const r of a.rels) mix[r.provenance] = (mix[r.provenance] ?? 0) + 1;
     const provenance = PROVENANCE_ORDER.find((pv) => mix[pv]) ?? 'code';

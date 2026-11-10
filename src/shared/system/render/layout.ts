@@ -16,7 +16,12 @@ export interface LayoutResult {
   /** Back edges (from→to) the ranking reversed to break a cycle. */
   back: Set<string>;
   zoneOrder: string[];
+  /** Zones laid out as a column beside the rows (shared code, built into several of them). */
+  side: string[];
 }
+
+/** Code that runs in more than one runtime stands beside the stack rather than in it. */
+export const SIDE_ZONES = ['shared'];
 
 export const GAP_MAIN = 120;
 export const GAP_CROSS = 56;
@@ -87,6 +92,12 @@ export function layeredLayout(nodes: LayoutNode[], edges: LayoutEdge[], opts: {
   zoneOrder?: (zones: string[], meanRank: Record<string, number>) => string[];
   memory?: Record<string, [number, number]>;
   pinned?: Record<string, [number, number]>;
+  /**
+   * 'rows': each runtime zone is a row and the flow runs down through them, like a section through the
+   * stack; within a row, parts sit under the neighbours they connect to. 'columns': classic layers along
+   * the flow (one zone, or none).
+   */
+  mode?: 'rows' | 'columns';
 }): LayoutResult {
   const ids = nodes.map((n) => n.id).sort(cmp);
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -145,8 +156,10 @@ export function layeredLayout(nodes: LayoutNode[], edges: LayoutEdge[], opts: {
     crossAcc += deepest + ZONE_GAP * 2;
   }
 
-  const fresh: Record<string, Point> = {};
-  for (const [k, l] of cells) {
+  let fresh: Record<string, Point> = {};
+  const side = opts.mode === 'rows' && zoneOrder.length > 1 && zoneOrder.some((z) => !SIDE_ZONES.includes(z)) ? zoneOrder.filter((z) => SIDE_ZONES.includes(z)) : [];
+  if (opts.mode === 'rows' && zoneOrder.length > 1) fresh = rowLayout(ids, byId, adj, rank, order, zoneOrder);
+  else for (const [k, l] of cells) {
     const z = k.slice(0, k.lastIndexOf('|'));
     let c = bandStart[z] + ZONE_GAP;
     for (const id of l) {
@@ -182,7 +195,71 @@ export function layeredLayout(nodes: LayoutNode[], edges: LayoutEdge[], opts: {
     placed[id] = 'layout';
     taken.push(rectOf(at, n));
   }
-  return { pos, placed, rank, back, zoneOrder };
+  return { pos, placed, rank, back, zoneOrder, side };
+}
+
+/** Max parts side by side in one row before it wraps into another line within its zone. */
+const ROW_MAX = 6;
+
+function rowLayout(ids: string[], byId: Map<string, LayoutNode>, adj: Map<string, string[]>, rank: Record<string, number>, order: Record<string, number>, zoneOrder: string[]): Record<string, Point> {
+  const out: Record<string, Point> = {};
+  const unit = 360;
+  let y = ZONE_GAP;
+  // Only a stack can have something beside it: with no other zone, the side zone is the stack.
+  const hasStack = zoneOrder.some((z) => !SIDE_ZONES.includes(z));
+  const sideZones = hasStack ? zoneOrder.filter((z) => SIDE_ZONES.includes(z)) : [];
+  const stackZones = zoneOrder.filter((z) => !sideZones.includes(z));
+  for (const z of stackZones) {
+    const members = ids.filter((id) => byId.get(id)!.zone === z);
+    // Where each wants to be: under (or over) the centre of its already-placed neighbours, else by rank.
+    const want = new Map(members.map((id) => {
+      const placed = adj.get(id)!.filter((n) => out[n]);
+      const x = placed.length
+        ? placed.reduce((s, n) => s + out[n].x + byId.get(n)!.w / 2, 0) / placed.length
+        : rank[id] * unit + byId.get(id)!.w / 2;
+      return [id, x] as const;
+    }));
+    const sorted = [...members].sort((a, b) => want.get(a)! - want.get(b)! || rank[a] - rank[b] || order[a] - order[b] || cmp(a, b));
+    for (let i = 0; i < sorted.length; i += ROW_MAX) {
+      const line = sorted.slice(i, i + ROW_MAX);
+      let right = -Infinity;
+      let deepest = 0;
+      for (const id of line) {
+        const n = byId.get(id)!;
+        const x = Math.max(want.get(id)! - n.w / 2, right + GAP_MAIN * 0.75);
+        out[id] = { x: Math.round(x), y };
+        right = x + n.w;
+        deepest = Math.max(deepest, n.h);
+      }
+      y += deepest + GAP_CROSS;
+    }
+    y += ZONE_GAP * 2 - GAP_CROSS + 24;
+  }
+  // Shift so the leftmost part starts at 0.
+  const minX = Math.min(...Object.values(out).map((p) => p.x));
+  for (const id of Object.keys(out)) out[id] = { x: out[id].x - minX, y: out[id].y };
+  // The side column: beside the stack, each part level with the middle of what uses it.
+  const right = Math.max(0, ...Object.keys(out).map((id) => out[id].x + byId.get(id)!.w));
+  let colX = right + GAP_MAIN * 1.6 + 100;
+  for (const z of sideZones) {
+    const members = ids.filter((id) => byId.get(id)!.zone === z);
+    const want = new Map(members.map((id) => {
+      const placed = adj.get(id)!.filter((n) => out[n] && !members.includes(n));
+      const yy = placed.length ? placed.reduce((s, n) => s + out[n].y + byId.get(n)!.h / 2, 0) / placed.length - byId.get(id)!.h / 2 : ZONE_GAP + rank[id] * 200;
+      return [id, yy] as const;
+    }));
+    const sorted = [...members].sort((a, b) => want.get(a)! - want.get(b)! || cmp(a, b));
+    let bottom = -Infinity, widest = 0;
+    for (const id of sorted) {
+      const n = byId.get(id)!;
+      const yy = Math.max(want.get(id)!, bottom + GAP_CROSS);
+      out[id] = { x: colX, y: Math.round(yy) };
+      bottom = yy + n.h;
+      widest = Math.max(widest, n.w);
+    }
+    colX += widest + GAP_MAIN * 1.6;
+  }
+  return out;
 }
 
 const rectOf = (p: Point, n: { w: number; h: number }): Rect => ({ x: p.x, y: p.y, w: n.w, h: n.h });

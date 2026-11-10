@@ -87,11 +87,11 @@ export function Harness({ request, registry, onApply, onClose }: { request: View
 
 const SAMPLE: DrawOpts = { lod: 'near', z: 1, selected: null, related: new Set(), hover: null, expanded: new Set(), step: null };
 
-export function Legend({ scene, onClose }: { scene: SystemScene; onClose(): void }) {
+export function Legend({ scene, onClose, docked }: { scene: SystemScene; onClose?(): void; docked?: boolean }) {
   const kinds = scene.legend.relations.length ? scene.legend.relations : [GRAMMAR.calls];
   return (
-    <div class="legend" role="region" aria-label="Legend">
-      <header><h2>How to read this</h2><button type="button" class="insp-close" onClick={onClose} aria-label="Close legend">×</button></header>
+    <div class={`legend ${docked ? 'docked' : ''}`} role="region" aria-label="Legend">
+      <header><h2>How to read this</h2>{onClose && <button type="button" class="insp-close" onClick={onClose} aria-label="Close legend">×</button>}</header>
       <h3>Connections</h3>
       <ul class="lg-rels">{kinds.map((g) => <li key={g.kind}><RelSample g={g} /><span>{g.says}</span></li>)}</ul>
       <p class="muted lg-note">Where a connection crosses from one runtime to another it passes a gate <svg width="16" height="14" class="lg-gate" aria-hidden="true"><path d="M5 0 V14 M11 0 V14" /></svg>. Numbers on a line mean it stands for several finer ones.</p>
@@ -120,7 +120,9 @@ function RelSample({ g }: { g: RelationGrammar }) {
 }
 
 function FormSample({ form }: { form: FormId }) {
-  return <svg width="40" height="26" aria-hidden="true" class={`lg-form f-${form}`}><g transform="translate(2 2) scale(0.12)"><path class="n-body" d={outlineFor(form, 300, 180)} /></g></svg>;
+  const chip = ['function', 'command', 'column', 'interaction', 'endpoint', 'step', 'store-function'].includes(form);
+  const [w, hh] = chip ? [44, 14] : form === 'bridge' ? [30, 22] : [44, 26];
+  return <svg width="48" height="30" aria-hidden="true" class={`lg-form f-${form}`}><g transform={`translate(${(48 - w) / 2} ${(30 - hh) / 2})`}><path class="n-body" d={outlineFor(form, w, hh)} /></g></svg>;
 }
 
 /* ---------- outline: the level as a list ---------- */
