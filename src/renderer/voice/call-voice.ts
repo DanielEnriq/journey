@@ -113,6 +113,10 @@ export class CallVoice {
    */
   private heard(speech: HeardSpeech) {
     if (!this.adapter) return;
+    // While your Vowe is thinking, only a new "Vowe, …" replaces the question: a murmur, an "mm" or the
+    // rest of a sentence would otherwise cancel the answer before a word of it is said. Talking over it
+    // once it speaks still stops it (main's barge-in arrives while it's speaking).
+    if (this.adapter.busy && !this.voweSpeaking && (!speech.final || speech.addressed === false)) return;
     if (speech.addressed || this.o.answers?.() !== 'pauses') {
       if (speech.final) this.unsay();
       this.adapter.hear(speech);

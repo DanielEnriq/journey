@@ -59,6 +59,8 @@ function bridge() {
     calls,
     turns,
     hear: (text: string, final = true) => speech.forEach((l) => l({ roomId: ROOM, speech: { participant: DANIEL, text, final } as never })),
+    /** A final as main sends it: with whether it was said to Vowe. */
+    speechFinal: (text: string, addressed: boolean) => speech.forEach((l) => l({ roomId: ROOM, speech: { participant: DANIEL, text, final: true, addressed } as never })),
     agentEvent: (e: AgentEvent) => agentListeners.forEach((l) => l(e)),
     reply,
     status: (s: Partial<VoiceStatus>) => status.forEach((l) => l({ ...on, ...s })),
@@ -163,6 +165,27 @@ describe('CallVoice', () => {
         ['agent.cancel', 't1'],
       ],
     );
+    await v.stop();
+  });
+
+  it('keeps thinking through your murmurs, and stops only when you talk over it while it speaks', async () => {
+    const b = bridge();
+    const c = fakeCall();
+    const v = new CallVoice({ api: b.api, roomId: ROOM, localUser: DANIEL, canvas: () => canvas, call: c.call, microphone: () => null, answers: () => 'pauses', pauseMs: 20 });
+    await v.start();
+    b.hear('Can you explain the main process?');
+    await new Promise((r) => setTimeout(r, 40));
+    b.agentEvent({ type: 'turn.started', turnId: 't1', conversationId: 'c1', roomId: ROOM, provider: { id: 'mock', name: 'Mock', billing: 'api-key', model: 'm' } });
+
+    b.hear('Mm', false); // thinking: a murmur, then a filler that ends
+    b.speechFinal('Mm, mm, mm, mm.', false);
+    await new Promise((r) => setTimeout(r, 40));
+    assert.deepEqual([b.turns.length, b.calls.filter(([n]) => n === 'agent.cancel' || n === 'cancel').length], [1, 0]);
+
+    b.status({ state: 'speaking' });
+    b.hear('…', false); // main's barge-in while it speaks
+    await tick();
+    assert.deepEqual(b.calls.filter(([n]) => n === 'agent.cancel'), [['agent.cancel', 't1']]);
     await v.stop();
   });
 
