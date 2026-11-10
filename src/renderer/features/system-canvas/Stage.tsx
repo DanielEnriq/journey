@@ -2,7 +2,7 @@ import { h } from '../../vendor/preact.js';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from '../../vendor/preact-hooks.js';
 import type { Rect, SceneOverflow, SystemScene } from '../../../shared/system/render/index.js';
 import { fit, lerpCamera, lodFor, matchFrame, panBy, reveal, toStage, zoomAt, type Camera, type Viewport } from './camera.js';
-import { Edge, Frame, Groups, Node, Overflow, Patterns, Portal, SequenceLayer, Stub, Zones, type DrawOpts } from './draw.js';
+import { Edge, Frame, Groups, Regions, Node, Overflow, Patterns, Portal, SequenceLayer, Stub, Zones, type DrawOpts } from './draw.js';
 import { spatial, tabOrder, type Dir } from './nav.js';
 
 // The stage: one level of the scene under a camera. It owns the gestures (pan, zoom, drag to pin), the
@@ -78,7 +78,15 @@ export function Stage(p: StageProps) {
 
   const s = p.scene;
   const key = s.level.key;
-  const home = () => fit(s.bounds, v, 40, 1.1);
+  // Opening a level shows what the view is about, legibly: the focus and the path, not every neighbour.
+  const home = () => {
+    const lead = s.level.root ? [] : s.nodes.filter((n) => n.emphasis === 'primary' || n.why === 'focus' || n.why === 'sequence');
+    if (!lead.length || lead.length === s.nodes.length) return fit(s.bounds, v, 40, 1.1);
+    const xs = lead.map((n) => n.rect);
+    const r = { x: Math.min(...xs.map((q) => q.x)) - 60, y: Math.min(...xs.map((q) => q.y)) - 90, w: 0, h: 0 };
+    r.w = Math.max(...xs.map((q) => q.x + q.w)) + 60 - r.x; r.h = Math.max(...xs.map((q) => q.y + q.h)) + 60 - r.y;
+    return fit(r, v, 40, 1.1);
+  };
 
   // A new level: open it from where the component was (entering) or put the component back where the
   // frame was (coming out). Same level with a new scene: keep the camera.
@@ -88,6 +96,8 @@ export function Stage(p: StageProps) {
     if (v.w < 10) return;
     const target = p.savedCamera ?? home();
     if (!before || !camRef.current) { setCam(target); return; }
+    // Another view: open it fresh (or where it was left), never on the last view's camera.
+    if (before.view !== s.view) { stop(); setCam(target); return; }
     if (before.level.key === key) return;
     const now = camRef.current;
     const e0 = before.level.entered, e1 = s.level.entered;
@@ -234,6 +244,7 @@ export function Stage(p: StageProps) {
           {s.level.frame && <Frame scene={s} z={c.z} name={p.rootName} kind={p.rootKind} />}
           {/* Subsystem hulls only where no runtime walls already say where things are. */}
           {s.zones.length < 2 && <Groups groups={s.groups} z={c.z} />}
+          <Regions regions={s.regions} z={c.z} />
           <g class="edges">{s.edges.map((e) => <Edge key={e.id} e={e} o={o} onSelect={(id) => p.onSelect({ kind: 'edge', id })} onHover={setHover} />)}</g>
           <g class="stubs">{s.stubs.map((x) => <Stub key={x.id} s={x} o={o} onSelect={(id) => p.onSelect({ kind: 'stub', id })} />)}</g>
           <g class="portals">{s.portals.map((x) => <Portal key={x.id} p={x} o={o} on={{ select: (id) => p.onSelect({ kind: 'entity', id }), follow: p.onFollow }} />)}</g>

@@ -107,7 +107,7 @@ function EntityView(p: InspectorProps & { e: Entity }) {
       <Relations title="Comes in from" rels={inn} reg={reg} end="from" onFollow={p.onFollow} />
       <section>
         <h3>Where it is in the code</h3>
-        {e.anchors.length ? <ul class="anchors">{e.anchors.map((a, i) => <li key={i}><code>{a.file}{a.range ? `:${a.range.start.line}` : ''}</code>{a.symbol ? <span class="muted"> {a.symbol.split('#')[1]}</span> : null}</li>)}</ul> : <p class="muted">No anchor in code{e.provenance === 'interpretation' ? ' — this is an interpretation.' : '.'}</p>}
+        {e.anchors.length ? <ul class="anchors">{e.anchors.slice(0, 6).map((a, i) => <li key={i}><code>{a.file}{a.range ? `:${a.range.start.line}` : ''}</code>{a.symbol ? <span class="muted"> {a.symbol.split('#')[1]}</span> : null}</li>)}{e.anchors.length > 6 && <li class="muted">+{e.anchors.length - 6} more files</li>}</ul> : <p class="muted">No anchor in code{e.provenance === 'interpretation' ? ' — this is an interpretation.' : '.'}</p>}
       </section>
       <EvidenceList ev={ev} {...p} />
       <section>

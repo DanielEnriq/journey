@@ -97,6 +97,20 @@ function ZoneLabel({ zo, z }: { zo: SceneZone; z: number }) {
   );
 }
 
+/** An entered component's compartments: quiet wells with the name they had on the outside. */
+export function Regions({ regions, z }: { regions: SystemScene['regions']; z: number }) {
+  return (
+    <g class="regions" aria-hidden="true">
+      {regions.map((r) => (
+        <g key={r.id} class="region">
+          <rect x={r.rect.x} y={r.rect.y} width={r.rect.w} height={r.rect.h} rx={12} />
+          <text x={r.rect.x + 14} y={r.rect.y + Math.max(20, sc(14, z))} style={{ fontSize: `${Math.max(11, sc(10, z))}px` }}>{r.label.toUpperCase()}</text>
+        </g>
+      ))}
+    </g>
+  );
+}
+
 export function Groups({ groups, z }: { groups: SceneGroup[]; z: number }) {
   return (
     <g class="groups" aria-hidden="true">

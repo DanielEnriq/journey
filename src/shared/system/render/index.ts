@@ -440,7 +440,7 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
     // Rows run the width of the stack (with a gutter for their names); a side zone stands beside it, full height.
     const column = L.side.includes(z);
     const rect = column
-      ? { x: u.x - 40, y: all.y - 56, w: u.w + 80, h: all.h + 96 }
+      ? { x: u.x - 40, y: Math.min(all.y, u.y - 70) - 56, w: u.w + 80, h: all.h + 96 + Math.max(0, all.y - u.y + 70) }
       : { x: stack.x - 220, y: u.y - 40, w: stack.w + 284, h: u.h + 64 };
     zones.push({ id: z, label: info.label || 'Unplaced', basis: info.basis, rect, orient: column ? 'column' : 'row' });
   }
@@ -499,7 +499,7 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
   let frame: Rect | null = null;
   const portals: ScenePortal[] = [];
   if (root && parentL) {
-    const inner = union(nodes.map((n) => n.rect));
+    const inner = union([...nodes.map((n) => n.rect), ...regions.map((r) => r.rect)]);
     frame = { x: inner.x - 72, y: inner.y - 96, w: inner.w + 144, h: inner.h + 168 };
     const rp = parentL.pos[root];
     const rd = parentL.drawn.get(root);

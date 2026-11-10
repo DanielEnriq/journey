@@ -118,6 +118,8 @@ code, pre, .mono { font-family: var(--sc-mono); font-size: 11.5px; }
 .zone-label { font-weight: 600; letter-spacing: .12em; fill: var(--v-fg-3) !important; }
 .zone-basis { font-weight: 400; letter-spacing: 0; fill: var(--v-fg-4) !important; font-style: italic; }
 
+.region rect { fill: var(--sc-well); stroke: var(--sc-well-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.region text { font-weight: 600; letter-spacing: .08em; fill: var(--v-fg-3) !important; }
 .group rect { fill: none; stroke: var(--v-line-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .group text { fill: var(--v-fg-3) !important; font-weight: 600; }
 .g-kind { font-weight: 400; }

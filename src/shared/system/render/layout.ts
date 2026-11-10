@@ -231,7 +231,8 @@ function rowLayout(ids: string[], byId: Map<string, LayoutNode>, adj: Map<string
         right = x + n.w;
         deepest = Math.max(deepest, n.h);
       }
-      y += deepest + GAP_CROSS;
+      // Room above each line for the names drawn over the parts at a distance.
+      y += deepest + GAP_CROSS + 50;
     }
     y += ZONE_GAP * 2 - GAP_CROSS + 24;
   }
@@ -240,7 +241,7 @@ function rowLayout(ids: string[], byId: Map<string, LayoutNode>, adj: Map<string
   for (const id of Object.keys(out)) out[id] = { x: out[id].x - minX, y: out[id].y };
   // The side column: beside the stack, each part level with the middle of what uses it.
   const right = Math.max(0, ...Object.keys(out).map((id) => out[id].x + byId.get(id)!.w));
-  let colX = right + GAP_MAIN * 1.6 + 100;
+  let colX = right + GAP_MAIN * 1.4;
   for (const z of sideZones) {
     const members = ids.filter((id) => byId.get(id)!.zone === z);
     const want = new Map(members.map((id) => {
