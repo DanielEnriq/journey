@@ -300,7 +300,7 @@ function arrangement(ctx: Ctx, entered: string[], members: string[]): { pos?: Re
   const colY = [0, 0];
   const placeCol = (col: 0 | 1, x0: number) => {
     for (const g of groups.filter((q) => q.col === col)) {
-      let y = colY[col] + 40; // room for the region's name
+      let y = colY[col] + 62; // room for the region's name, and for part names drawn above their forms
       const perRow = perRowOf(g);
       for (let i = 0; i < g.ids.length; i += perRow) {
         const row = g.ids.slice(i, i + perRow);
@@ -452,7 +452,7 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
   const regions = L.regions.map((g) => {
     const rs = g.ids.map((id) => byId.get(id)?.rect).filter((r): r is Rect => !!r);
     const u = union(rs);
-    return { id: g.key, label: g.label, rect: { x: u.x - 20, y: u.y - 36, w: u.w + 40, h: u.h + 56 } };
+    return { id: g.key, label: g.label, rect: { x: u.x - 20, y: u.y - 58, w: u.w + 40, h: u.h + 78 } };
   }).filter((r) => r.rect.w > 40);
 
   /* groups (subsystems the level flattened) */
@@ -517,7 +517,7 @@ function compose(ctx: Ctx, L: LevelLayout, entered: string[]): SystemScene {
       const t = side === 'left' || side === 'right' ? (Math.abs(dx) < 1 ? 0 : dy / Math.abs(dx)) : (Math.abs(dy) < 1 ? 0 : dx / Math.abs(dy));
       bySide[side].push({ id, t: Math.max(-1, Math.min(1, t)) });
     }
-    const PW = 184, PH = 56;
+    const PW = 230, PH = 56;
     for (const side of ['left', 'right', 'top', 'bottom'] as Side[]) {
       const list = bySide[side].sort((a, b) => a.t - b.t || cmp(a.id, b.id));
       const vertical = side === 'left' || side === 'right';
@@ -797,8 +797,8 @@ function placeSequence(
       perNode.set(n.id, k + 1);
       if (pt) part = pt.key;
       if (laned.has(n.id)) {
-        const per = Math.max(1, Math.floor((n.rect.w - 24) / 30));
-        at = { x: n.rect.x + 22 + (k % per) * 30, y: n.rect.y + n.rect.h - 16 - Math.floor(k / per) * 26 };
+        const per = Math.max(1, Math.floor((n.rect.w - 30) / 40));
+        at = { x: n.rect.x + 26 + (k % per) * 40, y: n.rect.y + n.rect.h - 20 - Math.floor(k / per) * 38 };
       } else if (pt) {
         at = { x: n.rect.x + pt.rect.x + pt.rect.w - 12, y: n.rect.y + pt.rect.y + pt.rect.h / 2 };
       } else {
@@ -823,6 +823,7 @@ function placeSequence(
   const idx = new Map(steps.map((s) => [s.id, s]));
   const segments: SceneSegment[] = [];
   let loops = 0;
+  const saidGuards = new Set<string>();
   for (const s of steps) {
     if (!s.on) continue;
     // A step whose part isn't on this level gets no station; the line runs on to the next one that is.
@@ -844,7 +845,22 @@ function placeSequence(
         const y = Math.max(s.at.y, to.at.y) + 44 + loops * 10;
         points = [s.at, { x: s.at.x, y }, { x: to.at.x, y }, to.at];
       } else points = [s.at, to.at];
-      segments.push({ from: s.id, to: t, kind, points, guard: kind !== 'next' ? s.guard ?? to.guard : undefined });
+      // The loop's condition is said once, with its bound when the notes name one ("MAX_ATTEMPTS = 5").
+      let guard: string | undefined;
+      if (kind === 'loop') {
+        const g = s.guard ?? to.guard;
+        if (g && !saidGuards.has(g)) {
+          saidGuards.add(g);
+          const bound = (seq.notes ?? []).map((n) => /\((\w+) = (\d+)\)/.exec(n)).find((m) => m && g.includes(m[1]));
+          guard = bound ? `${g} · ≤ ${bound[1]} = ${bound[2]}` : g;
+        }
+      }
+      const endsInFailure = to.next.length === 0 && /fail|busy|error|throw|reject/i.test(to.label);
+      segments.push({
+        from: s.id, to: t, kind, points, guard,
+        outcome: kind === 'branch' ? to.label : undefined,
+        failing: kind === 'loop' || endsInFailure || undefined,
+      });
     }
   }
   const claim = seq.kind === 'trace' && ctx.recorded

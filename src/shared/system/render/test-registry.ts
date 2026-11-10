@@ -13,7 +13,7 @@ export function testRegistry(): SystemRegistry {
   const es: Entity[] = [
     ent({ id: 'subsystem:canvas', kind: 'subsystem', name: 'Canvas', level: 'system' }),
     ent({ id: 'component:surface', kind: 'interface', name: 'Canvas surface', parent: 'subsystem:canvas', anchors: [{ file: 'src/renderer/features/canvas/CanvasSurface.tsx' }] }),
-    ...['select', 'pan', 'circle', 'draw', 'erase', 'comment'].map((t) => ent({ id: `interaction:tool-${t}`, kind: 'interaction', name: t, parent: 'component:surface', anchors: [{ file: 'src/renderer/features/canvas/CanvasSurface.tsx' }] })),
+    ...['select', 'pan', 'circle', 'draw', 'erase', 'comment'].map((t, i) => ent({ id: `interaction:tool-${t}`, kind: 'interaction', name: t, parent: 'component:surface', anchors: [{ file: 'src/renderer/features/canvas/CanvasSurface.tsx' }], attrs: { order: i, key: ['v', 'h', 'o', 'p', 'e', 'c'][i] } })),
     ent({ id: 'component:client', kind: 'client', name: 'Canvas client', parent: 'subsystem:canvas', anchors: [{ file: 'src/renderer/features/canvas/client.ts' }], provenance: 'inferred', confidence: 0.8 }),
     ent({ id: 'state:client-state', kind: 'state', name: 'CanvasState', parent: 'component:client', anchors: [{ file: 'src/renderer/features/canvas/client.ts' }] }),
     ent({ id: 'state:client-queue', kind: 'state', name: 'queue', parent: 'component:client', anchors: [{ file: 'src/renderer/features/canvas/client.ts' }] }),
@@ -52,6 +52,7 @@ export function testRegistry(): SystemRegistry {
     rel('function:execute', 'writes', 'table:room-canvases', { label: 'commit_canvas' }),
     rel('function:execute', 'reads', 'table:room-canvases'),
     rel('fn:commit-canvas', 'writes', 'table:room-canvas-ops'),
+    rel('interaction:tool-draw', 'produces', 'command:draw', { label: 'draw', provenance: 'inferred' }),
     rel('component:hub', 'publishes', 'method:client-saved', { label: 'canvas:changed', provenance: 'inferred', confidence: 0.7 }),
   ];
   const r: SystemRegistry = {
@@ -61,6 +62,19 @@ export function testRegistry(): SystemRegistry {
     coverage: { byLang: {}, limits: [], diagnostics: {} }, incomplete: false,
     fixture: { label: 'Render test fixture', note: 'Hand-made; not an index of any repository.' },
     sequences: {
+      'seq:retry': {
+        id: 'seq:retry', title: 'Saving under contention', kind: 'code-path', provenance: 'code', evidence: [],
+        notes: ['If commit returns null, load and go round again (MAX_ATTEMPTS = 5).'],
+        steps: [
+          { id: 'r1', entity: 'function:execute', label: 'load', evidence: [] },
+          { id: 'r2', entity: 'function:apply', label: 'applyCommand', guard: 'attempt < MAX_ATTEMPTS', ctx: ['loop'], evidence: [] },
+          { id: 'r3', entity: 'command:draw', label: 'draw handler', guard: 'attempt < MAX_ATTEMPTS', ctx: ['loop'], evidence: [] },
+          { id: 'r4', entity: 'table:room-canvases', label: 'commit', guard: 'attempt < MAX_ATTEMPTS', ctx: ['loop'], next: ['r5', 'r6'], evidence: [] },
+          { id: 'r5', entity: 'function:execute', label: 'saved: returns the new revision', guard: 'attempt < MAX_ATTEMPTS', next: [], evidence: [] },
+          { id: 'r6', entity: 'function:apply', label: 'reload', guard: 'attempt < MAX_ATTEMPTS', next: ['r2', 'r7'], evidence: [] },
+          { id: 'r7', entity: 'component:engine', label: 'failure(…): busy', next: [], evidence: [] },
+        ],
+      },
       'seq:draw': {
         id: 'seq:draw', title: 'A draw command', kind: 'code-path', provenance: 'code', evidence: [],
         steps: [

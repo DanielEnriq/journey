@@ -52,7 +52,6 @@ export function App() {
   const [motion, setMotion] = useState<Motion>(() => LS.get('vowe.system.motion', 'system'));
   const [sysDark, setSysDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches);
   const [sysStill, setSysStill] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const [memory, setMemory] = useState<Record<string, Record<string, [number, number]>>>({});
   const controls = useRef<StageControls | null>(null);
   const camT = useRefTimer();
 
@@ -111,7 +110,6 @@ export function App() {
     const v = st && st.view === req.id ? st : freshState(req.id, reg.revision.fingerprint);
     if (!st && req.enter && reg.entities[req.enter]) v.entered = [req.enter];
     setVs(v);
-    setMemory(LS.get(`vowe.system.layout:${repoKey(s)}:${req.id}`, {}));
     setStep(null);
     LS.set(`vowe.system.view:${repoKey(s)}`, req.id);
   }
@@ -156,20 +154,21 @@ export function App() {
   const ps = useMemo(() => (registry ? presets(registry, fresh?.changed ?? []) : []), [registry, fresh?.changed.join('|')]);
   const resolved = useMemo(() => (registry && request ? resolve(registry, request) : null), [registry, request]);
   const trace = traces.find((t) => t.id === traceId) ?? null;
+  // Where the layout put things lives in the view's state (saved with it), so reopening keeps every place.
+  const memory = () => vs?.layout ?? {};
   const scene = useMemo(() => {
     if (!registry || !resolved || !vs) return null;
-    return buildScene(registry, resolved, vs, { layoutMemory: memory, stale: fresh?.staleEntities ?? [], diff, trace: request && (request.lens === 'path' || request.lens === 'failure') ? trace : null });
-  }, [registry, resolved, vs?.entered.join('/'), vs?.pinned, memory, fresh, diff, trace]);
+    return buildScene(registry, resolved, vs, { layoutMemory: memory(), stale: fresh?.staleEntities ?? [], diff, trace: request && (request.lens === 'path' || request.lens === 'failure') ? trace : null });
+  }, [registry, resolved, vs?.entered.join('/'), vs?.pinned, vs?.layout, fresh, diff, trace]);
 
   // Remember where everything landed, so the next scene keeps it.
   useEffect(() => {
-    if (!scene || !source || !request) return;
-    const cur = memory[scene.level.key] ?? {};
+    if (!scene || !vs) return;
+    const all = memory();
+    const cur = all[scene.level.key] ?? {};
     const missing = Object.keys(scene.placed).filter((id) => !cur[id]);
     if (!missing.length) return;
-    const next = { ...memory, [scene.level.key]: { ...cur, ...Object.fromEntries(missing.map((id) => [id, scene.placed[id]])) } };
-    setMemory(next);
-    LS.set(`vowe.system.layout:${repoKey(source)}:${request.id}`, next);
+    setVs({ ...vs, layout: { ...all, [scene.level.key]: { ...cur, ...Object.fromEntries(missing.map((id) => [id, scene.placed[id]])) } } });
   }, [scene]);
 
   if (!registry || !request || !vs || !scene) {
@@ -212,11 +211,10 @@ export function App() {
   const onCamera = (k: string, c: Camera) => camT(() => setVs((cur) => (cur ? { ...cur, cameras: { ...cur.cameras, [k]: { x: Math.round(c.x), y: Math.round(c.y), z: Math.round(c.z * 1000) / 1000 } } } : cur)));
   const tidy = () => {
     const k = scene.level.key;
-    const m = { ...memory }; delete m[k];
-    setMemory(m);
-    LS.set(`vowe.system.layout:${repoKey(source!)}:${request.id}`, m);
+    const m = { ...memory() }; delete m[k];
     const pins = { ...vs.pinned }; delete pins[k];
-    setVs({ ...vs, pinned: pins, cameras: { ...vs.cameras, [k]: undefined as never } });
+    const cams = { ...vs.cameras }; delete cams[k];
+    setVs({ ...vs, layout: m, pinned: pins, cameras: cams });
   };
   const propose = async (i: Interpretation) => {
     if (source?.kind !== 'repo') throw new Error('Fixtures are read-only.');

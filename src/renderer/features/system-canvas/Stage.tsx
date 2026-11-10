@@ -2,7 +2,7 @@ import { h } from '../../vendor/preact.js';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from '../../vendor/preact-hooks.js';
 import type { Rect, SceneOverflow, SystemScene } from '../../../shared/system/render/index.js';
 import { fit, lerpCamera, lodFor, matchFrame, panBy, reveal, toStage, zoomAt, type Camera, type Viewport } from './camera.js';
-import { Edge, Frame, Groups, Regions, Node, Overflow, Patterns, Portal, SequenceLayer, Stub, Zones, type DrawOpts } from './draw.js';
+import { Edge, EdgeLabel, Frame, Groups, Regions, Node, Overflow, Patterns, Portal, SequenceLayer, Stub, Zones, type DrawOpts } from './draw.js';
 import { spatial, tabOrder, type Dir } from './nav.js';
 
 // The stage: one level of the scene under a camera. It owns the gestures (pan, zoom, drag to pin), the
@@ -153,7 +153,11 @@ export function Stage(p: StageProps) {
     if (p.sel.kind === 'edge') { const e = s.edges.find((x) => x.id === p.sel!.id); if (e) { r.add(e.from); r.add(e.to); } }
     return r;
   }, [s, p.sel]);
-  const o: DrawOpts = { lod, z: c.z, selected: selId, related, hover, expanded: p.expanded, step: p.step };
+  // Inside a component, calls between its own parts are drawn when one end is selected or hovered; its
+  // structure (writes into state, the transport, what crosses its edge) stays drawn all the time.
+  const quiet = (e: SystemScene['edges'][number]) => !!s.level.root && ((!e.portal && e.kind === 'calls') || e.kind === 'depends_on' || e.kind === 'implements' || e.kind === 'verified_by')
+    && !(selId && (e.from === selId || e.to === selId || e.id === selId)) && !(hover && (e.from === hover || e.to === hover || e.id === hover));
+  const o: DrawOpts = { lod, lens: s.lens, z: c.z, selected: selId, related, hover, expanded: p.expanded, step: p.step };
 
   /* ---------- gestures ---------- */
 
@@ -260,11 +264,12 @@ export function Stage(p: StageProps) {
           {/* Subsystem hulls only where no runtime walls already say where things are. */}
           {s.zones.length < 2 && <Groups groups={s.groups} z={c.z} />}
           <Regions regions={s.regions} z={c.z} />
-          <g class="edges">{s.edges.map((e) => <Edge key={e.id} e={e} o={o} onSelect={(id) => p.onSelect({ kind: 'edge', id })} onHover={setHover} />)}</g>
+          <g class="edges">{s.edges.filter((e) => !quiet(e)).map((e) => <Edge key={e.id} e={e} o={o} onSelect={(id) => p.onSelect({ kind: 'edge', id })} onHover={setHover} />)}</g>
           <g class="stubs">{s.stubs.map((x) => <Stub key={x.id} s={x} o={o} onSelect={(id) => p.onSelect({ kind: 'stub', id })} />)}</g>
           <g class="portals">{s.portals.map((x) => <Portal key={x.id} p={x} o={o} on={{ select: (id) => p.onSelect({ kind: 'entity', id }), follow: p.onFollow }} />)}</g>
           <g class="nodes">{s.nodes.map((n) => <Node key={n.id} n={n} o={o} on={nodeOn} />)}</g>
           {s.overflow.map((ov) => <Overflow key={ov.id} ov={ov} z={c.z} onOpen={p.onOverflow} />)}
+          <g class="edge-labels">{s.edges.filter((e) => !quiet(e)).map((e) => <EdgeLabel key={e.id} e={e} o={o} />)}</g>
           {s.sequence && <SequenceLayer seq={s.sequence} o={o} onSelect={(id) => p.onSelect({ kind: 'step', id })} />}
         </g>
       </svg>

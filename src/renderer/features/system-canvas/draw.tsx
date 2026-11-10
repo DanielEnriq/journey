@@ -14,6 +14,8 @@ export type Lod = 'far' | 'mid' | 'near';
 
 export interface DrawOpts {
   lod: Lod;
+  /** The view's lens: paths and failures keep their canvas to the path (no stubs unless asked). */
+  lens?: string;
   z: number;
   selected: string | null;
   /** Ids related to the selection: drawn at full strength while others recede a little. */
@@ -143,7 +145,8 @@ export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers
   const chip = n.head === ht;
   // At far, the name is held at a readable size on screen and fitted to the silhouette's width.
   const nameSize = far ? Math.min(sc(12.5, o.z), w / 7) : Math.max(14, sc(11.5, o.z));
-  const nameChars = Math.floor((w - 28) / (nameSize * 0.56));
+  const avail = w - 28 - (n.parts.some((p) => p.role === 'key') ? 32 : 0);
+  const nameChars = Math.max(4, Math.floor(n.name.length * avail / Math.max(1, textWidth(n.name, nameSize))));
   const kindSize = far ? sc(10, o.z) : Math.max(10, sc(9, o.z));
   const statusWord = STATUS_WORD[n.status];
   return (
@@ -162,16 +165,15 @@ export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers
       {n.form === 'external' && <path class="n-inner" d={outlineFor('external', w - 10, ht - 10)} transform="translate(5 5)" />}
       {n.parts.map((p) => <PartShape key={p.key} p={p} near={near} z={o.z} sel={o.selected} on={on} />)}
       {/* The head: name, then what it is and how we know. */}
-      {!far
+      {near || (chip && n.name.length <= nameChars)
         ? <text class="n-name" x={14} y={chip ? 24 : 22} style={{ fontSize: `${nameSize}px` }}>{trunc(n.name, nameChars)}</text>
-        : <FarName name={n.name} size={nameSize} w={w} />}
+        : <FarName name={n.name} size={far ? nameSize : Math.max(13, sc(11, o.z))} w={Math.max(w, 260)} />}
       {!far && (
         <g class="n-kind" style={{ fontSize: `${kindSize}px` }}>
           <ProvMark p={n.provenance} x={14} y={(chip ? 24 : 22) + kindSize * 1.35 - kindSize * 0.35} s={kindSize * 0.7} />
           <text x={14 + kindSize * 1.1} y={(chip ? 24 : 22) + kindSize * 1.35}>
             {n.kindLabel}{n.form === 'unknown' && n.kindLabel !== 'unknown' && !n.ghost ? ' (no form of its own)' : ''}
-            {n.provenance !== 'code' ? ` · ${PROV_WORD[n.provenance]}` : ''}
-            {n.provenance === 'inferred' && n.confidence !== undefined ? ` ${Math.round(n.confidence * 100)}%` : ''}
+            {n.provenance === 'proposed' || n.provenance === 'interpretation' ? ` · ${PROV_WORD[n.provenance]}` : ''}
           </text>
         </g>
       )}
@@ -214,6 +216,29 @@ function FarName({ name, size, w }: { name: string; size: number; w: number }) {
   );
 }
 
+/**
+ * At a distance a compartment says what it holds, never anonymous rows: a few things are named outright
+ * ("room_canvases · room_canvas_ops"), more are counted ("20 commands"), an empty tray says what waits there.
+ */
+function CompCaption({ p, z }: { p: Part; z: number }) {
+  const r = p.rect;
+  const n = p.count ?? 0;
+  const word = (p.label ?? '').toLowerCase();
+  const fit = (t: string, max: number, mono = false) => Math.min(max, r.h * 0.5, (r.w - 12) / Math.max(1, textWidth(t, 1, mono)));
+  if (n === 0) {
+    // Structure only (an empty queue tray): its name sits at the top, clear of the slots.
+    const fs = Math.min(sc(9, z), r.h * 0.3);
+    return <text class="cap-w" x={r.x + 6} y={r.y + fs * 1.1} style={{ fontSize: `${fs}px` }}>{word.toUpperCase()}</text>;
+  }
+  if (n <= 3 && p.detail) {
+    const fs = fit(p.detail, sc(10, z), true);
+    return <text class="cap-names" x={r.x + r.w / 2} y={r.y + r.h / 2 + fs * 0.35} text-anchor="middle" style={{ fontSize: `${fs}px` }}>{p.detail}</text>;
+  }
+  const t = `${n} ${word}`;
+  const big = fit(t, sc(12.5, z));
+  return <text class="cap-n" x={r.x + r.w / 2} y={r.y + r.h / 2 + big * 0.35} text-anchor="middle" style={{ fontSize: `${big}px` }}>{t}</text>;
+}
+
 function PartShape({ p, near, z, sel, on }: { p: Part; near: boolean; z: number; sel: string | null; on: NodeHandlers }) {
   const r = p.rect;
   const isSel = !!p.entity && sel === p.entity;
@@ -223,7 +248,9 @@ function PartShape({ p, near, z, sel, on }: { p: Part; near: boolean; z: number;
     return (
       <g class={`pt-comp c-${role}`}>
         <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={5} />
-        {near && <text class="pt-comp-label" x={r.x + 6} y={r.y + 12}>{p.label}</text>}
+        {near
+          ? <text class="pt-comp-label" x={r.x + 6} y={r.y + 12}>{p.label}</text>
+          : <CompCaption p={p} z={z} />}
       </g>
     );
   }
@@ -247,7 +274,11 @@ function PartShape({ p, near, z, sel, on }: { p: Part; near: boolean; z: number;
       );
     case 'signature':
       return near ? <text class="pt-sig" x={r.x} y={r.y + 10}>{trunc(p.label ?? '', Math.floor(r.w / 6.2))}</text> : null;
+    case 'key':
+      return z >= 0.42 ? <g class="pt-key"><rect x={r.x} y={r.y} width={r.w} height={r.h} rx={4} /><text x={r.x + r.w / 2} y={r.y + r.h / 2 + 4} text-anchor="middle">{p.label}</text></g> : null;
     default: {
+      // Below near, a part is said by its compartment's count; no anonymous placeholder rows.
+      if (!near) return null;
       const table = p.role === 'table';
       const pin = p.role === 'endpoint';
       const ticket = p.role === 'command';
@@ -305,9 +336,6 @@ export function Edge({ e, o, onSelect, onHover }: { e: SceneEdge; o: DrawOpts; o
   const recede = o.selected && !sel && !o.related.has(e.id);
   const n = e.points.length;
   const cls = ['edge', `l-${g.line}`, `k-${e.kind}`, `p-${e.provenance}`, `s-${e.status}`, `e-${e.emphasis}`, sel && 'sel', recede && 'recede', o.hover === e.id && 'hov', e.back && 'back'].filter(Boolean).join(' ');
-  const showLabel = (o.lod !== 'far' || sel || o.hover === e.id) && (e.label || e.count > 1);
-  const lbl = `${e.label ?? ''}${e.count > 1 ? `${e.label ? ' · ' : ''}${e.count} relations` : ''}`;
-  const fs = Math.max(10.5, sc(9.5, o.z));
   return (
     <g class={cls} data-id={e.id} onClick={(ev: MouseEvent) => { ev.stopPropagation(); onSelect(e.id); }} onPointerEnter={() => onHover(e.id)} onPointerLeave={() => onHover(null)}>
       <title>{`${g.says}${e.label ? ` · ${e.label}` : ''}${e.count > 1 ? ` · rolled up from ${e.count} relations` : ''} (${PROV_WORD[e.provenance]})`}</title>
@@ -323,19 +351,50 @@ export function Edge({ e, o, onSelect, onHover }: { e: SceneEdge; o: DrawOpts; o
         const deg = seg >= 0 ? angle(e.points[seg], e.points[seg + 1]) : 0;
         return <g key={i} class="e-gate" transform={`translate(${c.at.x} ${c.at.y}) rotate(${deg})`}><path d="M-3 -7 V7 M3 -7 V7" /></g>;
       })}
-      {e.provenance === 'inferred' && e.labelAt && !showLabel && o.lod !== 'far' && (
+      {e.provenance === 'inferred' && e.labelAt && !edgeLabelShown(e, o) && o.lod !== 'far' && (
         // Inferred: a small ≈ seal on the line (the legend and inspector say which rule).
         <g class="e-inferred" transform={`translate(${e.labelAt.x} ${e.labelAt.y})`}><circle r={Math.max(7, sc(6, o.z))} /><text y={Math.max(7, sc(6, o.z)) * 0.45} text-anchor="middle" style={{ fontSize: `${Math.max(11, sc(10, o.z))}px` }}>≈</text></g>
       )}
-      {e.provenance === 'inferred' && showLabel && e.labelAt && <text class="e-inferred-w" x={e.labelAt.x} y={e.labelAt.y + fs * 1.7} text-anchor="middle" style={{ fontSize: `${fs * 0.9}px` }}>≈ inferred</text>}
-      {showLabel && e.labelAt && (
-        <g class="e-label" transform={`translate(${e.labelAt.x} ${e.labelAt.y})`}>
-          <rect x={-(lbl.length * fs * 0.31) - 6} y={-fs * 0.85} width={lbl.length * fs * 0.62 + 12} height={fs * 1.6} rx={fs * 0.4} />
-          <text text-anchor="middle" y={fs * 0.33} style={{ fontSize: `${fs}px` }}>{lbl}</text>
-        </g>
-      )}
     </g>
   );
+}
+
+const edgeLabelShown = (e: SceneEdge, o: DrawOpts) =>
+  !!(e.label || e.count > 1) && (o.selected === e.id || o.hover === e.id || (o.lod !== 'far' && e.emphasis !== 'dim' && !(o.selected && !o.related.has(e.id))));
+
+/**
+ * The words on a relation, drawn above every part (so no line or form runs through them), on a pill sized
+ * to the text. An inferred relation says so with ≈ in the same pill.
+ */
+export function EdgeLabel({ e, o }: { e: SceneEdge; o: DrawOpts }) {
+  if (!e.labelAt || !edgeLabelShown(e, o)) return null;
+  const lbl = `${e.provenance === 'inferred' ? '≈ ' : ''}${e.label ?? ''}${e.count > 1 ? `${e.label ? ' · ' : ''}${e.count} relations` : ''}`;
+  const fs = Math.max(10.5, sc(9.5, o.z));
+  const w = textWidth(lbl, fs, true) + 14;
+  return (
+    <g class={`e-label k-${e.kind} ${o.selected === e.id ? 'sel' : ''}`} transform={`translate(${e.labelAt.x} ${e.labelAt.y})`}>
+      <rect x={-w / 2} y={-fs * 0.85} width={w} height={fs * 1.7} rx={fs * 0.5} />
+      <text text-anchor="middle" y={fs * 0.35} style={{ fontSize: `${fs}px` }}>{lbl}</text>
+    </g>
+  );
+}
+
+/** Measured once per string with a canvas when there is a DOM; a close estimate otherwise. */
+const widths = new Map<string, number>();
+let measurer: CanvasRenderingContext2D | null | undefined;
+export function textWidth(text: string, size: number, mono = false): number {
+  const k = `${mono ? 'm' : 's'}|${text}`;
+  let w = widths.get(k);
+  if (w === undefined) {
+    if (measurer === undefined) measurer = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null;
+    if (measurer) {
+      measurer.font = mono ? "100px 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace" : "100px -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif";
+      // SVG text here is set in a display cut that runs a little wider than the canvas measures: keep a margin.
+      w = Math.max(measurer.measureText(text).width / 100 * 1.1, text.length * (mono ? 0.6 : 0.56));
+    } else w = text.length * (mono ? 0.6 : 0.58);
+    widths.set(k, w);
+  }
+  return w * size;
 }
 
 function between(p: Point, a: Point, b: Point) {
@@ -344,7 +403,7 @@ function between(p: Point, a: Point, b: Point) {
 }
 
 export function Stub({ s, o, onSelect }: { s: SceneStub; o: DrawOpts; onSelect(id: string): void }) {
-  if (o.lod === 'far' && o.selected !== s.node) return null;
+  if ((o.lod === 'far' || o.lens === 'path' || o.lens === 'failure') && o.selected !== s.node) return null;
   const fs = Math.max(10.5, sc(9.5, o.z));
   const word = s.reason === 'not-indexed' ? `${s.count} not indexed` : `${s.count} outside the view`;
   const end = s.direction === 'out' ? s.points[1] : s.points[0];
@@ -393,8 +452,8 @@ export function Frame({ scene, z, name, kind }: { scene: SystemScene; z: number;
   return (
     <g class="frame" transform={`translate(${f.x} ${f.y})`} data-id={root}>
       <path class="frame-body" d={outlineFor(scene.level.form ?? 'module', f.w, f.h)} />
-      <text class="frame-name" x={28} y={44} style={{ fontSize: `${Math.max(22, sc(16, z))}px` }}>{name}</text>
-      <text class="frame-kind" x={28} y={44 + Math.max(18, sc(14, z))} style={{ fontSize: `${Math.max(11, sc(10, z))}px` }}>{kind} · entered — its parts keep the places they had inside it</text>
+      <text class="frame-name" x={28} y={36 + Math.max(22, sc(16, z))} style={{ fontSize: `${Math.max(22, sc(16, z))}px` }}>{name}</text>
+      <text class="frame-kind" x={28} y={36 + Math.max(22, sc(16, z)) + Math.max(18, sc(14, z))} style={{ fontSize: `${Math.max(11, sc(10, z))}px` }}>{kind} · entered — its parts keep the places they had inside it</text>
     </g>
   );
 }
@@ -405,7 +464,7 @@ export function SequenceLayer({ seq, o, onSelect }: { seq: SceneSequence; o: Dra
   const cur = o.step;
   const observed = seq.kind === 'trace';
   const fs = Math.max(11, sc(11, o.z));
-  const R = Math.max(10, sc(9, o.z));
+  const R = Math.min(17, Math.max(10, sc(9, o.z)));
   const byId = new Map(seq.steps.map((s) => [s.id, s]));
   return (
     <g class={`seq ${observed ? 'seq-observed' : 'seq-possible'}`}>
@@ -413,18 +472,30 @@ export function SequenceLayer({ seq, o, onSelect }: { seq: SceneSequence; o: Dra
         const a = byId.get(sg.from)!, b = byId.get(sg.to)!;
         const travelled = cur !== null && b.index <= cur && a.index < cur + (sg.kind === 'loop' ? 1 : 0) && (sg.kind !== 'loop' || a.index <= cur);
         const d = sg.kind === 'loop' ? roundedPath(sg.points, 16) : curve(sg.points[0], sg.points[1]);
-        const mid = sg.kind === 'loop' ? { x: (sg.points[1].x + sg.points[2].x) / 2, y: sg.points[1].y } : { x: (sg.points[0].x + sg.points[1].x) / 2, y: (sg.points[0].y + sg.points[1].y) / 2 };
         return (
-          <g key={i} class={`seg seg-${sg.kind} ${travelled ? 'done' : ''} ${cur !== null && a.index === cur - 1 && b.index === cur ? 'now' : ''}`}>
+          <g key={i} class={`seg seg-${sg.kind} ${travelled ? 'done' : ''} ${sg.failing ? 'failing' : ''} ${cur !== null && a.index === cur - 1 && b.index === cur ? 'now' : ''}`}>
             <path class="seg-under" d={d} />
             <path class="seg-line" d={d} />
-            {sg.kind !== 'next' && (o.lod !== 'far' || sg.kind === 'loop') && (
-              <text class="seg-guard" x={mid.x} y={mid.y + (sg.kind === 'loop' ? fs * 1.4 : -fs * 0.6)} text-anchor="middle" style={{ fontSize: `${fs * 0.95}px` }}>
-                {sg.kind === 'loop' ? '↺ ' : '⑂ '}{sg.guard ?? (sg.kind === 'loop' ? 'repeats' : 'branches')}
-              </text>
-            )}
           </g>
         );
+      })}
+      {/* Words on the path go above its lines: the loop's condition once, each branch's outcome at its end. */}
+      {seq.segments.map((sg, i) => {
+        if (sg.kind === 'loop' && sg.guard) {
+          const mid = { x: (sg.points[1].x + sg.points[2].x) / 2, y: sg.points[1].y };
+          const t = `↺ while ${sg.guard}`;
+          const w = textWidth(t, fs * 0.95, true) + 14;
+          return <g key={`g${i}`} class={`seg-tag ${sg.failing ? 'failing' : ''}`} transform={`translate(${mid.x} ${mid.y + fs * 1.3})`}><rect x={-w / 2} y={-fs * 0.85} width={w} height={fs * 1.7} rx={fs * 0.5} /><text text-anchor="middle" y={fs * 0.33} style={{ fontSize: `${fs * 0.95}px` }}>{t}</text></g>;
+        }
+        if (sg.kind === 'branch' && sg.outcome && o.lod !== 'far') {
+          // A fork's outcomes are listed under the station where it forks, one per line, in the code's order.
+          const k = seq.segments.filter((x, j) => j < i && x.from === sg.from && x.kind === 'branch').length;
+          const p0 = sg.points[0];
+          const t = `${k === 0 ? '⑂ ' : '  '}${k === 0 ? 'if' : 'or'} → ${trunc(sg.outcome, 40)}`;
+          const w = textWidth(t, fs * 0.9, true) + 12;
+          return <g key={`o${i}`} class={`seg-tag outcome ${sg.failing ? 'failing' : ''}`} transform={`translate(${p0.x - 12} ${p0.y - R * 2.6 - k * fs * 1.75})`}><rect x={-w} y={-fs * 0.8} width={w} height={fs * 1.6} rx={fs * 0.5} /><text text-anchor="end" x={-6} y={fs * 0.32} style={{ fontSize: `${fs * 0.9}px` }}>{t}</text></g>;
+        }
+        return null;
       })}
       {seq.steps.filter((s) => s.on).map((s) => {
         const isCur = cur === s.index;

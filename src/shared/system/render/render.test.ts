@@ -240,3 +240,47 @@ function synthetic(n: number): SystemRegistry {
   }
   return reg;
 }
+
+test('a distant form says what it holds by count, and every part it draws is real content', () => {
+  const s = scene(testRegistry());
+  const engine = node(s, 'component:engine')!;
+  const commands = engine.parts.find((p) => p.role === 'compartment:commands')!;
+  assert.equal(commands.count, 3);
+  // Every chip names a real child or an attr value; nothing anonymous.
+  for (const n of s.nodes) for (const p of n.parts) if (!p.role.startsWith('compartment:') && !['slot', 'plug', 'boundary', 'bus', 'more'].includes(p.role)) assert.ok(p.label, `${n.id} ${p.key}`);
+});
+
+test('entering an interface lays its interactions out as a rail in declared order, with key hints and what they produce', () => {
+  const reg = testRegistry();
+  const s = scene(reg, 'organization', {}, { ...emptyState(), entered: ['component:surface'] });
+  const order = ['select', 'pan', 'circle', 'draw', 'erase', 'comment'].map((t) => node(s, `interaction:tool-${t}`)!);
+  for (let i = 1; i < order.length; i++) {
+    assert.equal(order[i].rect.x, order[0].rect.x, 'one column');
+    assert.ok(order[i].rect.y > order[i - 1].rect.y, 'declared order');
+  }
+  assert.equal(order[3].parts.find((p) => p.role === 'key')?.label, 'P');
+  const prod = s.edges.find((e) => e.kind === 'produces' && e.from === 'interaction:tool-draw')!;
+  assert.equal(prod.to, 'component:engine');
+  assert.equal(prod.portal, 'to');
+  assert.equal(prod.label, 'draw');
+  assert.ok(s.regions.some((r) => r.label === 'interaction regions'));
+});
+
+test('a retry is drawn as one loop with its guard said once, its branch outcomes named, and its stations in order', () => {
+  const s = scene(testRegistry(), 'failure', { sequence: 'seq:retry' });
+  const seq = s.sequence!;
+  const guards = seq.segments.filter((g) => g.guard);
+  assert.equal(guards.length, 1);
+  assert.match(guards[0].guard!, /attempt < MAX_ATTEMPTS · ≤ MAX_ATTEMPTS = 5/);
+  assert.equal(guards[0].kind, 'loop');
+  assert.ok(guards[0].failing);
+  const outcomes = seq.segments.filter((g) => g.kind === 'branch').map((g) => g.outcome);
+  assert.ok(outcomes.includes('saved: returns the new revision'));
+  assert.ok(seq.segments.some((g) => g.outcome === 'failure(…): busy' && g.failing));
+  // Several steps on the engine sit in a lane, in order, never on top of one another.
+  const onEngine = seq.steps.filter((x) => x.on === 'component:engine');
+  assert.ok(onEngine.length >= 3);
+  const xs = onEngine.map((x) => x.at.x);
+  assert.deepEqual([...xs].sort((a, b) => a - b), xs);
+  assert.equal(new Set(seq.steps.map((x) => `${x.at.x},${x.at.y}`)).size, seq.steps.length);
+});

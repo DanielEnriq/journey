@@ -148,7 +148,7 @@ export function compartments(input: FormInput, lens?: Lens): CompartmentContent[
   for (const c of specFor(form).comps) {
     // Unclaimed children that fit, the ones that matter to this view first (stable: then by id).
     const kids = input.children.filter((k) => !used.has(k.id) && c.match(k))
-      .sort((a, b) => (rel ? rel(b.id) - rel(a.id) : 0) || order(a) - order(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      .sort((a, b) => declared(a, b) || (rel ? rel(b.id) - rel(a.id) : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     kids.forEach((k) => used.add(k.id));
     const strings = kids.length ? [] : attrList(input.entity, c.attrs);
     if (!kids.length && !strings.length && !c.slots) continue;
@@ -159,6 +159,8 @@ export function compartments(input: FormInput, lens?: Lens): CompartmentContent[
 
 /** The order the code declares things in (a toolbar's tools), when the registry recorded it. */
 const order = (e: Entity) => (typeof e.attrs.order === 'number' ? e.attrs.order : 1e6);
+/** Declared order wins between two things that both have one (tools keep their toolbar order). */
+const declared = (a: Entity, b: Entity) => (order(a) < 1e6 && order(b) < 1e6 ? order(a) - order(b) : 0);
 
 /** Lays a form out: its size, outline, and parts. Pure and deterministic. */
 export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
@@ -218,7 +220,7 @@ export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
     const h = cy - y + 4;
     // The compartment itself goes first so it is drawn under its chips.
     parts.splice(parts.length - (shown.length + (more > 0 ? 1 : 0) + (c.slots ?? 0)), 0,
-      { key: `${entity.id}:${c.role}`, role: `compartment:${c.role}`, label: c.label, count: items.length, rect: { x, y, w: colW, h }, lod: 'far' });
+      { key: `${entity.id}:${c.role}`, role: `compartment:${c.role}`, label: c.label, count: items.length, detail: items.slice(0, 3).map((it) => it.label).join(' · '), rect: { x, y, w: colW, h }, lod: 'far' });
     colY[c.col] = y + h + 8;
   }
   if (!parts.length) {

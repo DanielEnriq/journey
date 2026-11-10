@@ -81,7 +81,9 @@ Rolled-up edges say "N relations"; entering shows the finer ones.
   new = "new" tag + halo; unknown = hatched + "? not fully indexed".
 
 ### Levels of detail
-- far (zoom < 0.42): silhouettes with their compartments as shapes, names held at a readable size above.
+- far (zoom < 0.42): silhouettes whose compartments say what they hold — up to three things named outright
+  ("load · commit"), more counted ("20 command set", "32 tables"), an empty tray titled — never anonymous
+  placeholder rows. Names sit above each form at a readable size.
 - mid: names and kinds in the head, the words on relations, stubs ("3 outside the view", "not indexed").
 - near (≥ 0.8): every part labelled. Nothing is only reachable by zoom: Enter / double-click / "enter · N"
   / the outline list all go inside.
@@ -111,9 +113,19 @@ step gets an oxide ×. Play advances at an even pace that implies no timing; rec
   freshness + coverage bars, light/dark, motion toggle, narrow-window sheets. Camera math and keyboard order
   are pure and tested (`ui.test.ts`).
 
+### Colour (with restraint, on top of shape)
+Graphite for structure; the view's own parts in full ink, context parts lighter (figure/ground); relation
+families carry a quiet hue in addition to their grammar (calls graphite, sends/handles slate, writes/reads
+sage, events plum, produces/renders ochre, build-time hairlines grey); vermilion only for the selection and the
+current path station; oxide for the failure branch (the retry loop and a branch ending in failure).
+
 ## 4. Known gaps
-- Entered levels with many internal calls (the client) are still busy; edge bundling would help.
+- Inside a component, calls between its own parts appear only when one end is selected or hovered (by design,
+  to keep the structure readable); there is no edge bundling yet.
+- Only Draw has a `produces` relation in the registry today, so only Draw shows its command when the surface
+  is entered; the other tools say nothing rather than guess.
+- Bands span the stack's width; a row with one tall part (the cloud row) leaves space beside it.
 - The overview of the canvas subsystem opens at ~30–40 % on a 1440 window: legible as names and silhouettes,
   internals need a zoom or Enter.
-- Layout memory is kept per view in localStorage (ViewState has no field for it; see contract request).
+- Layout memory now travels with the view in `ViewState.layout`.
 - Port assignment is by side and part; there is no crossing minimisation across rows beyond barycentres.
