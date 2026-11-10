@@ -69,10 +69,10 @@ const any = () => true;
 const SPECS: Partial<Record<FormId, { w: number; comps: Compartment[] }>> = {
   interface: { w: 300, comps: [
     { role: 'regions', label: 'interaction regions', col: 0, match: kindIs('interaction'), attrs: ['tools', 'regions', 'members'] },
-    { role: 'screen', label: 'renders', col: 1, match: (e) => !['interaction'].includes(e.kind) },
+    { role: 'screen', label: 'renders', col: 1, match: (e) => !['interaction', 'test'].includes(e.kind) },
   ] },
   client: { w: 320, comps: [
-    { role: 'state', label: 'state', col: 0, match: (e) => e.kind === 'state' || /state|saved|doc|store$/i.test(e.name), attrs: ['state'] },
+    { role: 'state', label: 'state', col: 0, match: (e) => e.kind === 'state' && !/^(saved|reconcile|redraw|sync|reload|refresh)$/i.test(e.name), attrs: ['state'] },
     { role: 'reconcile', label: 'reconcile', col: 0, match: nameIs(/^(saved|reconcile|redraw|sync|reload|refresh)/i) },
     { role: 'pending', label: 'pending — in flight', col: 1, match: nameIs(/queue|pending|outbox|inflight/i), slots: 3, attrs: ['pending'] },
     { role: 'transport', label: 'transport boundary', col: 1, match: (e) => e.kind === 'transport' || e.kind === 'adapter' || /transport/i.test(e.name), attrs: ['transport'] },

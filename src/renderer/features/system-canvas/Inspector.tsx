@@ -80,8 +80,8 @@ function StatusLine({ status }: { status: Entity['status'] }) {
 function EntityView(p: InspectorProps & { e: Entity }) {
   const { e, registry: reg } = p;
   const children = Object.values(reg.entities).filter((c) => c.parent === e.id).sort((a, b) => (a.id < b.id ? -1 : 1));
-  const out = Object.values(reg.relations).filter((r) => r.from === e.id).sort(byKind);
-  const inn = Object.values(reg.relations).filter((r) => r.to === e.id).sort(byKind);
+  const out = Object.values(reg.relations).filter((r) => r.from === e.id && r.kind !== 'contains').sort(byKind);
+  const inn = Object.values(reg.relations).filter((r) => r.to === e.id && r.kind !== 'contains').sort(byKind);
   const ev = e.evidence.map((id) => reg.evidence[id]).filter(Boolean);
   const rule = ev.find((x) => x.kind === 'rule')?.rule;
   const parent = e.parent ? reg.entities[e.parent] : undefined;

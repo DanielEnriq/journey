@@ -805,10 +805,19 @@ function placeSequence(
   const segments: SceneSegment[] = [];
   let loops = 0;
   for (const s of steps) {
-    for (const t of s.next) {
+    if (!s.on) continue;
+    // A step whose part isn't on this level gets no station; the line runs on to the next one that is.
+    const targets: string[] = [];
+    for (const t0 of s.next) {
+      let t: string | undefined = t0;
+      const seen = new Set<string>();
+      while (t && !seen.has(t) && idx.get(t) && !idx.get(t)!.on) { seen.add(t); const nx: string[] = idx.get(t)!.next; t = nx.length === 1 ? nx[0] : undefined; }
+      if (t && idx.get(t)?.on && !targets.includes(t)) targets.push(t);
+    }
+    for (const t of targets) {
       const to = idx.get(t);
       if (!to) continue;
-      const kind: SceneSegment['kind'] = to.index <= s.index ? 'loop' : s.next.length > 1 ? 'branch' : 'next';
+      const kind: SceneSegment['kind'] = to.index <= s.index ? 'loop' : targets.length > 1 ? 'branch' : 'next';
       let points: Point[];
       if (kind === 'loop') {
         // A loop is drawn as one: out below both stations and back.

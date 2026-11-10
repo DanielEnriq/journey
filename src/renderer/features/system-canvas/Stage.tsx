@@ -46,6 +46,8 @@ export function Stage(p: StageProps) {
   const [v, setV] = useState<Viewport>({ w: 1000, h: 700 });
   const [cam, setCam] = useState<Camera | null>(null);
   const camRef = useRef<Camera | null>(null);
+  /** Whether the person has moved the camera on this level; until then a resize refits. */
+  const touched = useRef(false);
   camRef.current = cam;
   const anim = useRef<number | null>(null);
   const prev = useRef<SystemScene | null>(null);
@@ -80,12 +82,20 @@ export function Stage(p: StageProps) {
   const key = s.level.key;
   // Opening a level shows what the view is about, legibly: the focus and the path, not every neighbour.
   const home = () => {
-    const lead = s.level.root ? [] : s.nodes.filter((n) => n.emphasis === 'primary' || n.why === 'focus' || n.why === 'sequence');
-    if (!lead.length || lead.length === s.nodes.length) return fit(s.bounds, v, 40, 1.1);
+    if (s.level.root) return fit(s.bounds, v, 40, 1.1);
+    const lead = s.nodes.filter((n) => n.emphasis === 'primary' || n.why === 'focus' || n.why === 'sequence');
+    if (!lead.length || lead.length === s.nodes.length) lead.splice(0, lead.length, ...s.nodes);
     const xs = lead.map((n) => n.rect);
     const r = { x: Math.min(...xs.map((q) => q.x)) - 60, y: Math.min(...xs.map((q) => q.y)) - 90, w: 0, h: 0 };
     r.w = Math.max(...xs.map((q) => q.x + q.w)) + 60 - r.x; r.h = Math.max(...xs.map((q) => q.y + q.h)) + 60 - r.y;
-    return fit(r, v, 40, 1.1);
+    const f = fit(r, v, 40, 1.1);
+    // A small window can't hold the whole view legibly: start at the beginning of it, readable, and pan from there.
+    if (f.z < 0.24 && s.outline[0]) {
+      const first = s.nodes.find((n) => n.id === s.outline[0].id)!.rect;
+      const z = 0.3;
+      return { x: Math.max(r.x + v.w / 2 / z - 40 / z, first.x + first.w / 2), y: r.y + v.h / 2 / z - 40 / z, z };
+    }
+    return f;
   };
 
   // A new level: open it from where the component was (entering) or put the component back where the
@@ -113,6 +123,9 @@ export function Stage(p: StageProps) {
     animateTo(target);
   }, [s, v.w > 10]);
 
+  useEffect(() => { if (!touched.current && !p.savedCamera && v.w > 10) setCam(home()); }, [v.w, v.h]);
+  useEffect(() => { touched.current = !!p.savedCamera; }, [s.view, key]);
+
   // Report the camera (debounced by the caller) so it is saved per level.
   useEffect(() => { if (cam && !anim.current) p.onCamera(key, cam); }, [cam, key]);
 
@@ -127,7 +140,7 @@ export function Stage(p: StageProps) {
   useEffect(() => {
     if (p.step === null || !s.sequence || !camRef.current) return;
     const st = s.sequence.steps[p.step];
-    if (st) animateTo(reveal(camRef.current, v, { x: st.at.x - 140, y: st.at.y - 90, w: 420, h: 200 }, 70));
+    if (st && st.on) animateTo(reveal(camRef.current, v, { x: st.at.x - 140, y: st.at.y - 90, w: 420, h: 200 }, 70));
   }, [p.step]);
 
   const c = cam ?? home();
@@ -171,6 +184,7 @@ export function Stage(p: StageProps) {
     if (!d.moved && Math.hypot(dx, dy) < 4) return;
     if (!d.moved) (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     d.moved = true;
+    touched.current = true;
     if (d.kind === 'pan') setCam(panBy(d.start, dx, dy));
     else if (d.id && d.origin) p.onPin(d.id, [Math.round(d.origin[0] + dx / c.z), Math.round(d.origin[1] + dy / c.z)]);
   };
@@ -186,6 +200,7 @@ export function Stage(p: StageProps) {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       stop();
+      touched.current = true;
       const r = el.getBoundingClientRect();
       const at = { x: e.clientX - r.left, y: e.clientY - r.top };
       const cur = camRef.current ?? home();

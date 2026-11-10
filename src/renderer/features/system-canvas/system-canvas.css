@@ -234,7 +234,7 @@ code, pre, .mono { font-family: var(--sc-mono); font-size: 11.5px; }
 .edge.p-interpretation .e-line { stroke-dasharray: 9 3 2 3; }
 .e-inferred circle { fill: var(--v-canvas); stroke: var(--sc-ink-3); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .e-inferred text, .e-inferred-w { fill: var(--v-fg-2) !important; font-family: var(--sc-mono) !important; }
-.n-name.far { paint-order: stroke; stroke: var(--v-surface); stroke-width: 4px; stroke-linejoin: round; }
+.n-name.far { pointer-events: none; paint-order: stroke; stroke: var(--v-surface); stroke-width: 4px; stroke-linejoin: round; }
 .edge.s-stale .e-line, .edge.s-missing .e-line { stroke-dasharray: 2 4; }
 .t-fill { fill: var(--sc-ink-2); }
 .t-line { fill: none; stroke: var(--sc-ink-2); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }

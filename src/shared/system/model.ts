@@ -469,6 +469,8 @@ export interface ViewState {
   /** Components whose internals are expanded in place (without entering). */
   expanded: string[];
   playback?: { sequence: string; step: number };
+  /** Where the layout put things, per level key: kept so new information never reshuffles what is already placed. */
+  layout?: Record<string, Record<string, [number, number]>>;
 }
 
 /* ======================================================================================================

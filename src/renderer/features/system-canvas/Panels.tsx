@@ -46,7 +46,7 @@ export function Player({ seq, step, onStep, reducedMotion }: { seq: SceneSequenc
         <button type="button" class="pbtn" onClick={() => { setPlaying(false); onStep(null); }} aria-label="Stop showing steps" title="Hide steps">×</button>
       </div>
       <p class="player-step" aria-live="polite">
-        {s ? <span><b>{cur + 1}.</b> {s.label}{s.guard ? <em> — only if <code>{s.guard}</code></em> : null}{s.time !== undefined ? <span class="muted"> · {s.time} ms (recorded)</span> : null}</span> : <span class="muted">{seq.notes[0] ?? 'Press play or step through. Each step can be selected for its evidence.'}</span>}
+        {s ? <span><b>{cur + 1}.</b> {s.label}{s.guard ? <em> — only if <code>{s.guard}</code></em> : null}{s.time !== undefined ? <span class="muted"> · {s.time} ms (recorded)</span> : null}{!s.on ? <span class="muted"> · in a part not drawn on this level</span> : null}</span> : <span class="muted">{seq.notes[0] ?? 'Press play or step through. Each step can be selected for its evidence.'}</span>}
       </p>
     </div>
   );

@@ -142,7 +142,7 @@ export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers
   const cls = ['n', `f-${n.form}`, `p-${n.provenance}`, `s-${n.status}`, `e-${n.emphasis}`, sel && 'sel', recede && 'recede', n.ghost && 'ghost', o.hover === n.id && 'hov', n.affected && 'affected'].filter(Boolean).join(' ');
   const chip = n.head === ht;
   // At far, the name is held at a readable size on screen and fitted to the silhouette's width.
-  const nameSize = far ? sc(12.5, o.z) : Math.max(14, sc(11.5, o.z));
+  const nameSize = far ? Math.min(sc(12.5, o.z), w / 7) : Math.max(14, sc(11.5, o.z));
   const nameChars = Math.floor((w - 28) / (nameSize * 0.56));
   const kindSize = far ? sc(10, o.z) : Math.max(10, sc(9, o.z));
   const statusWord = STATUS_WORD[n.status];
@@ -426,7 +426,7 @@ export function SequenceLayer({ seq, o, onSelect }: { seq: SceneSequence; o: Dra
           </g>
         );
       })}
-      {seq.steps.map((s) => {
+      {seq.steps.filter((s) => s.on).map((s) => {
         const isCur = cur === s.index;
         const done = cur !== null && s.index < cur;
         const r = isCur ? R * 1.35 : R;
