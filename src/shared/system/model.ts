@@ -131,6 +131,8 @@ export interface ComparisonSite {
   /** The compared expression as written: `tool`, `e.type`, `cmd.name`. */
   subject: string;
   literal: string;
+  /** True for `!==` / `!=`: the branch is taken when the subject is *not* the literal. */
+  negated?: boolean;
   /** The range of the branch the comparison guards, when it guards one. */
   branch?: SourceRange;
 }
