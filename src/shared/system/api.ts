@@ -1,4 +1,4 @@
-import type { IndexDiff, RegistryDiff, RepoRevision, SystemRegistry, Trace, ViewRequest, ViewState } from './model.js';
+import type { IndexDiff, Interpretation, RegistryDiff, RepoRevision, SystemRegistry, Trace, ViewRequest, ViewState } from './model.js';
 
 // What the system canvas asks of whoever hosts the index: the dev server over HTTP
 // (scripts/system-canvas/serve.mjs) or Electron main over IPC (main/system-canvas.ts). Both implement
@@ -30,6 +30,8 @@ export interface IndexSummary {
   references: number;
   incomplete: boolean;
   ms: number;
+  /** True when served from the cached index because the working tree's files were unchanged. */
+  cached?: boolean;
 }
 
 /** A source excerpt for the inspector. */
@@ -68,4 +70,6 @@ export interface SystemApi {
   views(repo: string): Promise<SavedView[]>;
   saveView(repo: string, view: SavedView): Promise<void>;
   traces(repo: string): Promise<Trace[]>;
+  /** Saves (or replaces, by id) an interpretation for the repository and returns the registry rebuilt with it. */
+  addInterpretation(repo: string, interpretation: Interpretation): Promise<SystemRegistry>;
 }

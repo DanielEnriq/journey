@@ -22,6 +22,7 @@
     "cloud:types": "supabase gen types typescript --linked --schema public > src/integrations/supabase/types.ts",
     "cloud:functions": "supabase functions deploy livekit-token",
     "sign-out": "pnpm build && electron . --sign-out",
+    "system:serve": "pnpm build && node scripts/system-canvas/serve.mjs",
     "api:build": "pnpm --filter vowe-api build",
     "api:start": "pnpm --filter vowe-api build && node --env-file-if-exists=.env server/dist/index.js"
   },
