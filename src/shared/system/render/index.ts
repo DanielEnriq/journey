@@ -113,7 +113,8 @@ export function buildScene(registry: SystemRegistry, resolved: ResolvedView, sta
   const ctx: Ctx = {
     registry, resolved, state, inputs, ent, relations, pool, sequence, recorded,
     children: (id) => kids.get(id) ?? [],
-    allowed: (r) => r.kind !== 'contains' && (kinds.has(r.kind) || explicit.has(r.id)),
+    // Inside a component, what its parts produce and render is part of what they are (Draw → `draw`).
+    allowed: (r) => r.kind !== 'contains' && (kinds.has(r.kind) || explicit.has(r.id) || (state.entered.length > 0 && (r.kind === 'produces' || r.kind === 'renders'))),
     flow: LENS_FLOW[lens], layouts: new Map(),
   };
 
@@ -292,13 +293,15 @@ function arrangement(ctx: Ctx, entered: string[], members: string[]): { pos?: Re
   if (!groups.length) return { regions: [] };
   const size = (id: string) => drawForm({ entity: ctx.ent(id)!, children: ctx.children(id), registry: ctx.registry, relations: [] });
   const twoCols = groups.some((g) => g.col === 1);
-  const perRow = twoCols ? 2 : 3;
+  // Interaction regions stay a rail, in the order the interface declares them; others fill a grid.
+  const perRowOf = (g: { key: string }) => (g.key.endsWith(':regions') ? 1 : twoCols ? 2 : 3);
   const out: Record<string, [number, number]> = {};
   const colRight = [0, 0];
   const colY = [0, 0];
   const placeCol = (col: 0 | 1, x0: number) => {
     for (const g of groups.filter((q) => q.col === col)) {
       let y = colY[col] + 40; // room for the region's name
+      const perRow = perRowOf(g);
       for (let i = 0; i < g.ids.length; i += perRow) {
         const row = g.ids.slice(i, i + perRow);
         let x = x0, deepest = 0;
@@ -767,22 +770,38 @@ function placeSequence(
   const offstage: string[] = [];
   const maxBottom = Math.max(0, ...[...byId.values()].map((n) => n.rect.y + n.rect.h));
   let offX = 0;
-  seq.steps.forEach((s: SequenceStep, index) => {
+  // Where each step lands first; then how stations share a part: one step on a chip sits on it, but a
+  // part with several steps lays them out in order along a lane inside its bottom edge, so a retry inside
+  // the engine reads parse → load → apply → commit instead of a pile.
+  const landing = seq.steps.map((s) => {
     const v = vis(s.entity);
     const on = v.kind === 'member' || v.kind === 'portal' ? v.id : null;
+    const n = on ? byId.get(on) : undefined;
+    const pt = n?.parts.find((p) => p.entity && (p.entity === s.entity || isUnder(ctx, s.entity, p.entity)));
+    return { on, n, pt };
+  });
+  const countOn = new Map<string, number>();
+  const partUse = new Map<string, number>();
+  for (const l of landing) if (l.on) { countOn.set(l.on, (countOn.get(l.on) ?? 0) + 1); if (l.pt) partUse.set(l.on + '|' + l.pt.key, (partUse.get(l.on + '|' + l.pt.key) ?? 0) + 1); }
+  const laned = new Set([...countOn].filter(([id]) => {
+    const ls = landing.filter((l) => l.on === id);
+    return ls.length >= 3 || ls.some((l) => l.pt && partUse.get(id + '|' + l.pt.key)! > 1);
+  }).map(([id]) => id));
+  seq.steps.forEach((s: SequenceStep, index) => {
+    const { on, n, pt } = landing[index];
     let at: Point;
     let part: string | undefined;
-    const n = on ? byId.get(on) : undefined;
     const pr = on ? portals.get(on) : undefined;
     if (n) {
-      const pt = n.parts.find((p) => p.entity && (p.entity === s.entity || isUnder(ctx, s.entity, p.entity)));
       const k = perNode.get(n.id) ?? 0;
       perNode.set(n.id, k + 1);
-      if (pt) {
-        part = pt.key;
-        at = { x: n.rect.x + pt.rect.x + pt.rect.w - 12 - (k % 3) * 6, y: n.rect.y + pt.rect.y + pt.rect.h / 2 };
+      if (pt) part = pt.key;
+      if (laned.has(n.id)) {
+        const per = Math.max(1, Math.floor((n.rect.w - 24) / 30));
+        at = { x: n.rect.x + 22 + (k % per) * 30, y: n.rect.y + n.rect.h - 16 - Math.floor(k / per) * 26 };
+      } else if (pt) {
+        at = { x: n.rect.x + pt.rect.x + pt.rect.w - 12, y: n.rect.y + pt.rect.y + pt.rect.h / 2 };
       } else {
-        // Stations along the node's head, right to left, wrapping to a second row.
         const per = Math.max(1, Math.floor((n.rect.w - 150) / 26));
         at = { x: n.rect.x + n.rect.w - 18 - (k % per) * 26, y: n.rect.y + 16 + Math.floor(k / per) * 24 };
       }

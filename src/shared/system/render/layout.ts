@@ -199,7 +199,7 @@ export function layeredLayout(nodes: LayoutNode[], edges: LayoutEdge[], opts: {
 }
 
 /** Max parts side by side in one row before it wraps into another line within its zone. */
-const ROW_MAX = 6;
+const ROW_MAX = 8;
 
 function rowLayout(ids: string[], byId: Map<string, LayoutNode>, adj: Map<string, string[]>, rank: Record<string, number>, order: Record<string, number>, zoneOrder: string[]): Record<string, Point> {
   const out: Record<string, Point> = {};

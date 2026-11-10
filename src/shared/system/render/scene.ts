@@ -30,6 +30,8 @@ export interface Part {
   /** What it is inside the form: 'table', 'command', 'region', 'state', 'pending', 'slot', 'endpoint', 'more'… */
   role: string;
   label?: string;
+  /** For a compartment: how many things it holds (drawn or not), so a distant view says "20 commands". */
+  count?: number;
   /** Second line: columns, the writer, a signature. */
   detail?: string;
   /** Relative to the node's top-left. */
@@ -195,7 +197,18 @@ export interface SceneStep {
   observed?: Record<string, string | number | boolean>;
 }
 
-export interface SceneSegment { from: string; to: string; kind: 'next' | 'loop' | 'branch'; points: Point[]; guard?: string }
+export interface SceneSegment {
+  from: string;
+  to: string;
+  kind: 'next' | 'loop' | 'branch';
+  points: Point[];
+  /** The loop's condition as written in code, said once per loop (with its bound when the code names one). */
+  guard?: string;
+  /** For a branch: the outcome it leads to, in the target step's words. */
+  outcome?: string;
+  /** On the way to failure: the retry loop, or a branch ending in failure. */
+  failing?: boolean;
+}
 
 export interface SceneSequence {
   id: string;

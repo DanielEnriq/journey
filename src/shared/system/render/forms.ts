@@ -148,7 +148,7 @@ export function compartments(input: FormInput, lens?: Lens): CompartmentContent[
   for (const c of specFor(form).comps) {
     // Unclaimed children that fit, the ones that matter to this view first (stable: then by id).
     const kids = input.children.filter((k) => !used.has(k.id) && c.match(k))
-      .sort((a, b) => (rel ? rel(b.id) - rel(a.id) : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      .sort((a, b) => (rel ? rel(b.id) - rel(a.id) : 0) || order(a) - order(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     kids.forEach((k) => used.add(k.id));
     const strings = kids.length ? [] : attrList(input.entity, c.attrs);
     if (!kids.length && !strings.length && !c.slots) continue;
@@ -156,6 +156,9 @@ export function compartments(input: FormInput, lens?: Lens): CompartmentContent[
   }
   return out;
 }
+
+/** The order the code declares things in (a toolbar's tools), when the registry recorded it. */
+const order = (e: Entity) => (typeof e.attrs.order === 'number' ? e.attrs.order : 1e6);
 
 /** Lays a form out: its size, outline, and parts. Pure and deterministic. */
 export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
@@ -215,7 +218,7 @@ export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
     const h = cy - y + 4;
     // The compartment itself goes first so it is drawn under its chips.
     parts.splice(parts.length - (shown.length + (more > 0 ? 1 : 0) + (c.slots ?? 0)), 0,
-      { key: `${entity.id}:${c.role}`, role: `compartment:${c.role}`, label: c.label, rect: { x, y, w: colW, h }, lod: 'far' });
+      { key: `${entity.id}:${c.role}`, role: `compartment:${c.role}`, label: c.label, count: items.length, rect: { x, y, w: colW, h }, lod: 'far' });
     colY[c.col] = y + h + 8;
   }
   if (!parts.length) {
@@ -238,6 +241,9 @@ function chipForm(form: FormId, input: FormInput): DrawnForm {
   const parts: Part[] = [];
   const sig = input.entity.attrs.signature;
   if (typeof sig === 'string') parts.push({ key: `${input.entity.id}:sig`, role: 'signature', label: sig, rect: { x: 12, y: 36, w: w - 24, h: 14 }, lod: 'near' });
+  // A tool's key, as the interface declares it (`Draw · P`): the hint a person actually sees.
+  const key = input.entity.attrs.key;
+  if (typeof key === 'string' && key.length <= 3) parts.push({ key: `${input.entity.id}:key`, role: 'key', label: key.toUpperCase(), rect: { x: w - 34, y: 10, w: 22, h: 20 }, lod: 'far' });
   return { form, w, h, head: h, outline: outlineFor(form, w, h), parts };
 }
 
