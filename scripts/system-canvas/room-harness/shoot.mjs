@@ -20,9 +20,9 @@ const SHOTS = [
   { name: 'room-light', theme: 'light', size: [1440, 900] },
   { name: 'room-dark', theme: 'dark', size: [1440, 900] },
   { name: 'system-light', theme: 'light', size: [1440, 900], act: system },
-  { name: 'system-selected-light', theme: 'light', size: [1440, 900], act: async (p) => { await system(p); await select(p, 'Canvas client'); } },
-  { name: 'system-evidence-light', theme: 'light', size: [1440, 900], act: async (p) => { await system(p); await select(p, 'Canvas client'); await evidence(p); } },
-  { name: 'system-dark', theme: 'dark', size: [1440, 900], act: async (p) => { await system(p); await select(p, 'Supabase database'); } },
+  { name: 'system-selected-light', theme: 'light', size: [1440, 900], act: async (p) => { await system(p); await select(p, 'component:canvas-client'); } },
+  { name: 'system-evidence-light', theme: 'light', size: [1440, 900], act: async (p) => { await system(p); await select(p, 'component:canvas-client'); await evidence(p); } },
+  { name: 'system-dark', theme: 'dark', size: [1440, 900], act: async (p) => { await system(p); await select(p, 'component:supabase-database'); } },
   { name: 'system-1024', theme: 'light', size: [1024, 768], act: system },
 ];
 
@@ -32,7 +32,8 @@ async function system(p) {
   await p.waitForTimeout(900);
 }
 async function select(p, name) {
-  await p.locator('.sc-room .n', { hasText: name }).first().click({ position: { x: 30, y: 14 } });
+  // The node's own click handler, as a click on its name would reach it (lines drawn over it can't intercept).
+  await p.locator(`.sc-room g.n[data-id="${name}"]`).first().dispatchEvent('click');
   await p.waitForTimeout(500);
 }
 async function evidence(p) {

@@ -4,7 +4,8 @@ import type { RepoChoice } from '../../../shared/system/api.js';
 import type { SystemRegistry, Trace, ViewRequest, ViewState } from '../../../shared/system/model.js';
 import { buildScene } from '../../../shared/system/render/index.js';
 import { viewsOf } from '../../../shared/canvas/index.js';
-import { useStore, type Store } from '../../shared/store.js';
+import { Store, useStore } from '../../shared/store.js';
+import { correct, pointingContext, toSnapshotSelection, type Gesture, type PointingContext, type ReferentTarget } from '../../../shared/system/pointing.js';
 import { ToolPan, ToolSelect, ZoomIn, ZoomOut } from '../../shared/components/icons.js';
 import type { CanvasClient } from '../canvas/client.js';
 import type { SystemClient } from './api-client.js';
@@ -18,8 +19,6 @@ import { LENS_LABEL, presets, resolve } from './views.js';
 // as the standalone page), under the room's own view tabs and tool rail; the room panel shows what the
 // selected part is and the evidence it rests on. Everything comes through SystemApi
 // (`window.journey.system` in the app); nothing here writes to the room's canvas document or its record.
-//
-// Groundwork: the visuals are the standalone page's for now. See docs/system-canvas/INTEGRATION.md.
 
 export interface RoomSystemSlot {
   on: boolean;
@@ -31,6 +30,16 @@ export interface RoomSystemSlot {
   panel: ComponentChildren | null;
 }
 
+/**
+ * What "this" means on the System view right now, for whatever answers the room's questions: rebuilt on every
+ * click, keyboard move and correction, and cleared when nothing is selected. The room's ask flow (and later a
+ * voice or pointer agent) reads it from here alongside the canvas snapshot; see INTEGRATION.md.
+ */
+export const systemPointing = new Store<{ now: { roomId: string; context: PointingContext } | null }>({ now: null });
+
+/** Asking the room's agent about what's pointed at: the room's own entry point (AskVowe.open). */
+export interface SystemAsk { selected: string[]; circled: string[]; names: string[]; pointing: PointingContext }
+
 export interface RoomSystemInput {
   /** SystemApi in this window: window.journey.system in the app; absent, the room shows no System tab. */
   api: SystemClient | null | undefined;
@@ -39,6 +48,9 @@ export interface RoomSystemInput {
   /** The room's canvas, for its own view tabs (going back to one turns the System view off). */
   client: CanvasClient;
   ui: Store<{ myView: string | null }>;
+  roomId: string;
+  /** The room's "Ask about this" (absent: no agent in this room, so no ask button). */
+  onAsk?(about: SystemAsk): void;
 }
 
 type Load = { state: 'idle' } | { state: 'loading'; what: string } | { state: 'ready' } | { state: 'failed'; error: string };
@@ -70,7 +82,7 @@ function useSheet() {
   }, []);
 }
 
-export function useRoomSystem({ api, repository, client, ui }: RoomSystemInput): RoomSystemSlot | null {
+export function useRoomSystem({ api, repository, client, ui, roomId, onAsk }: RoomSystemInput): RoomSystemSlot | null {
   const [on, setOn] = useState(false);
   const [load, setLoad] = useState<Load>({ state: 'idle' });
   const [repo, setRepo] = useState<RepoChoice | null>(null);
@@ -81,6 +93,10 @@ export function useRoomSystem({ api, repository, client, ui }: RoomSystemInput):
   const [step, setStep] = useState<number | null>(null);
   const [travel, setTravel] = useState<{ id: string; n: number } | null>(null);
   const controls = useRef<StageControls | null>(null);
+  /** How the last pointing was made: a click, or a key (Tab, arrows). */
+  const lastInput = useRef<Gesture>('click');
+  /** A correction ("not this, that one") replaces the computed context until the selection moves again. */
+  const [corrected, setCorrected] = useState<PointingContext | null>(null);
   const cs = useStore(client.store);
   useSheet();
 
@@ -114,6 +130,30 @@ export function useRoomSystem({ api, repository, client, ui }: RoomSystemInput):
     const missing = Object.keys(scene.placed).filter((id) => !cur[id]);
     if (missing.length) setVs({ ...vs, layout: { ...(vs.layout ?? {}), [scene.level.key]: { ...cur, ...Object.fromEntries(missing.map((id) => [id, scene.placed[id]])) } } });
   }, [scene]);
+
+  // What "this" means: the selection as the registry names it, with what's next to it as alternatives.
+  const pointing = useMemo<PointingContext | null>(() => {
+    if (!registry || !scene || !vs?.selection || !request) return null;
+    const s0 = vs.selection;
+    const target: ReferentTarget | null = 'entity' in s0 ? { kind: 'entity', id: s0.entity }
+      : 'relation' in s0 ? (registry.relations[s0.relation] ? { kind: 'relation', id: s0.relation } : null)
+      : { kind: 'step', sequence: s0.sequence, step: s0.step };
+    if (!target) return null;
+    const nearby: ReferentTarget[] = [];
+    if (target.kind === 'entity') {
+      const holder = scene.nodes.find((n) => n.id !== target.id && n.parts.some((pt) => pt.entity === target.id));
+      if (holder) nearby.push({ kind: 'entity', id: holder.id });
+      for (const e of scene.edges) {
+        const other = e.from === target.id ? e.to : e.to === target.id ? e.from : null;
+        if (other && !nearby.some((x) => x.kind === 'entity' && x.id === other)) nearby.push({ kind: 'entity', id: other });
+        if (nearby.length >= 3) break;
+      }
+    }
+    return pointingContext(registry, { targets: [target], gesture: lastInput.current, nearby, entered: vs.entered, view: request });
+  }, [registry, scene, vs?.selection, request]);
+  const ctx = corrected ?? pointing;
+  useEffect(() => { setCorrected(null); }, [pointing]);
+  useEffect(() => { systemPointing.setState({ now: on && ctx ? { roomId, context: ctx } : null }); }, [on, ctx]);
 
   if (!api) return null;
   void traces;
@@ -151,7 +191,8 @@ export function useRoomSystem({ api, repository, client, ui }: RoomSystemInput):
   const backToRoom = (view?: string) => { setOn(false); if (view) ui.setState({ myView: view }); };
 
   const pane = (children?: ComponentChildren) => (
-    <section class="surface sc-room-surface" aria-label="System canvas">
+    <section class="surface sc-room-surface" aria-label="System canvas"
+      onPointerDownCapture={() => { lastInput.current = 'click'; }} onKeyDownCapture={() => { lastInput.current = 'keyboard'; }}>
       <div class="surface-head">
         <div class="seg" role="group" aria-label="Views">
           {roomTabs.map((v) => <button key={v.id} type="button" title={v.question} aria-pressed={false} onClick={() => backToRoom(v.id)}>{v.name}</button>)}
@@ -209,6 +250,16 @@ export function useRoomSystem({ api, repository, client, ui }: RoomSystemInput):
         <button type="button" class="rp-link" onClick={() => setSel(null)}>‹ Back to the room</button>
         <span>System · {repo.name}</span>
       </div>
+      {ctx && ctx.referents[0] ? (
+        <div class="sc-pointing" role="group" aria-label="What Vowe would take “this” to mean">
+          <span class="sc-pt-k">“This” means</span>
+          <span class="sc-pt-chip">{ctx.referents[0].name}<em> · {ctx.referents[0].kind}</em></span>
+          {ctx.alternatives.length ? (
+            <span class="sc-pt-alt">Not this? {ctx.alternatives.slice(0, 2).map((a, i) => <button key={i} type="button" class="rp-link" onClick={() => setCorrected(correct(ctx, i))}>{a.name}</button>)}</span>
+          ) : null}
+          {onAsk ? <button type="button" class="rp-mini" onClick={() => onAsk({ ...toSnapshotSelection(ctx, registry), names: ctx.referents.map((r) => r.name), pointing: ctx })}>Ask about this</button> : null}
+        </div>
+      ) : null}
       <Inspector registry={registry} scene={scene} sel={sel} stale={new Set()}
         source={(f, a, b) => api.source(repo.id, f, a, b, 3)}
         onFollow={follow} onSelect={setSel} onEnter={enter} onClose={() => setSel(null)}

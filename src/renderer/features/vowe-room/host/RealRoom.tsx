@@ -241,7 +241,11 @@ export function RealRoom(p: RealRoomProps) {
   );
 
   // The room's repository as the system canvas draws it, when this window has SystemApi.
-  const system = useRoomSystem({ api: window.journey?.system, repository: p.room.repo, client: p.client, ui });
+  const system = useRoomSystem({
+    api: window.journey?.system, repository: p.room.repo, client: p.client, ui, roomId: p.roomId,
+    // "Ask about this" on the System view goes through the room's own ask (the pointing context rides along in systemPointing).
+    onAsk: rec.vowe && p.asker ? (a) => p.asker!.open({ selected: a.selected, circled: a.circled, names: a.names }) : undefined,
+  });
   const n = names(directory);
   const speaker = p.speaking;
   const here = p.access ? p.access.members.filter((m) => m.presence !== 'away').length : p.people.length;
