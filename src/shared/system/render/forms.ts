@@ -136,7 +136,11 @@ function specFor(form: FormId): { w: number; comps: Compartment[] } {
   return { w: spec.w, comps: [...spec.comps.slice(0, spec.comps.length - catchAll.length), ...extra, ...catchAll] };
 }
 
-export interface CompartmentContent { role: string; label: string; col: 0 | 1; cols: number; slots?: number; kids: Entity[]; strings: string[] }
+export interface CompartmentContent {
+  role: string; label: string; col: 0 | 1; cols: number; slots?: number; kids: Entity[]; strings: string[];
+  /** The children this view touches (on its path, wired to what it draws, focused), most relevant first. */
+  relevant: Entity[];
+}
 
 /** Which of an entity's children go in which compartment of its form (all of them, most relevant first). */
 export function compartments(input: FormInput, lens?: Lens): CompartmentContent[] {
@@ -152,7 +156,11 @@ export function compartments(input: FormInput, lens?: Lens): CompartmentContent[
     kids.forEach((k) => used.add(k.id));
     const strings = kids.length ? [] : attrList(input.entity, c.attrs);
     if (!kids.length && !strings.length && !c.slots) continue;
-    out.push({ role: c.role, label: c.label, col: c.col, cols: c.cols ?? 1, slots: c.slots, kids, strings });
+    // What the view touches, most relevant first (a toolbar keeps its order for drawing, not for this).
+    let relevant = rel ? kids.filter((k) => rel(k.id) > 0).sort((a, b) => rel(b.id) - rel(a.id) || (a.id < b.id ? -1 : 1)) : [];
+    // When the view follows a path or names a focus, only what it passes through counts as touched.
+    if (rel && relevant.some((k) => rel(k.id) >= 100)) relevant = relevant.filter((k) => rel(k.id) >= 100);
+    out.push({ role: c.role, label: c.label, col: c.col, cols: c.cols ?? 1, slots: c.slots, kids, strings, relevant });
   }
   return out;
 }
@@ -160,7 +168,7 @@ export function compartments(input: FormInput, lens?: Lens): CompartmentContent[
 /** The order the code declares things in (a toolbar's tools), when the registry recorded it. */
 const order = (e: Entity) => (typeof e.attrs.order === 'number' ? e.attrs.order : 1e6);
 /** Declared order wins between two things that both have one (tools keep their toolbar order). */
-const declared = (a: Entity, b: Entity) => (order(a) < 1e6 && order(b) < 1e6 ? order(a) - order(b) : 0);
+const declared = (a: Entity, b: Entity) => (a.kind === 'interaction' && b.kind === 'interaction' && order(a) < 1e6 && order(b) < 1e6 ? order(a) - order(b) : 0);
 
 /** Lays a form out: its size, outline, and parts. Pure and deterministic. */
 export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
@@ -220,7 +228,7 @@ export function drawForm(input: FormInput, lens?: Lens): DrawnForm {
     const h = cy - y + 4;
     // The compartment itself goes first so it is drawn under its chips.
     parts.splice(parts.length - (shown.length + (more > 0 ? 1 : 0) + (c.slots ?? 0)), 0,
-      { key: `${entity.id}:${c.role}`, role: `compartment:${c.role}`, label: c.label, count: items.length, detail: items.slice(0, 3).map((it) => it.label).join(' · '), rect: { x, y, w: colW, h }, lod: 'far' });
+      { key: `${entity.id}:${c.role}`, role: `compartment:${c.role}`, label: c.label, count: items.length, detail: items.slice(0, 3).map((it) => it.label).join(' · '), named: c.relevant.slice(0, 3).map((k) => k.name), rect: { x, y, w: colW, h }, lod: 'far' });
     colY[c.col] = y + h + 8;
   }
   if (!parts.length) {

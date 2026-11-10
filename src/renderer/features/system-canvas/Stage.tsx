@@ -35,6 +35,8 @@ export interface StageProps {
   onFollow(id: string): void;
   onOverflow(ov: SceneOverflow): void;
   controls?: { current: StageControls | null };
+  /** Screen px at the bottom covered by an overlay (the sequence player): fitting and following keep clear of it. */
+  insetBottom?: number;
 }
 
 export interface StageControls { zoomIn(): void; zoomOut(): void; fit(): void; enter(id: string): void }
@@ -81,14 +83,20 @@ export function Stage(p: StageProps) {
   const s = p.scene;
   const key = s.level.key;
   // Opening a level shows what the view is about, legibly: the focus and the path, not every neighbour.
+  const inset = p.insetBottom ?? 0;
+  // Fit into the part of the stage nothing covers: the rect is fitted above the player and centred there.
+  const fitFree = (r: Rect, max = 1.1) => {
+    const f = fit(r, { w: v.w, h: Math.max(120, v.h - inset) }, 40, max);
+    return { ...f, y: f.y + inset / 2 / f.z };
+  };
   const home = () => {
-    if (s.level.root) return fit(s.bounds, v, 40, 1.1);
+    if (s.level.root) return fitFree(s.bounds);
     const lead = s.nodes.filter((n) => n.emphasis === 'primary' || n.why === 'focus' || n.why === 'sequence');
     if (!lead.length || lead.length === s.nodes.length) lead.splice(0, lead.length, ...s.nodes);
     const xs = lead.map((n) => n.rect);
     const r = { x: Math.min(...xs.map((q) => q.x)) - 60, y: Math.min(...xs.map((q) => q.y)) - 90, w: 0, h: 0 };
     r.w = Math.max(...xs.map((q) => q.x + q.w)) + 60 - r.x; r.h = Math.max(...xs.map((q) => q.y + q.h)) + 60 - r.y;
-    const f = fit(r, v, 40, 1.1);
+    const f = fitFree(r);
     // A small window can't hold the whole view legibly: start at the beginning of it, readable, and pan from there.
     if (f.z < 0.24 && s.outline[0]) {
       const first = s.nodes.find((n) => n.id === s.outline[0].id)!.rect;
@@ -140,7 +148,8 @@ export function Stage(p: StageProps) {
   useEffect(() => {
     if (p.step === null || !s.sequence || !camRef.current) return;
     const st = s.sequence.steps[p.step];
-    if (st && st.on) animateTo(reveal(camRef.current, v, { x: st.at.x - 140, y: st.at.y - 90, w: 420, h: 200 }, 70));
+    // Keep the station (and the words around it) clear of the player: pretend the area under it is taller.
+    if (st && st.on) animateTo(reveal(camRef.current, v, { x: st.at.x - 220, y: st.at.y - 110, w: 480, h: 220 + inset / camRef.current.z }, 60));
   }, [p.step]);
 
   const c = cam ?? home();

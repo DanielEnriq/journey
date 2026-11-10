@@ -216,27 +216,53 @@ function FarName({ name, size, w }: { name: string; size: number; w: number }) {
   );
 }
 
+/** Text smaller than this on screen is a smudge, not information: it isn't drawn (the shape and count carry it). */
+const MIN_PX = 7;
+const legible = (size: number, z: number) => size * z >= MIN_PX;
+
 /**
- * At a distance a compartment says what it holds, never anonymous rows: a few things are named outright
- * ("room_canvases · room_canvas_ops"), more are counted ("20 commands"), an empty tray says what waits there.
+ * At a distance a compartment says what it holds, never anonymous rows: first the things this view touches,
+ * by name ("room_canvases · commit_canvas"), then how many more ("+ 30 tables"); with nothing touched, a few
+ * names or a count; an empty tray says what waits there. Text too small to read on screen is left out.
  */
 function CompCaption({ p, z }: { p: Part; z: number }) {
   const r = p.rect;
   const n = p.count ?? 0;
   const word = (p.label ?? '').toLowerCase();
-  const fit = (t: string, max: number, mono = false) => Math.min(max, r.h * 0.5, (r.w - 12) / Math.max(1, textWidth(t, 1, mono)));
+  const fit = (t: string, max: number, mono = false, frac = 0.5) => Math.min(max, r.h * frac, (r.w - 12) / Math.max(1, textWidth(t, 1, mono)));
   if (n === 0) {
-    // Structure only (an empty queue tray): its name sits at the top, clear of the slots.
-    const fs = Math.min(sc(9, z), r.h * 0.3);
-    return <text class="cap-w" x={r.x + 6} y={r.y + fs * 1.1} style={{ fontSize: `${fs}px` }}>{word.toUpperCase()}</text>;
+    const fs = Math.min(sc(9, z), r.h * 0.3, (r.w - 12) / Math.max(1, textWidth(word.toUpperCase(), 1)));
+    return legible(fs, z) ? <text class="cap-w" x={r.x + 6} y={r.y + fs * 1.1} style={{ fontSize: `${fs}px` }}>{word.toUpperCase()}</text> : null;
+  }
+  // As many touched names as fit legibly (most relevant first); the rest are counted.
+  let named = p.named ?? [];
+  while (named.length > 1 && !legible(fit(named.join(' · '), sc(10.5, z), true, 0.32), z)) named = named.slice(0, -1);
+  if (named.length) {
+    const names = named.join(' · ');
+    const rest = n - named.length;
+    const fs1 = fit(names, sc(10.5, z), true, rest > 0 ? 0.32 : 0.5);
+    const restT = `+ ${rest} more ${word}`;
+    const fs2 = Math.min(fs1 * 0.9, fit(restT, sc(9.5, z), false, 0.3));
+    const two = rest > 0 && legible(fs2, z);
+    if (!legible(fs1, z)) {
+      const t = `${n} ${word}`;
+      const big = fit(t, sc(12.5, z));
+      return legible(big, z) ? <text class="cap-n" x={r.x + r.w / 2} y={r.y + r.h / 2 + big * 0.35} text-anchor="middle" style={{ fontSize: `${big}px` }}>{t}</text> : null;
+    }
+    return (
+      <g>
+        <text class="cap-names" x={r.x + r.w / 2} y={r.y + r.h / 2 + (two ? -fs2 * 0.25 : fs1 * 0.35)} text-anchor="middle" style={{ fontSize: `${fs1}px` }}>{names}</text>
+        {two && <text class="cap-w" x={r.x + r.w / 2} y={r.y + r.h / 2 + fs1 * 0.35 + fs2 * 1.15} text-anchor="middle" style={{ fontSize: `${fs2}px` }}>{restT}</text>}
+      </g>
+    );
   }
   if (n <= 3 && p.detail) {
     const fs = fit(p.detail, sc(10, z), true);
-    return <text class="cap-names" x={r.x + r.w / 2} y={r.y + r.h / 2 + fs * 0.35} text-anchor="middle" style={{ fontSize: `${fs}px` }}>{p.detail}</text>;
+    if (legible(fs, z)) return <text class="cap-names" x={r.x + r.w / 2} y={r.y + r.h / 2 + fs * 0.35} text-anchor="middle" style={{ fontSize: `${fs}px` }}>{p.detail}</text>;
   }
   const t = `${n} ${word}`;
   const big = fit(t, sc(12.5, z));
-  return <text class="cap-n" x={r.x + r.w / 2} y={r.y + r.h / 2 + big * 0.35} text-anchor="middle" style={{ fontSize: `${big}px` }}>{t}</text>;
+  return legible(big, z) ? <text class="cap-n" x={r.x + r.w / 2} y={r.y + r.h / 2 + big * 0.35} text-anchor="middle" style={{ fontSize: `${big}px` }}>{t}</text> : null;
 }
 
 function PartShape({ p, near, z, sel, on }: { p: Part; near: boolean; z: number; sel: string | null; on: NodeHandlers }) {
@@ -249,7 +275,7 @@ function PartShape({ p, near, z, sel, on }: { p: Part; near: boolean; z: number;
       <g class={`pt-comp c-${role}`}>
         <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={5} />
         {near
-          ? <text class="pt-comp-label" x={r.x + 6} y={r.y + 12}>{p.label}</text>
+          ? (legible(9.5, z) ? <text class="pt-comp-label" x={r.x + 6} y={r.y + 12}>{p.label}</text> : null)
           : <CompCaption p={p} z={z} />}
       </g>
     );
@@ -269,13 +295,13 @@ function PartShape({ p, near, z, sel, on }: { p: Part; near: boolean; z: number;
         <g class="pt-bus">
           <path d={`M${r.x} ${r.y + r.h / 2} H${r.x + r.w}`} />
           {[0.2, 0.4, 0.6, 0.8].map((t) => <circle key={t} cx={r.x + r.w * t} cy={r.y + r.h / 2} r={3.2} />)}
-          {near && p.label && <text x={r.x} y={r.y - 6}>{p.label}</text>}
+          {near && p.label && legible(10.5, z) && <text x={r.x} y={r.y - 6}>{p.label}</text>}
         </g>
       );
     case 'signature':
       return near ? <text class="pt-sig" x={r.x} y={r.y + 10}>{trunc(p.label ?? '', Math.floor(r.w / 6.2))}</text> : null;
     case 'key':
-      return z >= 0.42 ? <g class="pt-key"><rect x={r.x} y={r.y} width={r.w} height={r.h} rx={4} /><text x={r.x + r.w / 2} y={r.y + r.h / 2 + 4} text-anchor="middle">{p.label}</text></g> : null;
+      return legible(11, z) ? <g class="pt-key"><rect x={r.x} y={r.y} width={r.w} height={r.h} rx={4} /><text x={r.x + r.w / 2} y={r.y + r.h / 2 + 4} text-anchor="middle">{p.label}</text></g> : null;
     default: {
       // Below near, a part is said by its compartment's count; no anonymous placeholder rows.
       if (!near) return null;
@@ -429,8 +455,8 @@ export function Portal({ p, o, on }: { p: ScenePortal; o: DrawOpts; on: { select
       onClick={(e: MouseEvent) => { e.stopPropagation(); on.select(p.id); }} onDblClick={(e: MouseEvent) => { e.stopPropagation(); on.follow(p.id); }}>
       <title>{`${p.name} (${p.kindLabel}) — outside this component, ${p.side}. ${p.count} relation(s). Double-click to go there.`}</title>
       <path class="portal-body" d={outlineFor(p.form, w, ht)} />
-      <text class="portal-name" x={12} y={22}>{arrow} {trunc(p.name, 22)}</text>
-      <text class="portal-kind" x={12} y={40}>{p.kindLabel} · outside · {p.count} relation{p.count === 1 ? '' : 's'}</text>
+      <text class="portal-name" x={12} y={22} style={{ fontSize: `${Math.min(18, Math.max(13, sc(11, o.z)))}px` }}>{arrow} {trunc(p.name, 24)}</text>
+      {legible(10, o.z) && <text class="portal-kind" x={12} y={42}>{p.kindLabel} · outside · {p.count} relation{p.count === 1 ? '' : 's'}</text>}
     </g>
   );
 }

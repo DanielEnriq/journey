@@ -308,6 +308,7 @@ export function App() {
           <Stage
             scene={scene} rootName={rootE?.name ?? ''} rootKind={String(rootE?.kind ?? '')} sel={sel} step={step} savedCamera={camSaved}
             expanded={new Set(vs.expanded)} reducedMotion={still} travel={travel} controls={controls}
+            insetBottom={scene.sequence ? (sequenceTraces.length ? 190 : 160) : 0}
             onSelect={setSel} onEnter={enter} onExit={exit} onCamera={onCamera} onPin={pin} onFollow={follow} onOverflow={overflow}
           />
           {panel.legend && <Legend scene={scene} onClose={() => { LS.set('vowe.system.legend', false); setPanel({ ...panel, legend: false }); }} />}

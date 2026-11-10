@@ -32,6 +32,8 @@ export interface Part {
   label?: string;
   /** For a compartment: how many things it holds (drawn or not), so a distant view says "20 commands". */
   count?: number;
+  /** For a compartment: what of it this view touches, by name (the rest is counted). */
+  named?: string[];
   /** Second line: columns, the writer, a signature. */
   detail?: string;
   /** Relative to the node's top-left. */

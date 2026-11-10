@@ -284,3 +284,14 @@ test('a retry is drawn as one loop with its guard said once, its branch outcomes
   assert.deepEqual([...xs].sort((a, b) => a - b), xs);
   assert.equal(new Set(seq.steps.map((x) => `${x.at.x},${x.at.y}`)).size, seq.steps.length);
 });
+
+test('compartments name what the view touches first and count the rest', () => {
+  const s = scene(testRegistry());
+  const tables = node(s, 'store:db')!.parts.find((p) => p.role === 'compartment:tables')!;
+  // room_canvases is written by a part in view; room_canvas_ops only by the store's own function.
+  assert.deepEqual(tables.named, ['room_canvases']);
+  assert.equal(tables.count, 2);
+  const path = scene(testRegistry(), 'path', { sequence: 'seq:retry' });
+  const commands = node(path, 'component:engine')!.parts.find((p) => p.role === 'compartment:commands')!;
+  assert.equal(commands.named?.[0], 'draw');
+});

@@ -267,11 +267,22 @@ function relevance(ctx: Ctx, parent: string): (id: string) => number {
   const score = new Map<string, number>();
   const bump = (id: string, n: number) => score.set(id, (score.get(id) ?? 0) + n);
   const top = (id: string) => { let e = ctx.ent(id); const seen = new Set<string>(); while (e?.parent && e.parent !== parent && !seen.has(e.id)) { seen.add(e.id); e = ctx.ent(e.parent); } return e?.parent === parent ? e.id : null; };
+  // Does the other end belong to something this view draws (a part in view, not just a grouping it sits in)?
+  const inView = (id: string) => {
+    let e = ctx.ent(id);
+    const seen = new Set<string>();
+    while (e && !seen.has(e.id)) {
+      seen.add(e.id);
+      if (ctx.pool.has(e.id)) return !GROUP_KINDS.has(e.kind) && e.id !== parent;
+      e = e.parent ? ctx.ent(e.parent) : undefined;
+    }
+    return false;
+  };
   for (const r of ctx.relations) {
     if (r.kind === 'contains') continue;
     const a = top(r.from), b = top(r.to);
-    if (a && !b) bump(a, ctx.pool.has(r.to) || ctx.pool.has(ctx.ent(r.to)?.parent ?? '') ? 12 : 1);
-    if (b && !a) bump(b, ctx.pool.has(r.from) || ctx.pool.has(ctx.ent(r.from)?.parent ?? '') ? 12 : 1);
+    if (a && !b && inView(r.to)) bump(a, 12);
+    if (b && !a && inView(r.from)) bump(b, 12);
   }
   for (const s of seq) { const t = top(s); if (t) bump(t, 100); }
   for (const f of ctx.resolved.request.focus) { const t = top(f); if (t) bump(t, 200); }
