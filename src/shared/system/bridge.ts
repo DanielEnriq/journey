@@ -59,7 +59,7 @@ export function toRoomCanvasSystem(reg: SystemRegistry, view: ResolvedView, opts
     if (e.confidence !== undefined) facts.confidence = String(e.confidence);
     const byKind = new Map<string, string[]>();
     for (const x of inner) (byKind.get(x.kind) ?? byKind.set(x.kind, []).get(x.kind)!).push(x.name);
-    for (const [k, names] of [...byKind].sort(([a], [b]) => byString(a, b)).slice(0, 9)) facts[k] = cut(names.join(', '), 200);
+    for (const [k, names] of [...byKind].sort(([a], [b]) => byString(a, b)).slice(0, 9)) facts[k.replace(/[^a-zA-Z0-9_]/g, '_')] = cut(names.join(', '), 200);
     const parent = e.parent && boundaries.includes(e.parent) && kind !== 'queue' ? roomId(e.parent, used) : undefined;
     const c: ComponentInput = {
       id: roomId(id, used), kind, name: cut(e.name, 80), tech: cut(`${e.kind}${e.attrs.dir ? ` · ${e.attrs.dir}` : ''}`, 120),

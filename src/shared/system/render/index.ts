@@ -2,7 +2,8 @@ import type {
   Entity, EntityStatus, Provenance, Relation, RegistryDiff, ResolvedView, Sequence, SequenceStep, SystemRegistry, Trace, ViewState,
 } from '../model.js';
 import { drawForm, formFor } from './forms.js';
-import { grammarFor, LENS_FLOW, LENS_RELATIONS, PROVENANCE_ORDER } from './grammar.js';
+import { LENS_RELATIONS } from '../view.js';
+import { grammarFor, LENS_FLOW, PROVENANCE_ORDER } from './grammar.js';
 import { GAP_CROSS, GAP_MAIN, labelPoint, layeredLayout, pad, route, union, type LayoutEdge, type Side } from './layout.js';
 import {
   SCENE_SCHEMA, type Emphasis, type FormId, type OutlineItem, type Part, type Point, type Rect, type SceneEdge, type SceneGroup,
@@ -12,7 +13,7 @@ import {
 
 export * from './scene.js';
 export { FORM_TABLE, formFor, drawForm, outlineFor } from './forms.js';
-export { GRAMMAR, grammarFor, LENS_RELATIONS, LENS_FLOW, PROVENANCE_SAYS, STATUS_SAYS, PROVENANCE_ORDER } from './grammar.js';
+export { GRAMMAR, grammarFor, LENS_FLOW, PROVENANCE_SAYS, STATUS_SAYS, PROVENANCE_ORDER } from './grammar.js';
 
 // buildScene: one level of a resolved view, drawn. The level is the person's entered path (ViewState
 // .entered): the top shows the view's components; entering a component composes its internals in its own

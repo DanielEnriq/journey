@@ -310,7 +310,7 @@ function retryLoops(b: Builder, d: Discovery, ins: Internals, W: Walker) {
       const t = W.resolve(cand.flow.symbol, st);
       const e = t ? W.ent(t.id) : undefined;
       // An error built as an argument is part of the call around it, not a step of its own.
-      if (!t || !e || (t.kind === 'class' && /Error$/.test(t.name))) return;
+      if (!t || !e || (t.kind === 'class' && /Error$/.test(t.name) && cand.flow.steps.slice(i + 1).some((x) => x.range.start.line === st.range.start.line))) return;
       const inLoop = st.ctx.includes('loop');
       if (!inLoop && firstLoop >= 0 && afterLoop < 0) afterLoop = drafts.length;
       if (inLoop && firstLoop < 0) firstLoop = drafts.length;

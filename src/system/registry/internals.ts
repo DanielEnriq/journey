@@ -351,7 +351,8 @@ function database(b: Builder, d: Discovery, out: Internals) {
     const name = t.name.replace(/^public\./, '');
     const id = `table:${slug(name)}`;
     const cols = F.memberSymbols(t.id).filter((m) => m.kind === 'sql-column');
-    const keys = cols.filter((m) => m.attrs?.primary || m.attrs?.pk || m.attrs?.key || /primary key/i.test(m.signature ?? '')).map((m) => m.name);
+    const declared = F.strings(t, 'primaryKey');
+    const keys = cols.filter((m) => declared.includes(m.name) || m.attrs?.primaryKey || m.attrs?.primary || /primary key/i.test(m.signature ?? '')).map((m) => m.name);
     const refs = cols.filter((m) => /references/i.test(m.signature ?? '') || m.attrs?.references).map((m) => m.name);
     b.entity({
       id, kind: 'table', name, level: 'element', parent: db.id, anchors: [b.anchor(t)],

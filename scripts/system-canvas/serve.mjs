@@ -1,4 +1,4 @@
-// The system canvas's dev server: the built renderer (system.html at /) and the system service as JSON
+// The system canvas's dev server: the built renderer (/ opens /renderer/system.html) and the system service as JSON
 // routes (POST /api/<method>, JSON array of arguments). Runs the build in dist/ by default:
 //
 //   pnpm build && node scripts/system-canvas/serve.mjs            # http://127.0.0.1:4870
@@ -23,10 +23,10 @@ const { createSystemServer, listen } = await import(pathToFileURL(path.join(dist
 const service = createSystemService({ repos: repos.length ? repos : [journeyRoot()] });
 const server = createSystemServer({
   service,
-  staticDir: path.join(dist, 'renderer'),
+  distDir: dist,
   devMethods: true,
   log: (line) => console.log(`[system] ${line}`),
 });
 const actual = await listen(server, port);
-console.log(`[system] serving ${path.join(dist, 'renderer')} and the system API at http://127.0.0.1:${actual}/`);
+console.log(`[system] serving ${dist} (renderer/, shared/) and the system API at http://127.0.0.1:${actual}/ (→ /renderer/system.html)`);
 for (const r of await service.repos()) console.log(`[system] repository ${r.id}: ${r.root}`);

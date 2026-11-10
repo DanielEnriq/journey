@@ -21,13 +21,17 @@ const engine = { fixtures: () => [{ id: 'fixture:x', label: 'Fixture X' }], fixt
 before(async () => {
   const repo = tmp('vowe-repo-');
   writeFileSync(join(repo, 'a.ts'), 'one\ntwo\nthree\n');
-  const site = tmp('vowe-site-');
-  writeFileSync(join(site, 'system.html'), '<!doctype html><title>System</title>');
-  mkdirSync(join(site, 'vendor'));
-  writeFileSync(join(site, 'vendor', 'preact.js'), 'export {}');
+  const site = tmp('vowe-dist-');
+  mkdirSync(join(site, 'renderer', 'vendor'), { recursive: true });
+  mkdirSync(join(site, 'shared'));
+  mkdirSync(join(site, 'main'));
+  writeFileSync(join(site, 'renderer', 'system.html'), '<!doctype html><title>System</title>');
+  writeFileSync(join(site, 'renderer', 'vendor', 'preact.js'), 'export {}');
+  writeFileSync(join(site, 'shared', 'model.js'), 'export {}');
+  writeFileSync(join(site, 'main', 'index.js'), 'secret');
   writeFileSync(join(tmp('vowe-out-'), 'secret.txt'), 'no');
   const service = createSystemService({ home: tmp('vowe-home-'), repos: [repo], engine, recordTraces: false });
-  server = createSystemServer({ service, staticDir: site });
+  server = createSystemServer({ service, distDir: site });
   base = `http://127.0.0.1:${await listen(server, 0)}`;
 });
 after(() => { server.close(); for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -49,16 +53,20 @@ const api = async (method: string, args: unknown[]) => {
 };
 
 describe('system dev server', () => {
-  test('serves system.html at / and static files', async () => {
-    const page = await call('/');
+  test('serves the renderer and shared modules, nothing else', async () => {
+    const root = await call('/');
+    assert.equal(root.status, 302);
+    const page = await call('/renderer/system.html');
     assert.equal(page.status, 200);
     assert.match(page.type, /text\/html/);
     assert.match(page.text, /System/);
-    assert.match((await call('/vendor/preact.js')).type, /javascript/);
+    assert.match((await call('/renderer/vendor/preact.js')).type, /javascript/);
+    assert.match((await call('/shared/model.js')).type, /javascript/);
+    assert.equal((await call('/main/index.js')).status, 404, 'main/ is not served');
     assert.equal((await call('/nope.js')).status, 404);
     assert.notEqual((await call('/../secret.txt')).status, 200);
     assert.equal((await call('/%2e%2e/secret.txt')).status, 404, 'normalised to /secret.txt, which the site lacks');
-    assert.equal((await call('/vendor/%2e%2e%2f%2e%2e%2fsecret.txt')).status, 403);
+    assert.equal((await call('/renderer/%2e%2e%2f%2e%2e%2fsecret.txt')).status, 403);
   });
 
   test('answers SystemApi methods as JSON', async () => {

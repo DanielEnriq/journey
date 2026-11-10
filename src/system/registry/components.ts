@@ -371,6 +371,12 @@ export function discover(F: Facts): Discovery {
         const o = fileOwner.get(i.from);
         if (o) counts.set(o, (counts.get(o) ?? 0) + 1 + i.names.length / 10);
       }
+      // Failing that, the one whose files it imports most (a module that only builds on its neighbours).
+      if (!counts.size) for (const i of F.importsFrom.get(f) ?? []) {
+        if (!i.to || dirOf(i.to) !== dirOf(f)) continue;
+        const o = fileOwner.get(i.to);
+        if (o) counts.set(o, (counts.get(o) ?? 0) + 1 + i.names.length / 10);
+      }
       const best = [...counts].sort((a, b) => b[1] - a[1] || byString(a[0], b[0]))[0];
       if (best) { fileOwner.set(f, best[0]); components.get(best[0])!.helpers.push(f); }
     }

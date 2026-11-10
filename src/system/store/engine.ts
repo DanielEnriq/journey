@@ -1,5 +1,6 @@
 import { diffIndexes, indexRepository, INDEXER_TOOL, refreshIndex, scanFreshness } from '../indexer/index.js';
 import { buildRegistry, RULES_VERSION } from '../registry/index.js';
+import { FIXTURES, fixtureById } from '../../shared/system/fixtures/index.js';
 import { diffRegistries, markStatus } from '../../shared/system/registry-utils.js';
 import type { SystemEngine } from '../service.js';
 
@@ -19,7 +20,7 @@ export async function defaultEngine(): Promise<SystemEngine> {
     build: (index, interpretations) => buildRegistry(index, interpretations),
     diffRegistries,
     mark: (next, diff, previous) => markStatus(next, { diff, previous }),
-    fixtures: () => [],
-    fixture: () => null,
+    fixtures: () => FIXTURES.map((f) => ({ id: f.id, label: f.label })),
+    fixture: (id) => fixtureById(id) ?? null,
   };
 }

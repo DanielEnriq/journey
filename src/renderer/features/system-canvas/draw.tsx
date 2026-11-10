@@ -105,12 +105,12 @@ export interface NodeHandlers {
 }
 
 export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers }) {
-  const { x, y, w, h } = n.rect;
+  const { x, y, w, h: ht } = n.rect;
   const near = o.lod === 'near' || o.expanded.has(n.id);
   const sel = o.selected === n.id;
   const recede = o.selected && !sel && !o.related.has(n.id);
   const cls = ['n', `f-${n.form}`, `p-${n.provenance}`, `s-${n.status}`, `e-${n.emphasis}`, sel && 'sel', recede && 'recede', n.ghost && 'ghost', o.hover === n.id && 'hov', n.affected && 'affected'].filter(Boolean).join(' ');
-  const chip = n.head === n.rect.h;
+  const chip = n.head === ht;
   // At far, the name is held at a readable size on screen and fitted to the silhouette's width.
   const nameSize = near ? Math.max(14, sc(11, o.z)) : sc(13, o.z);
   const nameChars = Math.floor((w - 28) / (nameSize * 0.56));
@@ -129,7 +129,7 @@ export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers
       <path class="n-body" d={n.outline} />
       {n.status === 'stale' || n.status === 'unknown' ? <path class="n-hatch" d={n.outline} /> : null}
       {n.form === 'interface' && <g class="win-dots">{[0, 1, 2].map((i) => <circle key={i} cx={w - 16 - i * 11} cy={15} r={3} />)}</g>}
-      {n.form === 'external' && <path class="n-inner" d={outlineFor('external', w - 10, h - 10)} transform="translate(5 5)" />}
+      {n.form === 'external' && <path class="n-inner" d={outlineFor('external', w - 10, ht - 10)} transform="translate(5 5)" />}
       {n.parts.map((p) => <PartShape key={p.key} p={p} near={near} z={o.z} sel={o.selected} on={on} />)}
       {/* The head: name, then what it is and how we know. */}
       <text class="n-name" x={14} y={chip ? 24 : 22} style={{ fontSize: `${nameSize}px` }}>{trunc(n.name, nameChars)}</text>
@@ -149,9 +149,9 @@ export function Node({ n, o, on }: { n: SceneNode; o: DrawOpts; on: NodeHandlers
           <text x={-6} y={kindSize * 0.25} text-anchor="end" style={{ fontSize: `${kindSize}px` }}>{statusWord}</text>
         </g>
       )}
-      {n.affected && <text class="n-affected" x={w - 10} y={h - 10} text-anchor="end" style={{ fontSize: `${kindSize}px` }}>touched by the change</text>}
+      {n.affected && <text class="n-affected" x={w - 10} y={ht - 10} text-anchor="end" style={{ fontSize: `${kindSize}px` }}>touched by the change</text>}
       {n.enterable && near && !chip && (
-        <g class="n-enter" transform={`translate(${w - 12} ${h - 12})`} onClick={(e: MouseEvent) => { e.stopPropagation(); on.enter(n.id); }}>
+        <g class="n-enter" transform={`translate(${w - 12} ${ht - 12})`} onClick={(e: MouseEvent) => { e.stopPropagation(); on.enter(n.id); }}>
           <title>{`Enter ${n.name} (${n.childCount} parts) — Enter`}</title>
           <rect x={-74} y={-17} width={74} height={20} rx={10} />
           <text x={-37} y={-3} text-anchor="middle">enter · {n.childCount}</text>
@@ -289,14 +289,14 @@ export function Stub({ s, o, onSelect }: { s: SceneStub; o: DrawOpts; onSelect(i
 }
 
 export function Portal({ p, o, on }: { p: ScenePortal; o: DrawOpts; on: { select(id: string): void; follow(id: string): void } }) {
-  const { x, y, w, h } = p.rect;
+  const { x, y, w, h: ht } = p.rect;
   const sel = o.selected === p.id;
   const arrow = { left: '←', right: '→', top: '↑', bottom: '↓' }[p.side];
   return (
     <g class={`portal ${sel ? 'sel' : ''}`} transform={`translate(${x} ${y})`} data-id={p.id}
       onClick={(e: MouseEvent) => { e.stopPropagation(); on.select(p.id); }} onDblClick={(e: MouseEvent) => { e.stopPropagation(); on.follow(p.id); }}>
       <title>{`${p.name} (${p.kindLabel}) — outside this component, ${p.side}. ${p.count} relation(s). Double-click to go there.`}</title>
-      <path class="portal-body" d={outlineFor(p.form, w, h)} />
+      <path class="portal-body" d={outlineFor(p.form, w, ht)} />
       <text class="portal-name" x={12} y={22}>{arrow} {trunc(p.name, 22)}</text>
       <text class="portal-kind" x={12} y={40}>{p.kindLabel} · outside · {p.count} relation{p.count === 1 ? '' : 's'}</text>
     </g>

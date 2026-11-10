@@ -1,4 +1,7 @@
 import type { EntityStatus, Lens, Provenance, RelationKind } from '../model.js';
+
+// Which kinds each lens draws by default is the view's business (view.ts LENS_RELATIONS); this file only
+// says how each kind looks.
 import type { RelationGrammar } from './scene.js';
 
 // The relation grammar: what each kind of connection looks like, so a line says what it means by its
@@ -29,16 +32,6 @@ export const GRAMMAR: Record<string, RelationGrammar> = {
 export function grammarFor(kind: RelationKind): RelationGrammar {
   return GRAMMAR[kind] ?? G(kind, `${kind} — a relation kind without its own drawing; the name is written on the line`, 'thin', 'none', 'open-arrow', 'none');
 }
-
-/** Which relation kinds each lens draws when the view doesn't say. */
-export const LENS_RELATIONS: Record<Lens, RelationKind[]> = {
-  organization: ['calls', 'sends', 'handles', 'writes', 'reads', 'publishes', 'consumes', 'depends_on', 'implements', 'renders', 'produces'],
-  path: ['calls', 'sends', 'handles', 'writes', 'reads', 'publishes', 'consumes', 'precedes'],
-  failure: ['calls', 'sends', 'handles', 'writes', 'reads', 'publishes', 'consumes', 'precedes'],
-  dataflow: ['writes', 'reads', 'publishes', 'consumes', 'produces', 'sends', 'handles'],
-  'interface-change': ['renders', 'calls', 'handles', 'sends', 'depends_on', 'verified_by', 'implements'],
-  'change-review': ['calls', 'sends', 'handles', 'writes', 'reads', 'publishes', 'consumes', 'depends_on', 'implements', 'verified_by', 'renders', 'produces', 'precedes'],
-};
 
 /** Which way a lens reads. Failure reads top-down, like attempts stacked one under another. */
 export const LENS_FLOW: Record<Lens, 'right' | 'down'> = {

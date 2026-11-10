@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { extname, join, relative, resolve, sep } from 'node:path';
 import type { SystemService } from '../service.js';
 
-// The system canvas's dev server: the built renderer pages as static files (system.html at `/`), and
+// The system canvas's dev server: the built renderer as static files (`/` opens renderer/system.html), and
 // the system service as JSON routes, `POST /api/<method>` with the arguments as a JSON array. Plain
 // node:http, bound to 127.0.0.1 only. It reads the repositories it was given and nothing else, but a
 // page on another site could still try to reach it, so the API only answers same-origin JSON requests
@@ -15,6 +15,12 @@ const METHODS = ['repos', 'open', 'freshness', 'refresh', 'source', 'fixtures', 
 const DEV_METHODS = ['addRepo', 'recordTraces'] as const;
 
 const MAX_BODY = 1024 * 1024;
+const SERVED = ['renderer/', 'shared/'];
+
+function notFound(res: ServerResponse, pathname: string) {
+  res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+  res.end(`Not found: ${pathname}`);
+}
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -24,8 +30,11 @@ const TYPES: Record<string, string> = {
 
 export interface SystemServerOptions {
   service: SystemService;
-  /** The built renderer: dist/renderer. */
-  staticDir: string;
+  /**
+   * The build: dist/ (or another tsc outDir). Its renderer/ and shared/ folders are served at the same
+   * paths, since renderer modules import ../shared/… exactly as they do from file:// in Electron.
+   */
+  distDir: string;
   /** Allow `addRepo` and `recordTraces` over HTTP (the serve script turns this on; it's a local dev tool). */
   devMethods?: boolean;
   log?: (line: string) => void;
@@ -55,7 +64,7 @@ const statusFor = (code: unknown) => code === 'not-found' || code === 'missing' 
 export function createSystemServer(opts: SystemServerOptions): Server {
   const allowed = new Set<string>([...METHODS, ...(opts.devMethods ? DEV_METHODS : [])]);
   const log = opts.log ?? (() => {});
-  const root = resolve(opts.staticDir);
+  const root = resolve(opts.distDir);
 
   async function api(req: IncomingMessage, res: ServerResponse, method: string) {
     if (req.method !== 'POST') return send(res, 405, { error: 'Use POST' });
@@ -82,8 +91,11 @@ export function createSystemServer(opts: SystemServerOptions): Server {
 
   async function file(req: IncomingMessage, res: ServerResponse, pathname: string) {
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
-    const rel = pathname === '/' ? 'system.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+    if (pathname === '/') { res.writeHead(302, { location: '/renderer/system.html' }); return res.end(); }
+    const rel = decodeURIComponent(pathname).replace(/^\/+/, '');
     if (rel.split(/[\\/]/).includes('..') || rel.includes('\0')) { res.writeHead(403); return res.end(); }
+    // Only what a page loads: not main/, system/ or the rest of the build.
+    if (!SERVED.some((dir) => rel.startsWith(dir))) return notFound(res, pathname);
     try {
       const real = await realpath(join(root, rel));
       const inside = relative(await realpath(root), real);
@@ -94,8 +106,7 @@ export function createSystemServer(opts: SystemServerOptions): Server {
       if (req.method === 'HEAD') return res.end();
       createReadStream(real).pipe(res);
     } catch {
-      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end(`Not found: ${pathname}`);
+      notFound(res, pathname);
     }
   }
 

@@ -8,7 +8,7 @@ import type { Camera } from './camera.js';
 import { Inspector } from './Inspector.js';
 import { Harness, Legend, Outline, Player } from './Panels.js';
 import { Stage, type Sel, type StageControls } from './Stage.js';
-import { LENS_LABEL, presets, resolveLocal } from './views.js';
+import { LENS_LABEL, presets, resolve } from './views.js';
 
 // The system canvas page: choose a repository (or a labelled fixture), open its registry, choose a view
 // (a preset per lens, or a ViewRequest edited in the harness), and explore. Where you are — entered path,
@@ -154,7 +154,7 @@ export function App() {
 
   /* ---------- the scene ---------- */
   const ps = useMemo(() => (registry ? presets(registry, fresh?.changed ?? []) : []), [registry, fresh?.changed.join('|')]);
-  const resolved = useMemo(() => (registry && request ? resolveLocal(registry, request) : null), [registry, request]);
+  const resolved = useMemo(() => (registry && request ? resolve(registry, request) : null), [registry, request]);
   const trace = traces.find((t) => t.id === traceId) ?? null;
   const scene = useMemo(() => {
     if (!registry || !resolved || !vs) return null;
